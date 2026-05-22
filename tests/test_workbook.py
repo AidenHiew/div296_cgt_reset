@@ -260,3 +260,74 @@ class TestComparison:
         assert int(ws.page_setup.paperSize) == int(ws.PAPERSIZE_A4)
         assert int(ws.page_setup.fitToWidth) == 1
         assert ws.print_area is not None and "G" in ws.print_area
+
+
+# --- Notes tab (chunk 5) --------------------------------------------------
+
+def _notes(tmp_path: Path):
+    out = tmp_path / "out.xlsx"
+    wb = build_workbook()
+    wb.save(out)
+    return load_workbook(out)["Notes"]
+
+
+class TestNotes:
+    def test_required_caveats_present(self, tmp_path: Path):
+        """Every locked caveat from README must appear on the Notes tab."""
+        ws = _notes(tmp_path)
+        all_text = " ".join(
+            str(c.value) for row in ws.iter_rows() for c in row if c.value is not None
+        )
+        for required in (
+            "Illustrative only",
+            "Pension phase is NOT modelled",
+            "Loss-offset divergence",
+            "Reset OFF scenario is realised-only",
+            "Wash sale / Part IVA",
+            "Transaction costs",
+            "actuarial certificate",
+            "all-or-nothing and irrevocable",
+            "recontribution",
+        ):
+            assert required in all_text, f"Notes missing required caveat: {required!r}"
+
+    def test_no_recommendation_language(self, tmp_path: Path):
+        """Caveats are factual disclosures only — no advice language."""
+        ws = _notes(tmp_path)
+        forbidden = ("you should", "we recommend", "we suggest")
+        for row in ws.iter_rows(values_only=True):
+            for v in row:
+                if isinstance(v, str):
+                    for word in forbidden:
+                        assert word.lower() not in v.lower(), (
+                            f"Notes contains forbidden advice phrase {word!r}: {v!r}"
+                        )
+
+    def test_valuation_log_mirrors_register(self, tmp_path: Path):
+        """Valuation log has one row per asset, formulas pointing at Inputs."""
+        ws = _notes(tmp_path)
+        # Find at least 50 cells that reference 'Inputs'!G* (the valuation source col).
+        ref_count = 0
+        for row in ws.iter_rows():
+            for c in row:
+                if isinstance(c.value, str) and "'Inputs'!G" in c.value:
+                    ref_count += 1
+        assert ref_count == 50, f"Expected 50 valuation-source mirrors, got {ref_count}"
+
+    def test_provenance_cells_present(self, tmp_path: Path):
+        """Hidden provenance block carries build_version / build_date / git SHA."""
+        ws = _notes(tmp_path)
+        labels = {
+            str(c.value): c.row
+            for row in ws.iter_rows()
+            for c in row
+            if c.column == 1 and isinstance(c.value, str)
+        }
+        assert "build_version" in labels
+        assert "build_date" in labels
+        assert "git_short_sha" in labels
+        # The corresponding rows should be hidden.
+        for label in ("build_version", "build_date", "git_short_sha"):
+            assert ws.row_dimensions[labels[label]].hidden, (
+                f"Provenance row for {label!r} should be hidden"
+            )
