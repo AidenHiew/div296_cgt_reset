@@ -17,3 +17,4 @@ Thumbs.db
 
 # Excel lock files
 ~$*.xlsx
+.claude/

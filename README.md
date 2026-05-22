@@ -2,7 +2,7 @@
 
 A Microsoft Excel workbook (`.xlsx`) that illustrates Division 296 tax outcomes for SMSFs and makes the case for pre–30 June 2026 action on assets sitting in an unrealised-loss position (the "reset trap").
 
-**Status:** v0.1 scaffold. The workbook structure is in place; calculation logic, formatting, and acceptance-test wiring land in v1.0.
+**Status:** v1.0.0 — stable. Workbook, builder, tests, PDF export, and CI all green.
 
 **Audience:** internal use by partners, managers and staff; also printed or shared with clients.
 
@@ -18,7 +18,7 @@ python -m pip install -e .[dev]
 
 # 2. Build the workbook (runs a live recalc check at the end)
 python -m div296.build
-# -> dist/Division_296_Model_v0.1.0.xlsx
+# -> dist/Division_296_Model_v1.0.0.xlsx
 # -> Recalc validation: OK (no Excel error cells).
 
 # 3. Run the test suite (fast dev loop — skips live-recalc)
@@ -33,12 +33,12 @@ Pass `--no-validate` to skip the post-build recalc check (faster, not recommende
 ### Exporting to PDF (client-shareable Comparison page)
 
 ```bash
-python scripts/export_pdf.py dist/Division_296_Model_v0.1.0.xlsx
-# -> dist/Division_296_Model_v0.1.0_Comparison.pdf
+python scripts/export_pdf.py dist/Division_296_Model_v1.0.0.xlsx
+# -> dist/Division_296_Model_v1.0.0_Comparison.pdf
 
 # Other tabs / whole workbook:
-python scripts/export_pdf.py dist/Division_296_Model_v0.1.0.xlsx --tab Analyser
-python scripts/export_pdf.py dist/Division_296_Model_v0.1.0.xlsx --all-tabs
+python scripts/export_pdf.py dist/Division_296_Model_v1.0.0.xlsx --tab Analyser
+python scripts/export_pdf.py dist/Division_296_Model_v1.0.0.xlsx --all-tabs
 ```
 
 Requires [LibreOffice](https://www.libreoffice.org/) installed (`soffice` on PATH, or the default `C:\Program Files\LibreOffice\program\soffice.exe` on Windows).
