@@ -1,9 +1,10 @@
 """Integration tests: build the workbook, optionally recalc, read it back.
 
-v0.1 confirmed the build runs and produces 4 tabs in spec order.
-v1.0 adds verification that the Inputs tab has the right structure
-and that every named range resolves to a real cell. LibreOffice headless
-recalc and full reconciliation assertions land with chunk 6.
+v1.5: layouts changed in Inputs (zones reordered: control panel, members,
+asset register, advanced assumptions), Analyser (Div 296 cost base moved
+from col D to col F), and Comparison (full redesign — subtotals at top,
+metric cards, fund-context strip, 5-col panels + Δ column, 15 visible
+data rows). Tests below mirror the new coords.
 """
 
 from pathlib import Path
@@ -41,52 +42,64 @@ def test_every_named_range_resolves(tmp_path: Path):
         for sheet_name, ref in destinations:
             assert sheet_name in reopened.sheetnames, f"{name} points at missing sheet {sheet_name}"
             ws = reopened[sheet_name]
-            # If the reference resolves at all, openpyxl returns a cell.
             cell = ws[ref.replace("$", "")]
             assert cell is not None
 
 
 def test_inputs_sample_data_preloaded(tmp_path: Path):
-    """The three §12 sample assets are pre-loaded in rows 13–15."""
+    """v1.5: register data moved to rows 22-24; member 1 to row 13."""
     out = tmp_path / "out.xlsx"
     wb = build_workbook()
     wb.save(out)
     ws = load_workbook(out)["Inputs"]
 
-    # Row 13: Commercial property
-    assert ws["A13"].value == "P1"
-    assert ws["B13"].value == "Commercial property"
-    assert ws["D13"].value == 800_000
-    assert ws["F13"].value == 2_400_000
-    assert ws["H13"].value == 2_600_000
-    assert ws["I13"].value == "Yes"
+    # Row 22: Commercial property
+    assert ws["A22"].value == "P1"
+    assert ws["B22"].value == "Commercial property"
+    assert ws["D22"].value == 800_000
+    assert ws["F22"].value == 2_400_000
+    assert ws["H22"].value == 2_600_000
+    assert ws["I22"].value == "Yes"
 
-    # Row 14: Listed shares parcel
-    assert ws["A14"].value == "S1"
-    assert ws["D14"].value == 300_000
-    assert ws["F14"].value == 520_000
+    # Row 23: Listed shares parcel
+    assert ws["A23"].value == "S1"
+    assert ws["D23"].value == 300_000
+    assert ws["F23"].value == 520_000
 
-    # Row 15: Loss-making holding
-    assert ws["A15"].value == "L1"
-    assert ws["D15"].value == 500_000
-    assert ws["F15"].value == 100_000
+    # Row 24: Loss-making holding
+    assert ws["A24"].value == "L1"
+    assert ws["D24"].value == 500_000
+    assert ws["F24"].value == 100_000
 
-    # Sole member: TSB $12m, split 100%
-    assert ws["B66"].value == 12_000_000
-    assert ws["C66"].value == 1.0
+    # Sole member moved up to row 13: TSB $12m, split 100%
+    assert ws["B13"].value == 12_000_000
+    assert ws["C13"].value == 1.0
 
 
 def test_control_panel_defaults(tmp_path: Path):
+    """v1.5: control panel moved from rows 4-8 to rows 5-9 (sample badge on row 2)."""
     out = tmp_path / "out.xlsx"
     wb = build_workbook()
     wb.save(out)
     ws = load_workbook(out)["Inputs"]
 
-    assert ws["B4"].value == "ON"     # Reset election
-    assert ws["B5"].value == "OFF"    # $10m / +25% tier
-    assert ws["B6"].value == "ON"     # CGT discount
-    assert ws["B7"].value == "Auto"   # earnings source
-    assert ws["B8"].value is None     # manual earnings
+    assert ws["B5"].value == "ON"     # Reset election
+    assert ws["B6"].value == "OFF"    # $10m / +25% tier
+    assert ws["B7"].value == "ON"     # CGT discount
+    assert ws["B8"].value == "Auto"   # earnings source
+    assert ws["B9"].value is None     # manual earnings
+
+
+def test_sample_data_badge_present(tmp_path: Path):
+    """v1.5: warning badge on row 2 tells staff to overwrite sample data."""
+    out = tmp_path / "out.xlsx"
+    wb = build_workbook()
+    wb.save(out)
+    ws = load_workbook(out)["Inputs"]
+    badge = ws["A2"].value
+    assert badge is not None
+    assert "Sample data" in badge
+    assert "overwrite" in badge.lower()
 
 
 def test_all_tabs_protected(tmp_path: Path):
@@ -104,18 +117,18 @@ def test_input_cells_unlocked(tmp_path: Path):
     wb = build_workbook()
     wb.save(out)
     ws = load_workbook(out)["Inputs"]
-    # Control panel B4–B8 must be unlocked.
-    for row in range(4, 9):
+    # Control panel B5-B9 must be unlocked.
+    for row in range(5, 10):
         assert ws.cell(row=row, column=2).protection.locked is False, (
             f"Inputs!B{row} should be unlocked"
         )
-    # Sample register row D13 (Original cost base of Property) must be unlocked.
-    assert ws["D13"].protection.locked is False
-    # Member 1 TSB (B66) must be unlocked.
-    assert ws["B66"].protection.locked is False
+    # Sample register row D22 (Original cost base of Property) must be unlocked.
+    assert ws["D22"].protection.locked is False
+    # Member 1 TSB (B13) must be unlocked.
+    assert ws["B13"].protection.locked is False
 
 
-# --- Analyser tab (chunk 3) ----------------------------------------------
+# --- Analyser tab ---------------------------------------------------------
 
 def _analyser(tmp_path: Path):
     out = tmp_path / "out.xlsx"
@@ -126,9 +139,12 @@ def _analyser(tmp_path: Path):
 
 class TestAnalyser:
     def test_mirror_levers_reference_inputs(self, tmp_path: Path):
+        """Mirror strip at Analyser rows 4-8; references Inputs rows 5-9."""
         ws = _analyser(tmp_path)
-        for row in range(4, 9):
-            assert ws.cell(row=row, column=2).value == f"='Inputs'!B{row}"
+        for offset in range(5):
+            analyser_row = 4 + offset
+            inputs_row = 5 + offset
+            assert ws.cell(row=analyser_row, column=2).value == f"='Inputs'!B{inputs_row}"
 
     def test_fund_earnings_formula_uses_named_ranges(self, tmp_path: Path):
         ws = _analyser(tmp_path)
@@ -142,10 +158,10 @@ class TestAnalyser:
         assert ws["B16"].value == "=SUM(B12:B15)"
 
     def test_member_tax_formula_references_inputs_member_rows(self, tmp_path: Path):
+        """v1.5: members moved up — member 1 now on Inputs row 13."""
         ws = _analyser(tmp_path)
-        # Member 1 at row 12 should reference Inputs!B66 / C66 / D66 / E66.
         f = ws["B12"].value
-        for ref in ("'Inputs'!B66", "'Inputs'!C66", "'Inputs'!D66", "'Inputs'!E66"):
+        for ref in ("'Inputs'!B13", "'Inputs'!C13", "'Inputs'!D13", "'Inputs'!E13"):
             assert ref in f, f"member 1 formula missing {ref}"
         assert "rate_tier1" in f
         assert "rate_tier2" in f
@@ -153,18 +169,26 @@ class TestAnalyser:
         assert "threshold_2" in f
 
     def test_first_data_row_columns(self, tmp_path: Path):
+        """v1.5 column order: A Asset, B Proceeds, C Orig CB, D Ord taxable gain,
+        E Ord CGT, F Div 296 CB, G Div 296 adj gain, H Div 296 tax, I Reset impact."""
         ws = _analyser(tmp_path)
-        # Row 20 = first asset (Inputs row 13).
+        # Analyser row 20 = first asset (Inputs row 22 after v1.5 reorder).
         a, b, c, d, e, f, g, h, i = (ws.cell(row=20, column=col).value for col in range(1, 10))
-        assert "'Inputs'!A13" in a and "'Inputs'!B13" in a
-        assert "'Inputs'!H13" in b
-        assert "'Inputs'!D13" in c
-        assert 'reset_on="ON"' in d and "'Inputs'!F13" in d
-        assert "discount_rate" in e and "'Inputs'!I13" in e
-        assert "fund_cgt_rate" in f and "E20" in f         # uses col 5 of same row
+        assert "'Inputs'!A22" in a and "'Inputs'!B22" in a
+        assert "'Inputs'!H22" in b                      # Proceeds
+        assert "'Inputs'!D22" in c                      # Original CB
+        # Col D = Ordinary taxable gain (moved from E)
+        assert "discount_rate" in d and "'Inputs'!H22" in d and "'Inputs'!D22" in d
+        # Col E = Ordinary CGT = MAX(0, D{row}) * fund_cgt_rate
+        assert "fund_cgt_rate" in e and "D20" in e
+        # Col F = Div 296 cost base (moved from D)
+        assert 'reset_on="ON"' in f and "'Inputs'!F22" in f and "'Inputs'!D22" in f
+        # Col G = Div 296 adjusted gain
         assert "discount_rate" in g and 'reset_on="ON"' in g
+        # Col H = Div 296 tax (pro-rata of headline)
         assert "$B$16" in h and 'SUMIF(G20:G69,">0")' in h
-        assert "J20" in i and "K20" in i                    # helper cols
+        # Col I = Reset impact (J − K helper diff)
+        assert "J20" in i and "K20" in i
 
     def test_helper_columns_hidden(self, tmp_path: Path):
         ws = _analyser(tmp_path)
@@ -172,20 +196,21 @@ class TestAnalyser:
         assert ws.column_dimensions["K"].hidden
 
     def test_totals_row_sums_correct_ranges(self, tmp_path: Path):
+        """v1.5: Ord CGT total moved from col F to col E."""
         ws = _analyser(tmp_path)
-        assert ws["B70"].value == "=SUM(B20:B69)"
-        assert ws["F70"].value == "=SUM(F20:F69)"
-        assert ws["G70"].value == "=SUM(G20:G69)"
-        assert ws["H70"].value == "=SUM(H20:H69)"
+        assert ws["B70"].value == "=SUM(B20:B69)"        # Proceeds
+        assert ws["E70"].value == "=SUM(E20:E69)"        # Ord CGT (was F)
+        assert ws["G70"].value == "=SUM(G20:G69)"        # Div 296 adj gain
+        assert ws["H70"].value == "=SUM(H20:H69)"        # Div 296 tax
 
     def test_reconciliation_panel(self, tmp_path: Path):
+        """v1.5: Ord CGT payable now SUMs col E (was col F)."""
         ws = _analyser(tmp_path)
         assert ws["A73"].value == "Ordinary CGT payable"
-        assert ws["B73"].value == "=SUM(F20:F69)"
+        assert ws["B73"].value == "=SUM(E20:E69)"
         assert ws["A74"].value == "Div 296 tax payable (headline)"
         assert ws["B74"].value == "=B16"
         assert ws["A75"].value == "Capital losses carried forward"
-        # CF formula sums MAX(0, original − proceeds) across all 50 register rows.
         cf = ws["B75"].value
         assert cf.startswith("=")
         assert cf.count("MAX(0,'Inputs'!D") == 50  # one MAX per register row
@@ -194,27 +219,24 @@ class TestAnalyser:
         ws = _analyser(tmp_path)
         cf_rules = list(ws.conditional_formatting._cf_rules.items())
         assert cf_rules, "no conditional formatting rules on Analyser"
-        # At least one rule covering the per-asset block.
         ranges = [str(r[0]) for r in cf_rules]
         assert any("A20" in r and "I69" in r for r in ranges)
 
     def test_trap_cf_formula_uses_relative_rows(self, tmp_path: Path):
         """The CF formula must NOT have $ before row numbers (must adjust per row)."""
+        import re
         ws = _analyser(tmp_path)
-        for rng, rules in ws.conditional_formatting._cf_rules.items():
+        for _rng, rules in ws.conditional_formatting._cf_rules.items():
             for rule in rules:
                 if rule.formula:
                     for f in rule.formula:
-                        # $ on column letter is fine ($A, $B, $G).
-                        # $ before a digit (e.g. $A$20) would lock the row — not what we want.
-                        import re
                         bad = re.findall(r"\$\d+", f)
                         assert not bad, (
                             f"CF formula has absolute-row reference(s) {bad}: {f!r}"
                         )
 
 
-# --- Comparison tab (chunk 4) --------------------------------------------
+# --- Comparison tab -------------------------------------------------------
 
 def _comparison(tmp_path: Path):
     out = tmp_path / "out.xlsx"
@@ -227,70 +249,130 @@ class TestComparison:
     def test_watermark_banner_and_print_header(self, tmp_path: Path):
         ws = _comparison(tmp_path)
         assert ws["A1"].value == "ILLUSTRATIVE — NOT ADVICE"
-        # Print-header watermark for every printed page
         assert "ILLUSTRATIVE" in ws.oddHeader.center.text
 
-    def test_panel_headers(self, tmp_path: Path):
+    def test_context_strip_present(self, tmp_path: Path):
+        """v1.5: context strip at rows 13-14 shows TSB, proportion, discount, tier."""
         ws = _comparison(tmp_path)
-        assert ws["A15"].value == "Scenario A — No reset"
-        assert ws["E15"].value == "Scenario B — Reset elected"
+        labels_row_text = " ".join(
+            str(c.value) for c in ws[13] if c.value is not None
+        )
+        assert "TSB" in labels_row_text
+        assert "Proportion above $3m" in labels_row_text
+        assert "CGT discount" in labels_row_text
+        assert "tier" in labels_row_text.lower()
+        # Values row references Inputs (TSB) and named ranges (discount_on, tier10_on)
+        values_row_text = " ".join(
+            str(c.value) for c in ws[14] if c.value is not None
+        )
+        assert "'Inputs'!B13" in values_row_text   # member 1 TSB
+        assert "discount_on" in values_row_text
+        assert "tier10_on" in values_row_text
+
+    def test_metric_cards_present(self, tmp_path: Path):
+        """v1.5: three metric cards at rows 17-18 show scenario A / B / net effect."""
+        ws = _comparison(tmp_path)
+        # Card labels
+        assert ws["A17"].value == "Scenario A — No reset"
+        assert ws["E17"].value == "Scenario B — Reset elected"
+        assert "Net effect" in ws["I17"].value
+        # Card values point at the headline cells L6/M6.
+        assert "L$6" in ws["A18"].value or "L6" in ws["A18"].value
+        assert "M$6" in ws["E18"].value or "M6" in ws["E18"].value
+        # Net-effect card is A − B = L6 − M6
+        net = ws["I18"].value
+        assert ("L" in net and "M" in net and "-" in net), f"unexpected net-effect formula {net!r}"
+
+    def test_subtotals_table(self, tmp_path: Path):
+        """v1.5: subtotals at rows 22-25 — earnings, ord CGT (unchanged), Div 296 tax, total burden."""
+        ws = _comparison(tmp_path)
+        # Header row 21
+        assert ws["B21"].value == "Scenario A"
+        assert ws["C21"].value == "Scenario B"
+
+        # Row labels
+        assert ws["A22"].value == "Div 296 earnings"
+        assert "Ordinary CGT" in ws["A23"].value and "unchanged" in ws["A23"].value
+        assert ws["A24"].value == "Div 296 tax (headline)"
+        assert "TOTAL TAX BURDEN" in ws["A25"].value
+
+        # Ordinary CGT row pulls from Analyser (same value in both scenarios)
+        assert "Analyser" in ws["B23"].value
+        assert ws["B23"].value == ws["C23"].value
+
+        # Total burden = ord CGT + Div 296 tax for each scenario
+        assert ws["B25"].value == "=B23+B24"
+        assert ws["C25"].value == "=C23+C24"
 
     def test_panel_a_uses_original_cost_base(self, tmp_path: Path):
-        """Scenario A panel must compute using original CB (Inputs!D), not MV (F)."""
+        """v1.5: Panel A data rows start at 30. Cost base col is C (= Inputs!D)."""
         ws = _comparison(tmp_path)
-        f = ws["B17"].value
-        assert "'Inputs'!D13" in f
-        assert "'Inputs'!F13" not in f
+        # Panel A cost base for first asset
+        cb_formula = ws["C30"].value
+        assert "'Inputs'!D22" in cb_formula
+        assert "'Inputs'!F22" not in cb_formula
+        # Panel A adj gain
+        gain = ws["D30"].value
+        assert "'Inputs'!D22" in gain   # original cost base
+        assert "'Inputs'!F22" not in gain
 
     def test_panel_b_uses_market_value(self, tmp_path: Path):
-        """Scenario B panel must compute using MV (Inputs!F), not original CB (D)."""
+        """v1.5: Panel B cost base col is I (= Inputs!F = MV)."""
         ws = _comparison(tmp_path)
-        f = ws["F17"].value
-        assert "'Inputs'!F13" in f
-        assert "'Inputs'!D13" not in f
+        cb_formula = ws["I30"].value
+        assert "'Inputs'!F22" in cb_formula
+        assert "'Inputs'!D22" not in cb_formula
+        gain = ws["J30"].value
+        assert "'Inputs'!F22" in gain
+        assert "'Inputs'!D22" not in gain
 
     def test_panels_independent_of_master_reset_toggle(self, tmp_path: Path):
         """Neither panel formula may reference the reset_on named range."""
         ws = _comparison(tmp_path)
-        for row in range(17, 67):
-            for col_letter in ("B", "C", "F", "G"):
+        for row in range(30, 45):
+            for col_letter in ("B", "C", "D", "E", "H", "I", "J", "K"):
                 f = ws[f"{col_letter}{row}"].value
                 if f and isinstance(f, str):
                     assert "reset_on" not in f, (
                         f"{col_letter}{row} references reset_on; panels must be independent"
                     )
 
-    def test_helper_columns_hidden(self, tmp_path: Path):
+    def test_delta_column_formula(self, tmp_path: Path):
+        """Δ column F = panel B adj gain (J) − panel A adj gain (D)."""
         ws = _comparison(tmp_path)
-        for col_letter in ("H", "I", "J", "K", "L", "M"):
-            assert ws.column_dimensions[col_letter].hidden, f"col {col_letter} should be hidden"
+        delta = ws["F30"].value
+        assert "J30" in delta and "D30" in delta
+        assert "-" in delta
 
-    def test_subtotals_reference_helpers(self, tmp_path: Path):
+    def test_helper_columns_hidden(self, tmp_path: Path):
+        """v1.5: helpers moved to cols L/M (cols A-K are visible panels + Δ)."""
         ws = _comparison(tmp_path)
-        # Subtotal earnings sits in the GAIN column (under the gain header).
-        assert ws["B68"].value == "=H1"
-        assert ws["F68"].value == "=I1"
-        # Subtotal tax (headline) sits in the TAX column.
-        assert ws["C69"].value == "=H6"
-        assert ws["G69"].value == "=I6"
+        for col_letter in ("L", "M", "N", "O", "P", "Q"):
+            assert ws.column_dimensions[col_letter].hidden, f"col {col_letter} should be hidden"
+        # Visible columns must NOT be hidden.
+        for col_letter in ("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"):
+            assert not ws.column_dimensions[col_letter].hidden, f"col {col_letter} must be visible"
+
+    def test_only_15_asset_rows_rendered(self, tmp_path: Path):
+        """v1.5: display 15 assets, with overflow note pointing at Analyser."""
+        ws = _comparison(tmp_path)
+        # Row 30 has a formula; row 45 (just past 15 rows) should be the overflow note.
+        assert ws["A30"].value and ws["A30"].value.startswith("=")
+        assert ws["A44"].value and ws["A44"].value.startswith("=")  # last data row
+        overflow = ws["A45"].value
+        assert overflow and "Showing first 15 assets" in overflow
 
     def test_manual_earnings_footnote_present(self, tmp_path: Path):
-        """Comparison panels do not honour Manual earnings — must say so."""
         ws = _comparison(tmp_path)
         all_text = " ".join(
             str(c.value) for row in ws.iter_rows() for c in row if c.value is not None
         )
         assert "Manual" in all_text and "ignored here" in all_text
 
-    def test_neutral_net_effect_footer(self, tmp_path: Path):
-        """Footer is a NEUTRAL net-effect calculation — no recommendation language anywhere."""
+    def test_no_recommendation_language(self, tmp_path: Path):
+        """Comparison tab must use neutral net-effect language only."""
         ws = _comparison(tmp_path)
-        # Net effect label
-        label = ws["A72"].value
-        assert "Net effect" in label
-        # Forbidden words anywhere on the sheet (recommendation language).
-        forbidden = ("saved", "saves", "created", "creates", "should",
-                     "recommend", "we suggest")
+        forbidden = ("saved", "saves", "you should", "we recommend", "we suggest")
         for row in ws.iter_rows(values_only=True):
             for v in row:
                 if isinstance(v, str):
@@ -299,40 +381,34 @@ class TestComparison:
                             f"Comparison tab contains forbidden recommendation word "
                             f"{word!r} in cell value {v!r}"
                         )
-        # Net effect formula references both headlines.
-        net_formula = ws["C72"].value
-        assert net_formula == "=H6-I6"
 
     def test_print_setup_landscape_a4(self, tmp_path: Path):
         ws = _comparison(tmp_path)
         assert ws.page_setup.orientation == ws.ORIENTATION_LANDSCAPE
         assert int(ws.page_setup.paperSize) == int(ws.PAPERSIZE_A4)
         assert int(ws.page_setup.fitToWidth) == 1
-        assert ws.print_area is not None and "G" in ws.print_area
+        # Print area now spans through col K (widened from G in v1.5).
+        assert ws.print_area is not None and "K" in ws.print_area
 
     def test_chart_present_referencing_headlines(self, tmp_path: Path):
+        """v1.5: chart data cells moved to L8/L9 (labels) and M8/M9 (values)."""
         ws = _comparison(tmp_path)
         assert len(ws._charts) == 1, "Expected one BarChart on Comparison tab"
-        # Chart data must come from the headline cells via I8/I9 (which mirror H6/I6).
-        assert ws["I8"].value == "=H6"
-        assert ws["I9"].value == "=I6"
-        assert ws["H8"].value == "Scenario A — No reset"
-        assert ws["H9"].value == "Scenario B — Reset elected"
+        assert ws["M8"].value == "=L6"
+        assert ws["M9"].value == "=M6"
+        assert ws["L8"].value == "Scenario A — No reset"
+        assert ws["L9"].value == "Scenario B — Reset elected"
 
     def test_chart_has_cached_values_for_headless_pdf_render(self, tmp_path: Path):
-        """Chart must ship with numCache/strCache populated so LibreOffice's
-        headless PDF render draws the bars. Without these, the chart renders
-        with a default 0–12 axis and no data — see v1.4 fix."""
+        """Chart ships with numCache/strCache populated so headless PDF render draws bars."""
         ws = _comparison(tmp_path)
         chart = ws._charts[0]
         series = chart.ser[0]
-        # Value cache: scenario A and B headline tax for the §12 sample.
         num_cache = series.val.numRef.numCache
         assert num_cache is not None, "Chart value cache missing"
         assert num_cache.ptCount == 2
         cached_values = sorted(round(float(p.v)) for p in num_cache.pt)
         assert cached_values == [28_500, 157_500]
-        # Category cache: scenario labels (strRef, not numRef).
         str_cache = series.cat.strRef.strCache
         assert str_cache is not None, "Chart category cache missing"
         cached_labels = [p.v for p in str_cache.pt]
@@ -340,7 +416,7 @@ class TestComparison:
         assert "Scenario B — Reset elected" in cached_labels
 
 
-# --- Notes tab (chunk 5) --------------------------------------------------
+# --- Notes tab ------------------------------------------------------------
 
 def _notes(tmp_path: Path):
     out = tmp_path / "out.xlsx"
@@ -384,7 +460,6 @@ class TestNotes:
     def test_valuation_log_mirrors_register(self, tmp_path: Path):
         """Valuation log has one row per asset, formulas pointing at Inputs."""
         ws = _notes(tmp_path)
-        # Find at least 50 cells that reference 'Inputs'!G* (the valuation source col).
         ref_count = 0
         for row in ws.iter_rows():
             for c in row:
@@ -404,7 +479,6 @@ class TestNotes:
         assert "build_version" in labels
         assert "build_date" in labels
         assert "git_short_sha" in labels
-        # The corresponding rows should be hidden.
         for label in ("build_version", "build_date", "git_short_sha"):
             assert ws.row_dimensions[labels[label]].hidden, (
                 f"Provenance row for {label!r} should be hidden"

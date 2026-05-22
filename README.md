@@ -92,7 +92,10 @@ These supplement [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) §1.
 | Spec § | Original | This build |
 |---|---|---|
 | §2 / §9 | 5 tabs including `Decision` | **4 tabs** (`Inputs`, `Analyser`, `Comparison`, `Notes`). Decision tab removed to keep the model purely illustrative. |
-| §8 footer | "$X saved (green) / $X created (red)" recommendation | **Neutral net-effect calculation only.** Footer reads "Net effect = Scenario A − Scenario B = $X". No "saves/created" framing, no "you should..." text anywhere in the workbook. |
+| §4 | Inputs zones: control panel → asset register → members & advanced assumptions (top to bottom) | **v1.5 reorder:** control panel → members → asset register → advanced assumptions. Fund-level setup is now compact and near the top; bulk asset data sits in the middle; set-once constants demoted to the bottom. |
+| §5 | Analyser column order: Asset / Proceeds / Original CB / **Div 296 CB** / Ord taxable gain / Ord CGT / Div 296 adj gain / Div 296 tax / Reset impact | **v1.5 reorder:** Div 296 cost base moved from col 4 to col 6, so each cost base sits directly next to the gain it computes. |
+| §8 | Lean Comparison panels (3 cols: Asset / Div 296 gain / Div 296 tax), 50 data rows reserved, no chart, no headline summary | **v1.5 redesign:** subtotals moved to the top; three hero metric cards (Scenario A / B / Net effect); fund-context strip; 5-col panels (Asset / Proceeds / Div 296 CB / Div 296 adj gain / Div 296 tax) plus a Δ column between panels; **TOTAL TAX BURDEN row** (Ord CGT + Div 296 tax) added to subtotals; 15 visible rows with overflow note to Analyser; bar chart kept at bottom. |
+| §8 footer | "$X saved (green) / $X created (red)" recommendation | **Neutral net-effect calculation only.** Net-effect metric card reads "Net effect (A − B) = $X". No "saves/created" framing, no "you should..." text anywhere in the workbook. |
 
 ---
 
@@ -116,7 +119,9 @@ Factual disclosures, not recommendations:
 - **v1.0:** Inputs zones 1–3, Analyser 9-column audit trail + reconciliation panel, Comparison side-by-side panels with neutral footer + watermark, Notes content, pytest suite asserting §12 numbers, live `formulas`-based recalc integration test.
 - **v1.1:** response to independent code review (relative-row CF guarded by test, member-prop edge cases, quantity formatting, terminology consistency).
 - **v1.2:** post-build recalc validation gate — `python -m div296.build` fails non-zero if any cell resolves to an Excel error sentinel.
-- **v1.3 (this commit):** GitHub Actions CI (lint + tests + build, Python 3.11/3.12/3.13); bar chart on Comparison; `scripts/export_pdf.py` LibreOffice headless PDF export.
+- **v1.3:** GitHub Actions CI (lint + tests + build, Python 3.11/3.12/3.13); bar chart on Comparison; `scripts/export_pdf.py` LibreOffice headless PDF export.
+- **v1.4:** PDF render fixes — chart cache injection, footnote wrap, recalc.py source-collision fix.
+- **v1.5 (this commit):** Inputs zones reordered (members up, advanced down); sample-data warning badge; Analyser column reorder (Div 296 cost base next to its gain); Comparison redesign (subtotals at top, metric cards, fund-context strip, 5-col panels + Δ column, total-tax-burden subtotal).
 
 ---
 

@@ -14,11 +14,12 @@ never a magic number):
 
     Row 18    Section band: "Per-asset analysis"
     Row 19    Column headers (A..I visible, J..K hidden helpers)
-    Rows 20–69 50 data rows; column mapping:
-                  A Asset           B Proceeds              C Original CB
-                  D Div 296 CB      E Ordinary taxable gn   F Ordinary CGT
-                  G Div 296 adj gn  H Div 296 tax           I Reset impact
-                  J helper (with reset col 7)  K helper (without reset col 7)
+    Rows 20–69 50 data rows; column mapping (v1.5 reordered so each cost base
+               sits next to the gain it computes):
+                  A Asset                 B Proceeds              C Original CB
+                  D Ordinary taxable gn   E Ordinary CGT          F Div 296 CB
+                  G Div 296 adj gn        H Div 296 tax           I Reset impact
+                  J helper (with reset col G)  K helper (without reset col G)
     Row 70    Totals
 
     Row 72    Section band: "Reconciliation"
@@ -176,10 +177,11 @@ def build(wb: Workbook) -> Worksheet:
     # --- Per-asset analysis ---
     _band(ws, PERASSET_BAND_ROW, "Per-asset analysis (50 rows)")
     headers = [
-        "Asset", "Proceeds", "Original cost base", "Div 296 cost base",
+        "Asset", "Proceeds", "Original cost base",
         "Ordinary taxable capital gain", "Ordinary CGT",
+        "Div 296 cost base",
         "Div 296 adjusted taxable capital gain", "Div 296 tax",
-        "Reset impact", "Helper: col 7 with reset", "Helper: col 7 without reset",
+        "Reset impact", "Helper: col G with reset", "Helper: col G without reset",
     ]
     for col_idx, header in enumerate(headers, start=1):
         c = ws.cell(row=PERASSET_HEADER_ROW, column=col_idx, value=header)
@@ -212,18 +214,18 @@ def build(wb: Workbook) -> Worksheet:
         ws.cell(row=a_row, column=2, value=f'=IF({proceeds}="","",{proceeds})')
         # Col 3 — Original cost base
         ws.cell(row=a_row, column=3, value=f'=IF({orig}="","",{orig})')
-        # Col 4 — Div 296 cost base
-        ws.cell(
-            row=a_row, column=4,
-            value=f'=IF({proceeds}="","",IF(reset_on="ON",{mv},{orig}))',
-        )
-        # Col 5 — Ordinary taxable capital gain
-        ws.cell(row=a_row, column=5,
+        # Col 4 — Ordinary taxable capital gain
+        ws.cell(row=a_row, column=4,
                 value=_ord_taxable_formula(proceeds, orig, held))
-        # Col 6 — Ordinary CGT (per-asset silo)
+        # Col 5 — Ordinary CGT (per-asset silo)
+        ws.cell(
+            row=a_row, column=5,
+            value=f'=IF({proceeds}="","",MAX(0,D{a_row})*fund_cgt_rate)',
+        )
+        # Col 6 — Div 296 cost base (moved here from col 4 for v1.5)
         ws.cell(
             row=a_row, column=6,
-            value=f'=IF({proceeds}="","",MAX(0,E{a_row})*fund_cgt_rate)',
+            value=f'=IF({proceeds}="","",IF(reset_on="ON",{mv},{orig}))',
         )
         # Col 7 — Div 296 adjusted gain (current scenario)
         cb_current = f'IF(reset_on="ON",{mv},{orig})'
@@ -238,10 +240,10 @@ def build(wb: Workbook) -> Worksheet:
                 f'MAX(0,G{a_row})/SUMIF({g_first}:{g_last},">0")*$B${HEADLINE_ROW}))'
             ),
         )
-        # Helper J — col 7 WITH reset (cost base = MV)
+        # Helper J — col G WITH reset (cost base = MV)
         ws.cell(row=a_row, column=10,
                 value=_div296_adj_formula(proceeds, mv, held))
-        # Helper K — col 7 WITHOUT reset (cost base = original)
+        # Helper K — col G WITHOUT reset (cost base = original)
         ws.cell(row=a_row, column=11,
                 value=_div296_adj_formula(proceeds, orig, held))
         # Col 9 — Reset impact = J − K
@@ -256,7 +258,9 @@ def build(wb: Workbook) -> Worksheet:
     # --- Totals row ---
     ws.cell(row=TOTALS_ROW, column=1, value="TOTALS").font = SECTION_BAND_FONT
     ws.cell(row=TOTALS_ROW, column=1).fill = SECTION_BAND_FILL
-    for col_idx in (2, 6, 7, 8):
+    # Totals on Proceeds (B), Ord CGT (E — moved from F in v1.5),
+    # Div 296 adj gain (G), Div 296 tax (H).
+    for col_idx in (2, 5, 7, 8):
         col_letter = get_column_letter(col_idx)
         rng = f"{col_letter}{PERASSET_FIRST_ROW}:{col_letter}{PERASSET_LAST_ROW}"
         cell = ws.cell(row=TOTALS_ROW, column=col_idx, value=f"=SUM({rng})")
@@ -270,7 +274,7 @@ def build(wb: Workbook) -> Worksheet:
             value="Ordinary CGT payable").font = BODY_FONT
     ws.cell(
         row=RECON_ORD_CGT_ROW, column=2,
-        value=f"=SUM(F{PERASSET_FIRST_ROW}:F{PERASSET_LAST_ROW})",
+        value=f"=SUM(E{PERASSET_FIRST_ROW}:E{PERASSET_LAST_ROW})",
     ).number_format = FMT_CURRENCY
 
     ws.cell(row=RECON_DIV296_ROW, column=1,
