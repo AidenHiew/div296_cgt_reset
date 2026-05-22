@@ -118,3 +118,13 @@ def test_comparison_scenario_b_reset_28500(recalc_solution):
 def test_comparison_net_effect_129000(recalc_solution):
     """Spec §12: 157,500 − 28,500 = 129,000."""
     assert _r(recalc_solution["net_effect"]) == 129_000
+
+
+def test_build_validate_recalc_finds_no_errors(tmp_path):
+    """Build-time recalc gate: no cell resolves to #REF!/#DIV/0!/#VALUE!/etc."""
+    from div296.build import build_workbook, validate_recalc
+
+    out = tmp_path / "model.xlsx"
+    build_workbook().save(out)
+    errors = validate_recalc(out)
+    assert errors == [], f"Expected no Excel error cells, got: {errors[:5]}"
