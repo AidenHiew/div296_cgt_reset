@@ -284,3 +284,66 @@ def test_net_effect_of_electing_reset():
     assert _r(off) == 157_500
     assert _r(on) == 28_500
     assert _r(off - on) == 129_000
+
+
+# --- Tier 2 ON scenario (spec §7) ----------------------------------------
+
+class TestTierOn:
+    """Member with TSB > $10m, tier ON: tax splits across the two bands."""
+
+    def test_tier_on_collapses_to_tier_off_when_tsb_under_10m(self):
+        """TSB $5m → band2 = 0; tier ON tax equals tier OFF tax."""
+        m = Member(tsb=5_000_000, split_pct=1.0)
+        earnings = 100_000
+        from div296.calcs import div296_tax_for_member
+        off = div296_tax_for_member(
+            earnings, m,
+            tier10_on=False, threshold_1=A.threshold_1, threshold_2=A.threshold_2,
+            rate_tier1=A.rate_tier1, rate_tier2=A.rate_tier2,
+        )
+        on = div296_tax_for_member(
+            earnings, m,
+            tier10_on=True, threshold_1=A.threshold_1, threshold_2=A.threshold_2,
+            rate_tier1=A.rate_tier1, rate_tier2=A.rate_tier2,
+        )
+        assert _r(off) == _r(on)
+        # Manual check: (5m-3m)/5m × 100k × 15% = 40% × 100k × 15% = 6,000
+        assert _r(on) == 6_000
+
+    def test_tier_on_with_tsb_above_10m(self):
+        """TSB $15m: band1 = (15-10)+(10-3) ... wait, band1 = MIN(15,10)-3 = 7m / 15m;
+        band2 = (15-10) / 15m = 5m / 15m. Tax = E × 7/15 × 15% + E × 5/15 × 25%."""
+        m = Member(tsb=15_000_000, split_pct=1.0)
+        earnings = 100_000
+        from div296.calcs import div296_tax_for_member
+        on = div296_tax_for_member(
+            earnings, m,
+            tier10_on=True, threshold_1=A.threshold_1, threshold_2=A.threshold_2,
+            rate_tier1=A.rate_tier1, rate_tier2=A.rate_tier2,
+        )
+        expected = (
+            100_000 * (7_000_000 / 15_000_000) * 0.15
+            + 100_000 * (5_000_000 / 15_000_000) * 0.25
+        )
+        assert _r(on) == _r(expected)
+
+    def test_tier_on_zero_tax_when_tsb_at_threshold_1(self):
+        """TSB = $3m exactly: band1 = 0, band2 = 0 → tax = 0."""
+        m = Member(tsb=3_000_000, split_pct=1.0)
+        from div296.calcs import div296_tax_for_member
+        on = div296_tax_for_member(
+            100_000, m,
+            tier10_on=True, threshold_1=A.threshold_1, threshold_2=A.threshold_2,
+            rate_tier1=A.rate_tier1, rate_tier2=A.rate_tier2,
+        )
+        assert _r(on) == 0
+
+    def test_zero_tsb_returns_zero_tax(self):
+        m = Member(tsb=0, split_pct=1.0)
+        from div296.calcs import div296_tax_for_member
+        result = div296_tax_for_member(
+            100_000, m,
+            tier10_on=False, threshold_1=A.threshold_1, threshold_2=A.threshold_2,
+            rate_tier1=A.rate_tier1, rate_tier2=A.rate_tier2,
+        )
+        assert result == 0.0

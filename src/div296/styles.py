@@ -40,4 +40,6 @@ THIN_BOX = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 # --- Number formats ---
 FMT_CURRENCY = '$#,##0;($#,##0);"-"'
 FMT_PERCENT = "0.0%"
+FMT_PERCENT_3 = "0.000%"     # for the CGT discount rate (spec calls for 33.333%)
 FMT_INT = "#,##0"
+FMT_TEXT = "@"               # explicit text format — used for non-numeric input columns

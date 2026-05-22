@@ -313,4 +313,7 @@ def build(wb: Workbook) -> Worksheet:
         ws.column_dimensions[get_column_letter(col_idx)].width = w
     ws.freeze_panes = f"A{PERASSET_HEADER_ROW + 1}"
 
+    # --- Sheet protection (read-only; recalc allowed) ---
+    ws.protection.sheet = True
+
     return ws

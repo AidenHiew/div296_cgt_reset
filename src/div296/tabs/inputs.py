@@ -16,6 +16,7 @@ also updating named_ranges.py and any formulas that reference these cells):
 
 from __future__ import annotations
 
+from openpyxl.styles import Protection
 from openpyxl.utils import get_column_letter
 from openpyxl.workbook import Workbook
 from openpyxl.workbook.defined_name import DefinedName
@@ -25,9 +26,9 @@ from openpyxl.worksheet.worksheet import Worksheet
 from div296 import named_ranges as nr
 from div296.assumptions import ASSUMPTIONS
 from div296.styles import (
-    BODY_FONT, CENTER, FMT_CURRENCY, FMT_INT, FMT_PERCENT,
-    INPUT_FILL, INPUT_FONT, LEFT, SECTION_BAND_FILL, SECTION_BAND_FONT,
-    THIN_BOX, TITLE_FONT,
+    BODY_FONT, CENTER, FMT_CURRENCY, FMT_INT, FMT_PERCENT, FMT_PERCENT_3,
+    FMT_TEXT, INPUT_FILL, INPUT_FONT, LEFT, SECTION_BAND_FILL,
+    SECTION_BAND_FONT, THIN_BOX, TITLE_FONT,
 )
 
 
@@ -47,15 +48,15 @@ REGISTER_FIRST_DATA_ROW = 13
 REGISTER_LAST_DATA_ROW = REGISTER_FIRST_DATA_ROW + ASSUMPTIONS.asset_register_rows - 1
 
 REGISTER_HEADERS = [
-    ("Asset code", FMT_INT),
-    ("Asset name", FMT_INT),
+    ("Asset code", FMT_TEXT),
+    ("Asset name", FMT_TEXT),
     ("Quantity", FMT_INT),
     ("Original cost base", FMT_CURRENCY),
     ("Total value", FMT_CURRENCY),
     ("Market value at 30 Jun 2026", FMT_CURRENCY),
-    ("Valuation source / date", FMT_INT),
+    ("Valuation source / date", FMT_TEXT),
     ("Projected sale proceeds", FMT_CURRENCY),
-    ("Held > 12 months?", FMT_INT),
+    ("Held > 12 months?", FMT_TEXT),
 ]
 
 SAMPLE_REGISTER_ROWS = [
@@ -82,7 +83,7 @@ ADV_ROWS = [
     (nr.RATE_TIER2,        "Div 296 additional rate — tier 2 (above $10m)", ASSUMPTIONS.rate_tier2,      FMT_PERCENT),
     (nr.THRESHOLD_1,       "Threshold 1",                                 ASSUMPTIONS.threshold_1,        FMT_CURRENCY),
     (nr.THRESHOLD_2,       "Threshold 2",                                 ASSUMPTIONS.threshold_2,        FMT_CURRENCY),
-    (nr.DISCOUNT_RATE,     "CGT discount rate (1/3 = 33.333%)",           ASSUMPTIONS.discount_rate,      FMT_PERCENT),
+    (nr.DISCOUNT_RATE,     "CGT discount rate (1/3 = 33.333%)",           ASSUMPTIONS.discount_rate,      FMT_PERCENT_3),
     (nr.FUND_CGT_RATE,     "Fund CGT rate (accumulation phase)",          ASSUMPTIONS.fund_cgt_rate,      FMT_PERCENT),
     (nr.INDEXATION_INCR_1, "Indexation increment — threshold 1",          ASSUMPTIONS.indexation_increment_1, FMT_CURRENCY),
     (nr.INDEXATION_INCR_2, "Indexation increment — threshold 2",          ASSUMPTIONS.indexation_increment_2, FMT_CURRENCY),
@@ -103,6 +104,8 @@ def _input_cell(ws: Worksheet, coord: str, value=None, number_format: str | None
     cell.font = INPUT_FONT
     cell.fill = INPUT_FILL
     cell.border = THIN_BOX
+    # Unlocked so it stays editable when the sheet is protected.
+    cell.protection = Protection(locked=False)
     if number_format:
         cell.number_format = number_format
 
@@ -151,7 +154,7 @@ def build(wb: Workbook) -> Worksheet:
         for col_idx, (_header, fmt) in enumerate(REGISTER_HEADERS, start=1):
             coord = ws.cell(row=row, column=col_idx).coordinate
             value = sample[col_idx - 1] if sample else None
-            _input_cell(ws, coord, value=value, number_format=fmt if fmt != FMT_INT else None)
+            _input_cell(ws, coord, value=value, number_format=fmt)
         held_dv.add(f"I{row}")
 
     # --- Zone 3: Members ---
@@ -176,14 +179,26 @@ def build(wb: Workbook) -> Worksheet:
         prop_cell.number_format = FMT_PERCENT
         _input_cell(ws, f"E{row}", value=None, number_format=FMT_PERCENT)
 
-    # Member-split sanity row
+    # Member-split sanity row + visual flag (spec §4 Zone 3).
     split_check_row = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count + 1
-    ws.cell(row=split_check_row, column=1, value="Split % sum (should equal 100%)").font = BODY_FONT
+    ws.cell(row=split_check_row, column=1, value="Split % sum (must equal 100%)").font = BODY_FONT
     check_formula = (
         f"=SUM(C{MEMBERS_FIRST_DATA_ROW}:C{MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count - 1})"
     )
     chk = ws.cell(row=split_check_row, column=3, value=check_formula)
     chk.number_format = FMT_PERCENT
+    # Red when not 100%, green when 100%.
+    from openpyxl.formatting.rule import CellIsRule
+    from openpyxl.styles import PatternFill as _PF
+    chk_range = f"C{split_check_row}"
+    ws.conditional_formatting.add(
+        chk_range,
+        CellIsRule(operator="notEqual", formula=["1"], fill=_PF("solid", fgColor="FBE9E9")),
+    )
+    ws.conditional_formatting.add(
+        chk_range,
+        CellIsRule(operator="equal", formula=["1"], fill=_PF("solid", fgColor="E1F5EE")),
+    )
 
     # --- Advanced assumptions ---
     adv_first_row = split_check_row + 2
@@ -200,5 +215,12 @@ def build(wb: Workbook) -> Worksheet:
     for col_idx, w in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(col_idx)].width = w
     ws.freeze_panes = "A2"
+
+    # --- Sheet protection (tamper-evident, passwordless) ---
+    # Input cells were individually unlocked via _input_cell();
+    # everything else is locked by default.
+    ws.protection.sheet = True
+    ws.protection.selectLockedCells = False
+    ws.protection.selectUnlockedCells = False
 
     return ws

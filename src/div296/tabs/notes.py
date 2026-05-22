@@ -15,7 +15,7 @@ from __future__ import annotations
 import datetime as _dt
 import subprocess as _sp
 
-from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.styles import Alignment, Font, PatternFill, Protection
 from openpyxl.utils import get_column_letter
 from openpyxl.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
@@ -165,6 +165,7 @@ def build(wb: Workbook) -> Worksheet:
     enact.font = INPUT_FONT
     enact.fill = INPUT_FILL
     enact.border = THIN_BOX
+    enact.protection = Protection(locked=False)   # editable under sheet protection
     ws.merge_cells("B4:D4")
 
     # --- Terminology ---
@@ -216,15 +217,16 @@ def build(wb: Workbook) -> Worksheet:
     valuation_log_last_row = row - 1
 
     # --- Provenance (hidden) ---
+    build_date = _dt.date.today().isoformat()
     prov_first = row + 2
     ws.cell(row=prov_first, column=1, value="build_version")
     ws.cell(row=prov_first, column=2, value=_ver)
     ws.cell(row=prov_first + 1, column=1, value="build_date")
-    ws.cell(row=prov_first + 1, column=2, value=_dt.date.today().isoformat())
+    ws.cell(row=prov_first + 1, column=2, value=build_date)
     ws.cell(row=prov_first + 2, column=1, value="git_short_sha")
     ws.cell(row=prov_first + 2, column=2, value=_git_short_sha())
     ws.cell(row=prov_first + 3, column=1, value="model_logic")
-    ws.cell(row=prov_first + 3, column=2, value="per build plan dated 2026-05-22")
+    ws.cell(row=prov_first + 3, column=2, value=f"per build plan dated {build_date}")
     for r in range(prov_first, prov_first + 4):
         ws.row_dimensions[r].hidden = True
 
@@ -232,5 +234,8 @@ def build(wb: Workbook) -> Worksheet:
     widths = {"A": 32, "B": 50, "C": 28, "D": 22}
     for col_letter, w in widths.items():
         ws.column_dimensions[col_letter].width = w
+
+    # --- Sheet protection ---
+    ws.protection.sheet = True
 
     return ws

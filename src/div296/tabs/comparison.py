@@ -24,7 +24,7 @@ Layout:
 
 from __future__ import annotations
 
-from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.styles import Alignment, Font, PatternFill, Protection
 from openpyxl.utils import get_column_letter
 from openpyxl.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
@@ -265,11 +265,12 @@ def build(wb: Workbook) -> Worksheet:
             ws[f"{col_letter}{c_row}"].number_format = FMT_CURRENCY
 
     # --- Subtotals ---
+    # Earnings subtotal sits under the GAIN column header; tax subtotal under TAX.
     ws.cell(row=SUBTOTAL_EARNINGS_ROW, column=1,
             value="Subtotal — Div 296 earnings").font = SECTION_BAND_FONT
     ws.cell(row=SUBTOTAL_EARNINGS_ROW, column=1).fill = SECTION_BAND_FILL
-    ws[f"{PANEL_A_TAX}{SUBTOTAL_EARNINGS_ROW}"] = f"={COL_A_EARNINGS}{HELPER_FUND_EARNINGS_ROW}"
-    ws[f"{PANEL_B_TAX}{SUBTOTAL_EARNINGS_ROW}"] = f"={COL_B_EARNINGS}{HELPER_FUND_EARNINGS_ROW}"
+    ws[f"{PANEL_A_GAIN}{SUBTOTAL_EARNINGS_ROW}"] = f"={COL_A_EARNINGS}{HELPER_FUND_EARNINGS_ROW}"
+    ws[f"{PANEL_B_GAIN}{SUBTOTAL_EARNINGS_ROW}"] = f"={COL_B_EARNINGS}{HELPER_FUND_EARNINGS_ROW}"
 
     ws.cell(row=SUBTOTAL_TAX_ROW, column=1,
             value="Subtotal — Div 296 tax (headline)").font = SECTION_BAND_FONT
@@ -277,12 +278,16 @@ def build(wb: Workbook) -> Worksheet:
     ws[f"{PANEL_A_TAX}{SUBTOTAL_TAX_ROW}"] = f"={COL_A_EARNINGS}{HELPER_HEADLINE_ROW}"
     ws[f"{PANEL_B_TAX}{SUBTOTAL_TAX_ROW}"] = f"={COL_B_EARNINGS}{HELPER_HEADLINE_ROW}"
 
-    for row in (SUBTOTAL_EARNINGS_ROW, SUBTOTAL_TAX_ROW):
-        for col_letter in (PANEL_A_TAX, PANEL_B_TAX):
-            cell = ws[f"{col_letter}{row}"]
-            cell.number_format = FMT_CURRENCY
-            cell.font = SECTION_BAND_FONT
-            cell.fill = SECTION_BAND_FILL
+    for col_letter in (PANEL_A_GAIN, PANEL_B_GAIN):
+        cell = ws[f"{col_letter}{SUBTOTAL_EARNINGS_ROW}"]
+        cell.number_format = FMT_CURRENCY
+        cell.font = SECTION_BAND_FONT
+        cell.fill = SECTION_BAND_FILL
+    for col_letter in (PANEL_A_TAX, PANEL_B_TAX):
+        cell = ws[f"{col_letter}{SUBTOTAL_TAX_ROW}"]
+        cell.number_format = FMT_CURRENCY
+        cell.font = SECTION_BAND_FONT
+        cell.fill = SECTION_BAND_FILL
 
     # --- Neutral footer (NO recommendation language) ---
     _band(ws, FOOTER_BAND_ROW, "Footer")
@@ -301,6 +306,15 @@ def build(wb: Workbook) -> Worksheet:
     )
     reminder.font = Font(name="Arial", size=9, italic=True, color="666666")
     ws.merge_cells(f"A{REMINDER_ROW}:G{REMINDER_ROW}")
+
+    manual_note = ws.cell(
+        row=REMINDER_ROW + 1, column=1,
+        value=("Note: Comparison panels always compute from the asset register. "
+               "If 'Div 296 earnings source' is set to Manual on Inputs, the override "
+               "applies to the Analyser headline only — it is ignored here."),
+    )
+    manual_note.font = Font(name="Arial", size=9, italic=True, color="666666")
+    ws.merge_cells(f"A{REMINDER_ROW + 1}:G{REMINDER_ROW + 1}")
 
     # --- Print header watermark (large gray text on every printed page) ---
     ws.oddHeader.center.text = "ILLUSTRATIVE — NOT ADVICE"
@@ -328,5 +342,13 @@ def build(wb: Workbook) -> Worksheet:
     }
     for col_letter, w in widths.items():
         ws.column_dimensions[col_letter].width = w
+
+    # Editable header-block cells unlocked so they remain user-editable
+    # under sheet protection.
+    for row in (HEADER_FIRM_ROW, HEADER_PREPARED_FOR_ROW,
+                HEADER_PREPARED_BY_ROW, HEADER_DATE_ROW):
+        ws[f"B{row}"].protection = Protection(locked=False)
+
+    ws.protection.sheet = True
 
     return ws

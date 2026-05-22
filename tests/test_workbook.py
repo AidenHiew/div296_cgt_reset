@@ -89,6 +89,32 @@ def test_control_panel_defaults(tmp_path: Path):
     assert ws["B8"].value is None     # manual earnings
 
 
+def test_all_tabs_protected(tmp_path: Path):
+    out = tmp_path / "out.xlsx"
+    wb = build_workbook()
+    wb.save(out)
+    wb_re = load_workbook(out)
+    for tab in ("Inputs", "Analyser", "Comparison", "Notes"):
+        assert wb_re[tab].protection.sheet is True, f"{tab} is not protected"
+
+
+def test_input_cells_unlocked(tmp_path: Path):
+    """Inputs control-panel and register cells must stay editable under protection."""
+    out = tmp_path / "out.xlsx"
+    wb = build_workbook()
+    wb.save(out)
+    ws = load_workbook(out)["Inputs"]
+    # Control panel B4–B8 must be unlocked.
+    for row in range(4, 9):
+        assert ws.cell(row=row, column=2).protection.locked is False, (
+            f"Inputs!B{row} should be unlocked"
+        )
+    # Sample register row D13 (Original cost base of Property) must be unlocked.
+    assert ws["D13"].protection.locked is False
+    # Member 1 TSB (B66) must be unlocked.
+    assert ws["B66"].protection.locked is False
+
+
 # --- Analyser tab (chunk 3) ----------------------------------------------
 
 def _analyser(tmp_path: Path):
@@ -172,6 +198,21 @@ class TestAnalyser:
         ranges = [str(r[0]) for r in cf_rules]
         assert any("A20" in r and "I69" in r for r in ranges)
 
+    def test_trap_cf_formula_uses_relative_rows(self, tmp_path: Path):
+        """The CF formula must NOT have $ before row numbers (must adjust per row)."""
+        ws = _analyser(tmp_path)
+        for rng, rules in ws.conditional_formatting._cf_rules.items():
+            for rule in rules:
+                if rule.formula:
+                    for f in rule.formula:
+                        # $ on column letter is fine ($A, $B, $G).
+                        # $ before a digit (e.g. $A$20) would lock the row — not what we want.
+                        import re
+                        bad = re.findall(r"\$\d+", f)
+                        assert not bad, (
+                            f"CF formula has absolute-row reference(s) {bad}: {f!r}"
+                        )
+
 
 # --- Comparison tab (chunk 4) --------------------------------------------
 
@@ -226,12 +267,20 @@ class TestComparison:
 
     def test_subtotals_reference_helpers(self, tmp_path: Path):
         ws = _comparison(tmp_path)
-        # Subtotal earnings: =H1 / =I1
-        assert ws["C68"].value == "=H1"
-        assert ws["G68"].value == "=I1"
-        # Subtotal tax (headline): =H6 / =I6
+        # Subtotal earnings sits in the GAIN column (under the gain header).
+        assert ws["B68"].value == "=H1"
+        assert ws["F68"].value == "=I1"
+        # Subtotal tax (headline) sits in the TAX column.
         assert ws["C69"].value == "=H6"
         assert ws["G69"].value == "=I6"
+
+    def test_manual_earnings_footnote_present(self, tmp_path: Path):
+        """Comparison panels do not honour Manual earnings — must say so."""
+        ws = _comparison(tmp_path)
+        all_text = " ".join(
+            str(c.value) for row in ws.iter_rows() for c in row if c.value is not None
+        )
+        assert "Manual" in all_text and "ignored here" in all_text
 
     def test_neutral_net_effect_footer(self, tmp_path: Path):
         """Footer is a NEUTRAL net-effect calculation — no recommendation language anywhere."""
