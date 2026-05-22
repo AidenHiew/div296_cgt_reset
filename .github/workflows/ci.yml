@@ -30,8 +30,8 @@ jobs:
       - name: Lint (ruff)
         run: ruff check src tests scripts
 
-      - name: Test (pytest)
-        run: pytest -q
+      - name: Test (pytest, parallel)
+        run: pytest -q -n auto
 
       - name: Build (with recalc validation gate)
         run: python -m div296.build

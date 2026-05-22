@@ -16,8 +16,9 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
+    "pytest-xdist>=3",   # parallel test execution: pytest -n auto
     "ruff>=0.5",
-    "formulas>=1.2",   # pure-Python xlsx recalc for the integration test
+    "formulas>=1.2",     # pure-Python xlsx recalc for the integration test
 ]
 
 [project.scripts]
@@ -28,6 +29,9 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "slow: live xlsx recalc via the `formulas` package (~30s+). Skip on dev runs with `-m 'not slow'`.",
+]
 
 [tool.ruff]
 line-length = 100

@@ -1,22 +1,20 @@
 """Inputs tab — the only data-entry sheet.
 
-Layout (v1.5 — restructured to put fund-level context near the top
-and bulk asset data in the middle, with set-once constants at the
-bottom):
+Layout (v1.7 — Manual earnings dropped; control panel now has 3 toggles):
 
     Row 1       Title
     Row 2       Sample-data badge (warns staff before client share)
     Row 4       Band: 1. Control panel
-    Rows 5-9    5 control levers (named ranges anchored here)
-    Row 11      Band: 2. Members
-    Row 12      Members header row
-    Rows 13-16  4 member rows
-    Row 18      Split-% sum check row
-    Row 20      Band: 3. Asset register
-    Row 21      Register header row
-    Rows 22-71  50 register data rows
-    Row 73      Band: 4. Advanced assumptions
-    Rows 74-81  8 assumption rows (named ranges anchored here)
+    Rows 5-7    3 control levers (named ranges anchored here)
+    Row 9       Band: 2. Members
+    Row 10      Members header row
+    Rows 11-14  4 member rows
+    Row 16      Split-% sum check row
+    Row 18      Band: 3. Asset register
+    Row 19      Register header row
+    Rows 20-69  50 register data rows
+    Row 71      Band: 4. Advanced assumptions
+    Rows 72-79  8 assumption rows (named ranges anchored here)
 
 Downstream tabs read this layout via the constants below — do not
 change row numbers without grepping for the constant names first.
@@ -44,18 +42,16 @@ from div296.styles import (
 # Cell-layout constants — single source of truth.
 SHEET = "Inputs"
 
-# --- Zone 1: Control panel (rows 5-9) ---
+# --- Zone 1: Control panel (rows 5-7) ---
 CONTROL_ROWS = {
     nr.RESET_ON:        ("Reset election",                        5, "B5", ["ON", "OFF"], "ON"),
     nr.TIER10_ON:       ("$10m / +25% tier",                      6, "B6", ["ON", "OFF"], "OFF"),
     nr.DISCOUNT_ON:     ("CGT discount",                          7, "B7", ["ON", "OFF"], "ON"),
-    nr.EARNINGS_SOURCE: ("Div 296 earnings source",               8, "B8", ["Auto", "Manual"], "Auto"),
-    nr.MANUAL_EARNINGS: ("Manual earnings (used only if Manual)", 9, "B9", None, None),
 }
 
-# --- Zone 2: Members (rows 11-18) ---
-MEMBERS_HEADER_ROW = 12
-MEMBERS_FIRST_DATA_ROW = 13
+# --- Zone 2: Members (rows 9-16) ---
+MEMBERS_HEADER_ROW = 10
+MEMBERS_FIRST_DATA_ROW = 11
 MEMBER_HEADERS = [
     "Member",
     "TSB ($)",
@@ -65,9 +61,9 @@ MEMBER_HEADERS = [
 ]
 SPLIT_CHECK_ROW = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count + 1   # row 18
 
-# --- Zone 3: Asset register (rows 20-71) ---
-REGISTER_HEADER_ROW = 21
-REGISTER_FIRST_DATA_ROW = 22
+# --- Zone 3: Asset register (rows 18-69) ---
+REGISTER_HEADER_ROW = 19
+REGISTER_FIRST_DATA_ROW = 20
 REGISTER_LAST_DATA_ROW = REGISTER_FIRST_DATA_ROW + ASSUMPTIONS.asset_register_rows - 1   # row 71
 
 REGISTER_HEADERS = [
@@ -157,8 +153,7 @@ def build(wb: Workbook) -> Worksheet:
     _band(ws, 4, "1. Control panel (the demo levers)")
     for name, (label, row, coord, options, default) in CONTROL_ROWS.items():
         ws.cell(row=row, column=1, value=label).font = BODY_FONT
-        _input_cell(ws, coord, value=default,
-                    number_format=FMT_CURRENCY if name == nr.MANUAL_EARNINGS else None)
+        _input_cell(ws, coord, value=default)
         _define_name(wb, name, coord)
         if options is not None:
             dv = DataValidation(type="list", formula1=f'"{",".join(options)}"', allow_blank=False)

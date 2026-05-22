@@ -11,8 +11,6 @@ Populated in v1.0 when Inputs/Analyser are built.
 RESET_ON = "reset_on"
 TIER10_ON = "tier10_on"
 DISCOUNT_ON = "discount_on"
-EARNINGS_SOURCE = "earnings_source"   # "Auto" or "Manual"
-MANUAL_EARNINGS = "manual_earnings"
 
 # Assumption constants (spec §4 Zone 3)
 RATE_TIER1 = "rate_tier1"
@@ -25,7 +23,7 @@ INDEXATION_INCR_1 = "indexation_increment_1"
 INDEXATION_INCR_2 = "indexation_increment_2"
 
 ALL_NAMES = (
-    RESET_ON, TIER10_ON, DISCOUNT_ON, EARNINGS_SOURCE, MANUAL_EARNINGS,
+    RESET_ON, TIER10_ON, DISCOUNT_ON,
     RATE_TIER1, RATE_TIER2, THRESHOLD_1, THRESHOLD_2,
     DISCOUNT_RATE, FUND_CGT_RATE,
     INDEXATION_INCR_1, INDEXATION_INCR_2,

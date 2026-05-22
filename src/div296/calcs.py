@@ -143,14 +143,9 @@ def div296_headline_tax(
     threshold_2: float,
     rate_tier1: float,
     rate_tier2: float,
-    earnings_source: str = "Auto",
-    manual_earnings: float = 0.0,
 ) -> float:
-    """Sum of per-member Div 296 tax. Honours the Auto/Manual earnings switch."""
-    if earnings_source == "Manual":
-        earnings = manual_earnings
-    else:
-        earnings = div296_fund_earnings(assets, reset_on, discount_on, discount_rate)
+    """Sum of per-member Div 296 tax."""
+    earnings = div296_fund_earnings(assets, reset_on, discount_on, discount_rate)
     return sum(
         div296_tax_for_member(
             earnings, m, tier10_on, threshold_1, threshold_2, rate_tier1, rate_tier2

@@ -12,7 +12,7 @@ Layout (top to bottom):
     Rows 28-29   Panel headers + column sub-headers
     Rows 30-44   15 data rows
     Row 45       Note: "Showing first 15 assets — see Analyser for the full register"
-    Rows 47-48   Existing reminder + manual-earnings notes
+    Rows 47-48   Reminder + sort-order notes
     Rows 50+     Chart
 
 Columns:
@@ -51,7 +51,8 @@ from div296.styles import (
     SECTION_BAND_FILL, SECTION_BAND_FONT, THIN_BOX, TITLE_FONT,
 )
 from div296.tabs.inputs import (
-    MEMBERS_FIRST_DATA_ROW, REGISTER_FIRST_DATA_ROW, SAMPLE_REGISTER_ROWS,
+    MEMBERS_FIRST_DATA_ROW, REGISTER_FIRST_DATA_ROW,
+    REGISTER_LAST_DATA_ROW, SAMPLE_REGISTER_ROWS,
 )
 
 
@@ -60,8 +61,10 @@ INPUTS_SHEET = "'Inputs'"
 ANALYSER_SHEET = "'Analyser'"
 
 # How many assets to display on the printable comparison page.
-# Reduced from 50 (Inputs register capacity) to a tight tearsheet view.
-DISPLAY_ROWS = 15
+# v1.7: 10 rows, sorted by absolute Δ (Scenario B − Scenario A) descending so
+# the assets most affected by the reset election appear at the top. Empty
+# register rows sort to the bottom and render blank.
+DISPLAY_ROWS = 10
 
 # --- Layout rows ---
 WATERMARK_ROW = 1
@@ -95,11 +98,15 @@ DATA_FIRST_ROW = 30
 DATA_LAST_ROW = DATA_FIRST_ROW + DISPLAY_ROWS - 1   # row 44
 DATA_OVERFLOW_NOTE_ROW = DATA_LAST_ROW + 1          # row 45
 
-REMINDER_ROW = DATA_OVERFLOW_NOTE_ROW + 2           # row 47
-MANUAL_NOTE_ROW = REMINDER_ROW + 1                  # row 48
+REMINDER_ROW = DATA_OVERFLOW_NOTE_ROW + 1           # row 36
+SORT_NOTE_ROW = REMINDER_ROW + 1                  # row 37
 
-CHART_ANCHOR_ROW = MANUAL_NOTE_ROW + 2              # row 50
-CHART_BOTTOM_ROW = CHART_ANCHOR_ROW + 16            # ~16 rows tall
+# v1.6: chart anchored inline next to the subtotals (cols F-K, rows 20-27)
+# rather than below the data block. Fills the empty right-side region that
+# the subtotals table (cols A-D) doesn't use, and gets the chart on page 1.
+CHART_ANCHOR_ROW = BAND_SUBTOTALS_ROW                 # row 20
+CHART_ANCHOR_COL = "F"
+CHART_BOTTOM_ROW = SORT_NOTE_ROW                  # print area ends with the notes
 
 # --- Layout columns ---
 PANEL_A_COLS = ("A", "B", "C", "D", "E")   # Asset, Proceeds, Cost base, Adj gain, Tax
@@ -110,6 +117,14 @@ LAST_VISIBLE_COL = PANEL_B_COLS[-1]         # "K"
 # Hidden helper columns (right of the visible panels)
 HELPER_COL_A = "L"   # Scenario A working column
 HELPER_COL_B = "M"   # Scenario B working column
+
+# v1.7: per-register-row helper grid for sort-by-impact lookup.
+# Cols N/O/P/Q span register rows (REGISTER_FIRST_DATA_ROW..REGISTER_LAST_DATA_ROW).
+PER_REG_GAIN_A_COL = "N"   # Scenario A adj gain per register row
+PER_REG_GAIN_B_COL = "O"   # Scenario B adj gain per register row
+PER_REG_DELTA_COL = "P"    # |Δ| + row tiebreaker; empty rows = -1
+# Col R: matched register row for each visible display row (rows 30..39).
+MATCHED_ROW_COL = "R"
 
 # Hidden helper rows in cols L/M
 HELPER_FUND_EARNINGS_ROW = 1
@@ -305,15 +320,44 @@ def _build_context_strip(ws: Worksheet) -> None:
     ws.row_dimensions[CONTEXT_VALUE_ROW].height = 22
 
 
-def _build_helpers(ws: Worksheet) -> tuple[str, str, str, str]:
-    """Hidden helper block in cols L/M. Returns (gain_a_range, gain_b_range,
-    headline_a_cell, headline_b_cell) for downstream wiring."""
-    # Scenario A panel fund earnings = sum of positive col D values
-    panel_a_gain_col = PANEL_A_COLS[3]   # col D = adj gain
-    panel_b_gain_col = PANEL_B_COLS[3]   # col J = adj gain
-    gain_a_range = f"{panel_a_gain_col}{DATA_FIRST_ROW}:{panel_a_gain_col}{DATA_LAST_ROW}"
-    gain_b_range = f"{panel_b_gain_col}{DATA_FIRST_ROW}:{panel_b_gain_col}{DATA_LAST_ROW}"
+def _build_per_register_helpers(ws: Worksheet) -> tuple[str, str, str]:
+    """Per-register-row helper grid (cols N/O/P) used to sort the per-asset
+    detail panel by |Δ| descending.
 
+    N = Scenario A Div 296 adj gain (cost base = original)
+    O = Scenario B Div 296 adj gain (cost base = MV)
+    P = |Δ| + row-based tiebreaker (so MATCH uniquely identifies the row);
+        empty register rows return -1 so LARGE pushes them to the bottom.
+
+    Returns the absolute ranges (e.g. '$N$20:$N$69').
+    """
+    n_first, n_last = REGISTER_FIRST_DATA_ROW, REGISTER_LAST_DATA_ROW
+    for n in range(n_first, n_last + 1):
+        proceeds = f"{INPUTS_SHEET}!H{n}"
+        orig = f"{INPUTS_SHEET}!D{n}"
+        mv = f"{INPUTS_SHEET}!F{n}"
+        held = f"{INPUTS_SHEET}!I{n}"
+        ws[f"{PER_REG_GAIN_A_COL}{n}"] = _div296_adj_formula(proceeds, orig, held)
+        ws[f"{PER_REG_GAIN_B_COL}{n}"] = _div296_adj_formula(proceeds, mv, held)
+        # Tiebreaker: a small positive amount that decreases with register row,
+        # so earlier-listed assets win ties without ever turning P negative.
+        tiebreak = f"({n_last}-ROW())*0.001"
+        ws[f"{PER_REG_DELTA_COL}{n}"] = (
+            f'=IF({proceeds}="",-1,'
+            f'ABS({PER_REG_GAIN_B_COL}{n}-{PER_REG_GAIN_A_COL}{n})+{tiebreak})'
+        )
+    return (
+        f"${PER_REG_GAIN_A_COL}${n_first}:${PER_REG_GAIN_A_COL}${n_last}",
+        f"${PER_REG_GAIN_B_COL}${n_first}:${PER_REG_GAIN_B_COL}${n_last}",
+        f"${PER_REG_DELTA_COL}${n_first}:${PER_REG_DELTA_COL}${n_last}",
+    )
+
+
+def _build_helpers(
+    ws: Worksheet, gain_a_range: str, gain_b_range: str,
+) -> tuple[str, str]:
+    """Hidden L/M block: fund earnings (over the full register), per-member tax,
+    and the chart cache cells. Returns (headline_a_abs, headline_b_abs)."""
     ws[f"{HELPER_COL_A}{HELPER_FUND_EARNINGS_ROW}"] = f'=SUMIF({gain_a_range},">0")'
     ws[f"{HELPER_COL_B}{HELPER_FUND_EARNINGS_ROW}"] = f'=SUMIF({gain_b_range},">0")'
 
@@ -345,14 +389,15 @@ def _build_helpers(ws: Worksheet) -> tuple[str, str, str, str]:
     for coord in (CHART_VALUE_A_CELL, CHART_VALUE_B_CELL):
         ws[coord].number_format = FMT_CURRENCY
 
-    # Hide helper columns + anything to the right
-    for col_letter in (HELPER_COL_A, HELPER_COL_B, "N", "O", "P", "Q"):
+    # Hide helper columns (L/M plus the per-register grid + matched-row col R).
+    for col_letter in (HELPER_COL_A, HELPER_COL_B,
+                       PER_REG_GAIN_A_COL, PER_REG_GAIN_B_COL,
+                       PER_REG_DELTA_COL, "Q", MATCHED_ROW_COL):
         ws.column_dimensions[col_letter].hidden = True
 
-    # Return absolute refs for downstream formulas (e.g. "$L$6").
     abs_a = f"${HELPER_COL_A}${HELPER_HEADLINE_ROW}"
     abs_b = f"${HELPER_COL_B}${HELPER_HEADLINE_ROW}"
-    return gain_a_range, gain_b_range, abs_a, abs_b
+    return abs_a, abs_b
 
 
 def _build_metric_cards(ws: Worksheet, headline_a: str, headline_b: str) -> None:
@@ -457,11 +502,11 @@ def _build_subtotals(ws: Worksheet, headline_a: str, headline_b: str,
 
 
 def _build_per_asset_detail(
-    ws: Worksheet, gain_a_range: str, gain_b_range: str,
+    ws: Worksheet, gain_a_range: str, gain_b_range: str, delta_range: str,
     headline_a: str, headline_b: str,
 ) -> None:
     _band(ws, BAND_DETAIL_ROW,
-          f"Per-asset detail (first {DISPLAY_ROWS} assets)")
+          f"Per-asset detail — top {DISPLAY_ROWS} by |Δ (B − A)|")
 
     # Panel titles row (28)
     panel_a_first, panel_a_last = PANEL_A_COLS[0], PANEL_A_COLS[-1]
@@ -507,43 +552,62 @@ def _build_per_asset_detail(
         c.fill = SECTION_BAND_FILL
         c.alignment = CENTER
 
-    # Per-row data formulas (only the first DISPLAY_ROWS rows are rendered)
+    # Per-row data formulas — sort by |Δ| descending via LARGE / MATCH / INDEX.
+    # Empty register rows score -1 on the delta range; LARGE pushes them past
+    # rank DISPLAY_ROWS so matched=0 → blank cells in the visible panel.
+    asset_a, proc_a, cb_a, gain_a, tax_a = PANEL_A_COLS
+    asset_b, proc_b, cb_b, gain_b, tax_b = PANEL_B_COLS
+
     for offset in range(DISPLAY_ROWS):
         c_row = DATA_FIRST_ROW + offset
-        i_row = REGISTER_FIRST_DATA_ROW + offset
+        k = offset + 1   # rank 1..DISPLAY_ROWS
+        matched = f"${MATCHED_ROW_COL}{c_row}"   # absolute col, this row
 
-        code = f"{INPUTS_SHEET}!A{i_row}"
-        name = f"{INPUTS_SHEET}!B{i_row}"
-        orig = f"{INPUTS_SHEET}!D{i_row}"
-        mv = f"{INPUTS_SHEET}!F{i_row}"
-        proceeds = f"{INPUTS_SHEET}!H{i_row}"
-        held = f"{INPUTS_SHEET}!I{i_row}"
+        # Hidden: the register row that fills this visible slot. 0 = no asset
+        # (fewer assets than DISPLAY_ROWS, or LARGE landed on an empty marker).
+        ws[f"{MATCHED_ROW_COL}{c_row}"] = (
+            f'=IFERROR('
+            f'IF(LARGE({delta_range},{k})<=0,0,'
+            f'MATCH(LARGE({delta_range},{k}),{delta_range},0)+{REGISTER_FIRST_DATA_ROW - 1}),'
+            f'0)'
+        )
+
+        def _input(col: str) -> str:
+            return f"INDEX({INPUTS_SHEET}!${col}:${col},{matched})"
+
+        a_code  = _input("A")
+        a_name  = _input("B")
+        a_orig  = _input("D")
+        a_mv    = _input("F")
+        a_proc  = _input("H")
+
+        # Pre-computed gains from the per-register grid (cols N/O).
+        gain_a_lookup = f"INDEX(${PER_REG_GAIN_A_COL}:${PER_REG_GAIN_A_COL},{matched})"
+        gain_b_lookup = f"INDEX(${PER_REG_GAIN_B_COL}:${PER_REG_GAIN_B_COL},{matched})"
 
         # Panel A (no reset → cost base = original)
-        asset_a, proc_a, cb_a, gain_a, tax_a = PANEL_A_COLS
-        ws[f"{asset_a}{c_row}"] = f'=IF({code}="","",{name}&" ("&{code}&")")'
-        ws[f"{proc_a}{c_row}"] = f'=IF({proceeds}="","",{proceeds})'
-        ws[f"{cb_a}{c_row}"]   = f'=IF({proceeds}="","",{orig})'
-        ws[f"{gain_a}{c_row}"] = _div296_adj_formula(proceeds, orig, held)
-        ws[f"{tax_a}{c_row}"]  = (
-            f'=IF({proceeds}="","",'
+        ws[f"{asset_a}{c_row}"] = f'=IF({matched}=0,"",{a_name}&" ("&{a_code}&")")'
+        ws[f"{proc_a}{c_row}"]  = f'=IF({matched}=0,"",{a_proc})'
+        ws[f"{cb_a}{c_row}"]    = f'=IF({matched}=0,"",{a_orig})'
+        ws[f"{gain_a}{c_row}"]  = f'=IF({matched}=0,"",{gain_a_lookup})'
+        ws[f"{tax_a}{c_row}"]   = (
+            f'=IF({matched}=0,"",'
             f'IF(SUMIF({gain_a_range},">0")=0,0,'
             f'MAX(0,{gain_a}{c_row})/SUMIF({gain_a_range},">0")*{headline_a}))'
         )
 
         # Δ column = (panel B adj gain) − (panel A adj gain)
-        asset_b, proc_b, cb_b, gain_b, tax_b = PANEL_B_COLS
         ws[f"{DELTA_COL}{c_row}"] = (
-            f'=IF({proceeds}="","",{gain_b}{c_row}-{gain_a}{c_row})'
+            f'=IF({matched}=0,"",{gain_b}{c_row}-{gain_a}{c_row})'
         )
 
         # Panel B (reset elected → cost base = MV)
-        ws[f"{asset_b}{c_row}"] = f'=IF({code}="","",{name}&" ("&{code}&")")'
-        ws[f"{proc_b}{c_row}"]  = f'=IF({proceeds}="","",{proceeds})'
-        ws[f"{cb_b}{c_row}"]    = f'=IF({proceeds}="","",{mv})'
-        ws[f"{gain_b}{c_row}"]  = _div296_adj_formula(proceeds, mv, held)
+        ws[f"{asset_b}{c_row}"] = f'=IF({matched}=0,"",{a_name}&" ("&{a_code}&")")'
+        ws[f"{proc_b}{c_row}"]  = f'=IF({matched}=0,"",{a_proc})'
+        ws[f"{cb_b}{c_row}"]    = f'=IF({matched}=0,"",{a_mv})'
+        ws[f"{gain_b}{c_row}"]  = f'=IF({matched}=0,"",{gain_b_lookup})'
         ws[f"{tax_b}{c_row}"]   = (
-            f'=IF({proceeds}="","",'
+            f'=IF({matched}=0,"",'
             f'IF(SUMIF({gain_b_range},">0")=0,0,'
             f'MAX(0,{gain_b}{c_row})/SUMIF({gain_b_range},">0")*{headline_b}))'
         )
@@ -566,8 +630,9 @@ def _build_per_asset_detail(
     # Overflow note
     overflow = ws.cell(
         row=DATA_OVERFLOW_NOTE_ROW, column=1,
-        value=(f"Showing first {DISPLAY_ROWS} assets — see the Analyser tab "
-               f"for the full register (up to {ASSUMPTIONS.asset_register_rows} rows)."),
+        value=(f"Showing top {DISPLAY_ROWS} assets by |Δ (B − A)| — see the "
+               f"Analyser tab for the full register "
+               f"(up to {ASSUMPTIONS.asset_register_rows} rows)."),
     )
     overflow.font = Font(name="Arial", size=9, italic=True, color="666666")
     ws.merge_cells(f"A{DATA_OVERFLOW_NOTE_ROW}:{LAST_VISIBLE_COL}{DATA_OVERFLOW_NOTE_ROW}")
@@ -584,16 +649,16 @@ def _build_footer_notes(ws: Worksheet) -> None:
     ws.merge_cells(f"A{REMINDER_ROW}:{LAST_VISIBLE_COL}{REMINDER_ROW}")
     ws.row_dimensions[REMINDER_ROW].height = 24
 
-    manual_note = ws.cell(
-        row=MANUAL_NOTE_ROW, column=1,
-        value=("Note: Comparison panels always compute from the asset register. "
-               "If 'Div 296 earnings source' is set to Manual on Inputs, the override "
-               "applies to the Analyser headline only — it is ignored here."),
+    sort_note = ws.cell(
+        row=SORT_NOTE_ROW, column=1,
+        value=("Note: per-asset detail shows the top 10 assets by absolute "
+               "Δ (Scenario B − Scenario A) — i.e. those where the reset election "
+               "moves the Div 296 gain the most. See the Analyser tab for the full register."),
     )
-    manual_note.font = Font(name="Arial", size=9, italic=True, color="666666")
-    manual_note.alignment = Alignment(wrap_text=True, vertical="top")
-    ws.merge_cells(f"A{MANUAL_NOTE_ROW}:{LAST_VISIBLE_COL}{MANUAL_NOTE_ROW}")
-    ws.row_dimensions[MANUAL_NOTE_ROW].height = 30
+    sort_note.font = Font(name="Arial", size=9, italic=True, color="666666")
+    sort_note.alignment = Alignment(wrap_text=True, vertical="top")
+    ws.merge_cells(f"A{SORT_NOTE_ROW}:{LAST_VISIBLE_COL}{SORT_NOTE_ROW}")
+    ws.row_dimensions[SORT_NOTE_ROW].height = 30
 
 
 def _build_chart(ws: Worksheet, headline_a_cell: str, headline_b_cell: str) -> None:
@@ -612,8 +677,9 @@ def _build_chart(ws: Worksheet, headline_a_cell: str, headline_b_cell: str) -> N
     chart.dataLabels = DataLabelList(
         showVal=True, showCatName=False, showSerName=False, showLegendKey=False,
     )
-    chart.height = 8
-    chart.width = 22
+    # Sized to fit cols F-K (~75 char widths) × ~7 rows next to the subtotals.
+    chart.height = 6.5
+    chart.width = 14
 
     scenario_a, scenario_b = _sample_scenario_headlines()
     series = chart.ser[0]
@@ -638,7 +704,7 @@ def _build_chart(ws: Worksheet, headline_a_cell: str, headline_b_cell: str) -> N
         ),
     ))
 
-    ws.add_chart(chart, f"A{CHART_ANCHOR_ROW}")
+    ws.add_chart(chart, f"{CHART_ANCHOR_COL}{CHART_ANCHOR_ROW}")
 
 
 def build(wb: Workbook) -> Worksheet:
@@ -653,11 +719,14 @@ def build(wb: Workbook) -> Worksheet:
 
     _build_context_strip(ws)
 
-    gain_a_range, gain_b_range, headline_a, headline_b = _build_helpers(ws)
+    gain_a_range, gain_b_range, delta_range = _build_per_register_helpers(ws)
+    headline_a, headline_b = _build_helpers(ws, gain_a_range, gain_b_range)
 
     _build_metric_cards(ws, headline_a, headline_b)
     _build_subtotals(ws, headline_a, headline_b, gain_a_range, gain_b_range)
-    _build_per_asset_detail(ws, gain_a_range, gain_b_range, headline_a, headline_b)
+    _build_per_asset_detail(
+        ws, gain_a_range, gain_b_range, delta_range, headline_a, headline_b,
+    )
     _build_footer_notes(ws)
     _build_chart(ws, headline_a, headline_b)
 
@@ -670,7 +739,9 @@ def build(wb: Workbook) -> Worksheet:
     ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
     ws.page_setup.paperSize = ws.PAPERSIZE_A4
     ws.page_setup.fitToWidth = 1
-    ws.page_setup.fitToHeight = 0           # may spill to 2 pages — print risk relaxed
+    # v1.6: fitToHeight=1 — scale the whole print area to a single A4 landscape
+    # page rather than letting footer notes overflow onto a near-empty page 2.
+    ws.page_setup.fitToHeight = 1
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.print_options.horizontalCentered = True
     ws.page_margins.left = 0.25

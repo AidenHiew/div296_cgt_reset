@@ -8,7 +8,7 @@ never a magic number):
     Rows 4–8  Lever mirrors (read-only =Inputs!B*)
 
     Row 10    Section band: "Fund summary"
-    Row 11    Fund Div 296 earnings (auto / manual switch)
+    Row 11    Fund Div 296 earnings (sum of positive realised gains)
     Rows 12–15 Member 1–4 attributed Div 296 tax
     Row 16    Total Div 296 tax (the headline)
 
@@ -143,19 +143,17 @@ def build(wb: Workbook) -> Worksheet:
         ws.cell(row=row, column=1, value=label).font = BODY_FONT
         mirror = ws.cell(row=row, column=2, value=f"={INPUTS_SHEET}!{coord}")
         mirror.font = BODY_FONT
-        if "earnings" in label.lower() and "manual" in label.lower():
-            mirror.number_format = FMT_CURRENCY
 
     # --- Fund summary block ---
     _band(ws, FUND_BAND_ROW, "Fund summary")
 
-    # Fund earnings — auto (sum of positive col 7) or manual override.
+    # Fund earnings — sum of positive col-G realised Div 296 gains.
     g_first, g_last = f"G{PERASSET_FIRST_ROW}", f"G{PERASSET_LAST_ROW}"
     ws.cell(row=FUND_EARNINGS_ROW, column=1,
-            value="Fund Div 296 earnings (auto / manual)").font = BODY_FONT
+            value="Fund Div 296 earnings").font = BODY_FONT
     ws.cell(
         row=FUND_EARNINGS_ROW, column=2,
-        value=f'=IF(earnings_source="Manual",manual_earnings,SUMIF({g_first}:{g_last},">0"))',
+        value=f'=SUMIF({g_first}:{g_last},">0")',
     ).number_format = FMT_CURRENCY
 
     # Per-member attributed Div 296 tax.
@@ -177,7 +175,7 @@ def build(wb: Workbook) -> Worksheet:
     # --- Per-asset analysis ---
     _band(ws, PERASSET_BAND_ROW, "Per-asset analysis (50 rows)")
     headers = [
-        "Asset", "Proceeds", "Original cost base",
+        "Asset", "Projected sale proceeds", "Original cost base",
         "Ordinary taxable capital gain", "Ordinary CGT",
         "Div 296 cost base",
         "Div 296 adjusted taxable capital gain", "Div 296 tax",

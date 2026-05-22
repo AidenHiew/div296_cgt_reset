@@ -21,7 +21,10 @@ python -m div296.build
 # -> dist/Division_296_Model_v0.1.0.xlsx
 # -> Recalc validation: OK (no Excel error cells).
 
-# 3. Run the test suite
+# 3. Run the test suite (fast dev loop — skips live-recalc)
+pytest -m "not slow"
+
+# Full suite incl. live-recalc against §12 numbers (~30s+):
 pytest
 ```
 
@@ -121,7 +124,9 @@ Factual disclosures, not recommendations:
 - **v1.2:** post-build recalc validation gate — `python -m div296.build` fails non-zero if any cell resolves to an Excel error sentinel.
 - **v1.3:** GitHub Actions CI (lint + tests + build, Python 3.11/3.12/3.13); bar chart on Comparison; `scripts/export_pdf.py` LibreOffice headless PDF export.
 - **v1.4:** PDF render fixes — chart cache injection, footnote wrap, recalc.py source-collision fix.
-- **v1.5 (this commit):** Inputs zones reordered (members up, advanced down); sample-data warning badge; Analyser column reorder (Div 296 cost base next to its gain); Comparison redesign (subtotals at top, metric cards, fund-context strip, 5-col panels + Δ column, total-tax-burden subtotal).
+- **v1.5:** Inputs zones reordered (members up, advanced down); sample-data warning badge; Analyser column reorder (Div 296 cost base next to its gain); Comparison redesign (subtotals at top, metric cards, fund-context strip, 5-col panels + Δ column, total-tax-burden subtotal).
+- **v1.6:** Comparison PDF fits on one A4 landscape page — chart anchored inline next to subtotals (was below data, on page 2), 5 visible data rows + `fitToHeight=1` removes mid-page whitespace.
+- **v1.7 (this commit):** Manual earnings input removed (Comparison-vs-Analyser divergence eliminated, control panel down to 3 levers); Analyser column label "Proceeds" renamed to "Projected sale proceeds" to match Inputs; Comparison per-asset detail now shows **top 10 assets sorted by |Δ (B − A)|** descending, via LARGE/MATCH/INDEX over a hidden per-register helper grid (cols N/O/P/R).
 
 ---
 

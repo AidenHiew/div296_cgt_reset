@@ -47,37 +47,37 @@ def test_every_named_range_resolves(tmp_path: Path):
 
 
 def test_inputs_sample_data_preloaded(tmp_path: Path):
-    """v1.5: register data moved to rows 22-24; member 1 to row 13."""
+    """v1.7: Manual earnings dropped → register rows shift up to 20-22; member 1 → 11."""
     out = tmp_path / "out.xlsx"
     wb = build_workbook()
     wb.save(out)
     ws = load_workbook(out)["Inputs"]
 
-    # Row 22: Commercial property
-    assert ws["A22"].value == "P1"
-    assert ws["B22"].value == "Commercial property"
-    assert ws["D22"].value == 800_000
-    assert ws["F22"].value == 2_400_000
-    assert ws["H22"].value == 2_600_000
-    assert ws["I22"].value == "Yes"
+    # Row 20: Commercial property
+    assert ws["A20"].value == "P1"
+    assert ws["B20"].value == "Commercial property"
+    assert ws["D20"].value == 800_000
+    assert ws["F20"].value == 2_400_000
+    assert ws["H20"].value == 2_600_000
+    assert ws["I20"].value == "Yes"
 
-    # Row 23: Listed shares parcel
-    assert ws["A23"].value == "S1"
-    assert ws["D23"].value == 300_000
-    assert ws["F23"].value == 520_000
+    # Row 21: Listed shares parcel
+    assert ws["A21"].value == "S1"
+    assert ws["D21"].value == 300_000
+    assert ws["F21"].value == 520_000
 
-    # Row 24: Loss-making holding
-    assert ws["A24"].value == "L1"
-    assert ws["D24"].value == 500_000
-    assert ws["F24"].value == 100_000
+    # Row 22: Loss-making holding
+    assert ws["A22"].value == "L1"
+    assert ws["D22"].value == 500_000
+    assert ws["F22"].value == 100_000
 
-    # Sole member moved up to row 13: TSB $12m, split 100%
-    assert ws["B13"].value == 12_000_000
-    assert ws["C13"].value == 1.0
+    # Sole member on row 11: TSB $12m, split 100%
+    assert ws["B11"].value == 12_000_000
+    assert ws["C11"].value == 1.0
 
 
 def test_control_panel_defaults(tmp_path: Path):
-    """v1.5: control panel moved from rows 4-8 to rows 5-9 (sample badge on row 2)."""
+    """v1.7: control panel = 3 levers on rows 5-7 (Manual earnings dropped)."""
     out = tmp_path / "out.xlsx"
     wb = build_workbook()
     wb.save(out)
@@ -86,8 +86,7 @@ def test_control_panel_defaults(tmp_path: Path):
     assert ws["B5"].value == "ON"     # Reset election
     assert ws["B6"].value == "OFF"    # $10m / +25% tier
     assert ws["B7"].value == "ON"     # CGT discount
-    assert ws["B8"].value == "Auto"   # earnings source
-    assert ws["B9"].value is None     # manual earnings
+    # B8/B9 used to hold earnings source + manual override — removed in v1.7.
 
 
 def test_sample_data_badge_present(tmp_path: Path):
@@ -117,15 +116,15 @@ def test_input_cells_unlocked(tmp_path: Path):
     wb = build_workbook()
     wb.save(out)
     ws = load_workbook(out)["Inputs"]
-    # Control panel B5-B9 must be unlocked.
-    for row in range(5, 10):
+    # Control panel B5-B7 must be unlocked.
+    for row in range(5, 8):
         assert ws.cell(row=row, column=2).protection.locked is False, (
             f"Inputs!B{row} should be unlocked"
         )
-    # Sample register row D22 (Original cost base of Property) must be unlocked.
-    assert ws["D22"].protection.locked is False
-    # Member 1 TSB (B13) must be unlocked.
-    assert ws["B13"].protection.locked is False
+    # Sample register row D20 (Original cost base of Property) must be unlocked.
+    assert ws["D20"].protection.locked is False
+    # Member 1 TSB (B11) must be unlocked.
+    assert ws["B11"].protection.locked is False
 
 
 # --- Analyser tab ---------------------------------------------------------
@@ -139,29 +138,28 @@ def _analyser(tmp_path: Path):
 
 class TestAnalyser:
     def test_mirror_levers_reference_inputs(self, tmp_path: Path):
-        """Mirror strip at Analyser rows 4-8; references Inputs rows 5-9."""
+        """v1.7: Mirror strip at Analyser rows 4-6; references Inputs rows 5-7."""
         ws = _analyser(tmp_path)
-        for offset in range(5):
+        for offset in range(3):
             analyser_row = 4 + offset
             inputs_row = 5 + offset
             assert ws.cell(row=analyser_row, column=2).value == f"='Inputs'!B{inputs_row}"
 
-    def test_fund_earnings_formula_uses_named_ranges(self, tmp_path: Path):
+    def test_fund_earnings_formula(self, tmp_path: Path):
+        """v1.7: fund earnings = SUMIF over col-G positive Div 296 gains. No Manual switch."""
         ws = _analyser(tmp_path)
         f = ws["B11"].value
-        assert 'earnings_source="Manual"' in f
-        assert "manual_earnings" in f
-        assert 'SUMIF(G20:G69,">0")' in f
+        assert f == '=SUMIF(G20:G69,">0")'
 
     def test_headline_is_sum_of_member_tax(self, tmp_path: Path):
         ws = _analyser(tmp_path)
         assert ws["B16"].value == "=SUM(B12:B15)"
 
     def test_member_tax_formula_references_inputs_member_rows(self, tmp_path: Path):
-        """v1.5: members moved up — member 1 now on Inputs row 13."""
+        """v1.7: members moved up another two rows — member 1 now on Inputs row 11."""
         ws = _analyser(tmp_path)
         f = ws["B12"].value
-        for ref in ("'Inputs'!B13", "'Inputs'!C13", "'Inputs'!D13", "'Inputs'!E13"):
+        for ref in ("'Inputs'!B11", "'Inputs'!C11", "'Inputs'!D11", "'Inputs'!E11"):
             assert ref in f, f"member 1 formula missing {ref}"
         assert "rate_tier1" in f
         assert "rate_tier2" in f
@@ -169,20 +167,19 @@ class TestAnalyser:
         assert "threshold_2" in f
 
     def test_first_data_row_columns(self, tmp_path: Path):
-        """v1.5 column order: A Asset, B Proceeds, C Orig CB, D Ord taxable gain,
-        E Ord CGT, F Div 296 CB, G Div 296 adj gain, H Div 296 tax, I Reset impact."""
+        """v1.7 column order unchanged; Inputs reference shifted by -2 to row 20."""
         ws = _analyser(tmp_path)
-        # Analyser row 20 = first asset (Inputs row 22 after v1.5 reorder).
+        # Analyser row 20 = first asset (Inputs row 20 after v1.7 Manual removal).
         a, b, c, d, e, f, g, h, i = (ws.cell(row=20, column=col).value for col in range(1, 10))
-        assert "'Inputs'!A22" in a and "'Inputs'!B22" in a
-        assert "'Inputs'!H22" in b                      # Proceeds
-        assert "'Inputs'!D22" in c                      # Original CB
-        # Col D = Ordinary taxable gain (moved from E)
-        assert "discount_rate" in d and "'Inputs'!H22" in d and "'Inputs'!D22" in d
+        assert "'Inputs'!A20" in a and "'Inputs'!B20" in a
+        assert "'Inputs'!H20" in b                      # Proceeds
+        assert "'Inputs'!D20" in c                      # Original CB
+        # Col D = Ordinary taxable gain
+        assert "discount_rate" in d and "'Inputs'!H20" in d and "'Inputs'!D20" in d
         # Col E = Ordinary CGT = MAX(0, D{row}) * fund_cgt_rate
         assert "fund_cgt_rate" in e and "D20" in e
-        # Col F = Div 296 cost base (moved from D)
-        assert 'reset_on="ON"' in f and "'Inputs'!F22" in f and "'Inputs'!D22" in f
+        # Col F = Div 296 cost base
+        assert 'reset_on="ON"' in f and "'Inputs'!F20" in f and "'Inputs'!D20" in f
         # Col G = Div 296 adjusted gain
         assert "discount_rate" in g and 'reset_on="ON"' in g
         # Col H = Div 296 tax (pro-rata of headline)
@@ -252,7 +249,7 @@ class TestComparison:
         assert "ILLUSTRATIVE" in ws.oddHeader.center.text
 
     def test_context_strip_present(self, tmp_path: Path):
-        """v1.5: context strip at rows 13-14 shows TSB, proportion, discount, tier."""
+        """v1.7: context strip values reference Inputs!B11 (member 1 TSB after Manual removal)."""
         ws = _comparison(tmp_path)
         labels_row_text = " ".join(
             str(c.value) for c in ws[13] if c.value is not None
@@ -261,11 +258,10 @@ class TestComparison:
         assert "Proportion above $3m" in labels_row_text
         assert "CGT discount" in labels_row_text
         assert "tier" in labels_row_text.lower()
-        # Values row references Inputs (TSB) and named ranges (discount_on, tier10_on)
         values_row_text = " ".join(
             str(c.value) for c in ws[14] if c.value is not None
         )
-        assert "'Inputs'!B13" in values_row_text   # member 1 TSB
+        assert "'Inputs'!B11" in values_row_text   # member 1 TSB
         assert "discount_on" in values_row_text
         assert "tier10_on" in values_row_text
 
@@ -305,31 +301,25 @@ class TestComparison:
         assert ws["C25"].value == "=C23+C24"
 
     def test_panel_a_uses_original_cost_base(self, tmp_path: Path):
-        """v1.5: Panel A data rows start at 30. Cost base col is C (= Inputs!D)."""
+        """v1.7: panels use INDEX(Inputs!col, matched_row) — col D = original CB."""
         ws = _comparison(tmp_path)
-        # Panel A cost base for first asset
+        # Panel A cost base for first visible row pulls Inputs col D via INDEX.
         cb_formula = ws["C30"].value
-        assert "'Inputs'!D22" in cb_formula
-        assert "'Inputs'!F22" not in cb_formula
-        # Panel A adj gain
-        gain = ws["D30"].value
-        assert "'Inputs'!D22" in gain   # original cost base
-        assert "'Inputs'!F22" not in gain
+        assert "'Inputs'!$D:$D" in cb_formula
+        assert "'Inputs'!$F:$F" not in cb_formula
 
     def test_panel_b_uses_market_value(self, tmp_path: Path):
-        """v1.5: Panel B cost base col is I (= Inputs!F = MV)."""
+        """v1.7: panels use INDEX(Inputs!col, matched_row) — col F = MV."""
         ws = _comparison(tmp_path)
         cb_formula = ws["I30"].value
-        assert "'Inputs'!F22" in cb_formula
-        assert "'Inputs'!D22" not in cb_formula
-        gain = ws["J30"].value
-        assert "'Inputs'!F22" in gain
-        assert "'Inputs'!D22" not in gain
+        assert "'Inputs'!$F:$F" in cb_formula
+        assert "'Inputs'!$D:$D" not in cb_formula
 
     def test_panels_independent_of_master_reset_toggle(self, tmp_path: Path):
         """Neither panel formula may reference the reset_on named range."""
         ws = _comparison(tmp_path)
-        for row in range(30, 45):
+        # v1.7: 10 visible data rows (30..39).
+        for row in range(30, 40):
             for col_letter in ("B", "C", "D", "E", "H", "I", "J", "K"):
                 f = ws[f"{col_letter}{row}"].value
                 if f and isinstance(f, str):
@@ -345,29 +335,29 @@ class TestComparison:
         assert "-" in delta
 
     def test_helper_columns_hidden(self, tmp_path: Path):
-        """v1.5: helpers moved to cols L/M (cols A-K are visible panels + Δ)."""
+        """v1.7: helpers in cols L/M plus per-register grid N/O/P + matched-row R."""
         ws = _comparison(tmp_path)
-        for col_letter in ("L", "M", "N", "O", "P", "Q"):
+        for col_letter in ("L", "M", "N", "O", "P", "Q", "R"):
             assert ws.column_dimensions[col_letter].hidden, f"col {col_letter} should be hidden"
-        # Visible columns must NOT be hidden.
         for col_letter in ("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"):
             assert not ws.column_dimensions[col_letter].hidden, f"col {col_letter} must be visible"
 
-    def test_only_15_asset_rows_rendered(self, tmp_path: Path):
-        """v1.5: display 15 assets, with overflow note pointing at Analyser."""
+    def test_top_10_sorted_rendered(self, tmp_path: Path):
+        """v1.7: display top 10 assets by |Δ (B − A)| descending. Rows 30..39."""
         ws = _comparison(tmp_path)
-        # Row 30 has a formula; row 45 (just past 15 rows) should be the overflow note.
         assert ws["A30"].value and ws["A30"].value.startswith("=")
-        assert ws["A44"].value and ws["A44"].value.startswith("=")  # last data row
-        overflow = ws["A45"].value
-        assert overflow and "Showing first 15 assets" in overflow
+        assert ws["A39"].value and ws["A39"].value.startswith("=")  # last data row
+        overflow = ws["A40"].value
+        assert overflow and "top 10" in overflow.lower()
 
-    def test_manual_earnings_footnote_present(self, tmp_path: Path):
+    def test_per_asset_detail_uses_large_match_sort(self, tmp_path: Path):
+        """v1.7: each visible row's matched register row is computed via LARGE/MATCH
+        in the hidden col R, and panel cells INDEX into Inputs by that row."""
         ws = _comparison(tmp_path)
-        all_text = " ".join(
-            str(c.value) for row in ws.iter_rows() for c in row if c.value is not None
-        )
-        assert "Manual" in all_text and "ignored here" in all_text
+        matched_formula = ws["R30"].value
+        assert "LARGE" in matched_formula and "MATCH" in matched_formula
+        # Panel cells should reference R30 (the matched row).
+        assert "$R30" in ws["B30"].value or "R30" in ws["B30"].value
 
     def test_no_recommendation_language(self, tmp_path: Path):
         """Comparison tab must use neutral net-effect language only."""
