@@ -60,6 +60,17 @@ def _isolate_tab(src: Path, work_dir: Path, tab_name: str | None) -> Path:
     return staged
 
 
+def _soffice(soffice: str, work: Path, convert_to: str, target: Path) -> subprocess.CompletedProcess:
+    """Invoke `soffice --headless --calc --convert-to <fmt>` against `target`, output in `work`."""
+    cmd = [
+        soffice, "--headless", "--calc",
+        "--convert-to", convert_to,
+        "--outdir", str(work),
+        str(target),
+    ]
+    return subprocess.run(cmd, capture_output=True, text=True, check=False)
+
+
 def export_pdf(src: Path, out: Path | None, tab: str | None) -> int:
     soffice = _soffice_executable()
     if soffice is None:
@@ -78,22 +89,33 @@ def export_pdf(src: Path, out: Path | None, tab: str | None) -> int:
         work = Path(td)
         staged = _isolate_tab(src, work, tab)
 
-        cmd = [
-            soffice, "--headless", "--calc",
-            "--convert-to", "pdf",
-            "--outdir", str(work),
-            str(staged),
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
-        if result.returncode != 0:
-            print(result.stdout, file=sys.stdout)
-            print(result.stderr, file=sys.stderr)
-            return result.returncode
+        # Step 1: recalculate via a convert-to-xlsx round-trip so chart data
+        # series (which reference formula cells) get cached values written.
+        # Without this, the headless PDF renderer sees empty refs and the chart
+        # renders with no bars and a default 0–12 axis.
+        recalc_dir = work / "recalc"
+        recalc_dir.mkdir()
+        recalc_result = _soffice(soffice, recalc_dir, "xlsx", staged)
+        if recalc_result.returncode != 0:
+            print(recalc_result.stdout, file=sys.stdout)
+            print(recalc_result.stderr, file=sys.stderr)
+            return recalc_result.returncode
+        recalc_xlsx = recalc_dir / staged.name
+        if not recalc_xlsx.exists():
+            print(f"ERROR: recalc step did not produce {recalc_xlsx}", file=sys.stderr)
+            return 1
 
-        produced = work / (staged.stem + ".pdf")
+        # Step 2: convert the recalc'd workbook to PDF.
+        pdf_result = _soffice(soffice, work, "pdf", recalc_xlsx)
+        if pdf_result.returncode != 0:
+            print(pdf_result.stdout, file=sys.stdout)
+            print(pdf_result.stderr, file=sys.stderr)
+            return pdf_result.returncode
+
+        produced = work / (recalc_xlsx.stem + ".pdf")
         if not produced.exists():
             print(f"ERROR: LibreOffice did not produce {produced}", file=sys.stderr)
-            print(result.stdout, file=sys.stdout)
+            print(pdf_result.stdout, file=sys.stdout)
             return 1
 
         final = out or (out_dir / f"{src.stem}{'_' + tab if tab else ''}.pdf")

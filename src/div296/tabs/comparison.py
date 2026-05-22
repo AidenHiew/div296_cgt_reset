@@ -25,18 +25,23 @@ Layout:
 from __future__ import annotations
 
 from openpyxl.chart import BarChart, Reference
+from openpyxl.chart.data_source import (
+    AxDataSource, NumData, NumDataSource, NumRef, NumVal,
+    StrData, StrRef, StrVal,
+)
 from openpyxl.chart.label import DataLabelList
 from openpyxl.styles import Alignment, Font, PatternFill, Protection
 from openpyxl.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
+from div296 import calcs
 from div296.assumptions import ASSUMPTIONS
 from div296.styles import (
     BODY_FONT, CENTER, FMT_CURRENCY, INPUT_FILL, INPUT_FONT,
     SECTION_BAND_FILL, SECTION_BAND_FONT, THIN_BOX, TITLE_FONT,
 )
 from div296.tabs.inputs import (
-    MEMBERS_FIRST_DATA_ROW, REGISTER_FIRST_DATA_ROW,
+    MEMBERS_FIRST_DATA_ROW, REGISTER_FIRST_DATA_ROW, SAMPLE_REGISTER_ROWS,
 )
 
 
@@ -92,6 +97,37 @@ PANEL_A_TAX = "C"
 PANEL_B_ASSET = "E"
 PANEL_B_GAIN = "F"
 PANEL_B_TAX = "G"
+
+
+def _sample_scenario_headlines() -> tuple[float, float]:
+    """Compute the Scenario A / Scenario B Div 296 headline tax from the sample
+    register baked into Inputs. Used to pre-populate the chart's cache so that
+    headless PDF renderers (LibreOffice) draw the bars without needing to
+    resolve formula references."""
+    assets = [
+        calcs.Asset(
+            code=r[0], name=r[1], quantity=r[2], original_cost_base=r[3],
+            total_value=r[4], market_value_30jun2026=r[5],
+            valuation_source=r[6], projected_sale_proceeds=r[7],
+            held_over_12_months=(r[8] == "Yes"),
+        )
+        for r in SAMPLE_REGISTER_ROWS
+    ]
+    member = calcs.Member(tsb=12_000_000.0, split_pct=1.0)
+    kwargs = dict(
+        assets=assets,
+        members=[member],
+        discount_on=True,
+        discount_rate=ASSUMPTIONS.discount_rate,
+        tier10_on=False,
+        threshold_1=ASSUMPTIONS.threshold_1,
+        threshold_2=ASSUMPTIONS.threshold_2,
+        rate_tier1=ASSUMPTIONS.rate_tier1,
+        rate_tier2=ASSUMPTIONS.rate_tier2,
+    )
+    scenario_a = calcs.div296_headline_tax(reset_on=False, **kwargs)
+    scenario_b = calcs.div296_headline_tax(reset_on=True, **kwargs)
+    return scenario_a, scenario_b
 
 
 def _band(ws: Worksheet, row: int, text: str, last_col_letter: str = "G") -> None:
@@ -315,7 +351,9 @@ def build(wb: Workbook) -> Worksheet:
                "that they do not under Scenario A — see the Analyser tab for per-asset detail."),
     )
     reminder.font = Font(name="Arial", size=9, italic=True, color="666666")
+    reminder.alignment = Alignment(wrap_text=True, vertical="top")
     ws.merge_cells(f"A{REMINDER_ROW}:G{REMINDER_ROW}")
+    ws.row_dimensions[REMINDER_ROW].height = 24
 
     manual_note = ws.cell(
         row=REMINDER_ROW + 1, column=1,
@@ -324,7 +362,9 @@ def build(wb: Workbook) -> Worksheet:
                "applies to the Analyser headline only — it is ignored here."),
     )
     manual_note.font = Font(name="Arial", size=9, italic=True, color="666666")
+    manual_note.alignment = Alignment(wrap_text=True, vertical="top")
     ws.merge_cells(f"A{REMINDER_ROW + 1}:G{REMINDER_ROW + 1}")
+    ws.row_dimensions[REMINDER_ROW + 1].height = 30
 
     # --- Chart data block (hidden cells in cols H/I) + BarChart ---
     ws[CHART_LABEL_A_CELL] = "Scenario A — No reset"
@@ -346,9 +386,39 @@ def build(wb: Workbook) -> Worksheet:
     cats = Reference(ws, min_col=8, min_row=8, max_col=8, max_row=9)   # H8:H9
     chart.add_data(data, titles_from_data=False)
     chart.set_categories(cats)
-    chart.dataLabels = DataLabelList(showVal=True)
+    chart.dataLabels = DataLabelList(
+        showVal=True, showCatName=False, showSerName=False, showLegendKey=False,
+    )
     chart.height = 8       # cm
     chart.width = 18       # cm
+
+    # Pre-populate the chart's data caches so headless renderers (LibreOffice
+    # PDF export) draw the bars even though the source cells contain formulas.
+    # Excel/LibreOffice GUI will refresh the cache from the live cells on
+    # next save; this baked cache only matters for direct headless render.
+    scenario_a, scenario_b = _sample_scenario_headlines()
+    series = chart.ser[0]
+    series.val = NumDataSource(numRef=NumRef(
+        f=f"'{SHEET}'!${CHART_VALUE_A_CELL[0]}${CHART_VALUE_A_CELL[1:]}:"
+          f"${CHART_VALUE_B_CELL[0]}${CHART_VALUE_B_CELL[1:]}",
+        numCache=NumData(
+            formatCode='"$"#,##0',
+            ptCount=2,
+            pt=[NumVal(idx=0, v=scenario_a), NumVal(idx=1, v=scenario_b)],
+        ),
+    ))
+    series.cat = AxDataSource(strRef=StrRef(
+        f=f"'{SHEET}'!${CHART_LABEL_A_CELL[0]}${CHART_LABEL_A_CELL[1:]}:"
+          f"${CHART_LABEL_B_CELL[0]}${CHART_LABEL_B_CELL[1:]}",
+        strCache=StrData(
+            ptCount=2,
+            pt=[
+                StrVal(idx=0, v="Scenario A — No reset"),
+                StrVal(idx=1, v="Scenario B — Reset elected"),
+            ],
+        ),
+    ))
+
     ws.add_chart(chart, f"A{CHART_ANCHOR_ROW}")
 
     # --- Print header watermark (large gray text on every printed page) ---

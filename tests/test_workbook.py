@@ -319,6 +319,26 @@ class TestComparison:
         assert ws["H8"].value == "Scenario A — No reset"
         assert ws["H9"].value == "Scenario B — Reset elected"
 
+    def test_chart_has_cached_values_for_headless_pdf_render(self, tmp_path: Path):
+        """Chart must ship with numCache/strCache populated so LibreOffice's
+        headless PDF render draws the bars. Without these, the chart renders
+        with a default 0–12 axis and no data — see v1.4 fix."""
+        ws = _comparison(tmp_path)
+        chart = ws._charts[0]
+        series = chart.ser[0]
+        # Value cache: scenario A and B headline tax for the §12 sample.
+        num_cache = series.val.numRef.numCache
+        assert num_cache is not None, "Chart value cache missing"
+        assert num_cache.ptCount == 2
+        cached_values = sorted(round(float(p.v)) for p in num_cache.pt)
+        assert cached_values == [28_500, 157_500]
+        # Category cache: scenario labels (strRef, not numRef).
+        str_cache = series.cat.strRef.strCache
+        assert str_cache is not None, "Chart category cache missing"
+        cached_labels = [p.v for p in str_cache.pt]
+        assert "Scenario A — No reset" in cached_labels
+        assert "Scenario B — Reset elected" in cached_labels
+
 
 # --- Notes tab (chunk 5) --------------------------------------------------
 
