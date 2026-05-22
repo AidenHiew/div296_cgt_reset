@@ -171,3 +171,92 @@ class TestAnalyser:
         # At least one rule covering the per-asset block.
         ranges = [str(r[0]) for r in cf_rules]
         assert any("A20" in r and "I69" in r for r in ranges)
+
+
+# --- Comparison tab (chunk 4) --------------------------------------------
+
+def _comparison(tmp_path: Path):
+    out = tmp_path / "out.xlsx"
+    wb = build_workbook()
+    wb.save(out)
+    return load_workbook(out)["Comparison"]
+
+
+class TestComparison:
+    def test_watermark_banner_and_print_header(self, tmp_path: Path):
+        ws = _comparison(tmp_path)
+        assert ws["A1"].value == "ILLUSTRATIVE — NOT ADVICE"
+        # Print-header watermark for every printed page
+        assert "ILLUSTRATIVE" in ws.oddHeader.center.text
+
+    def test_panel_headers(self, tmp_path: Path):
+        ws = _comparison(tmp_path)
+        assert ws["A15"].value == "Scenario A — No reset"
+        assert ws["E15"].value == "Scenario B — Reset elected"
+
+    def test_panel_a_uses_original_cost_base(self, tmp_path: Path):
+        """Scenario A panel must compute using original CB (Inputs!D), not MV (F)."""
+        ws = _comparison(tmp_path)
+        f = ws["B17"].value
+        assert "'Inputs'!D13" in f
+        assert "'Inputs'!F13" not in f
+
+    def test_panel_b_uses_market_value(self, tmp_path: Path):
+        """Scenario B panel must compute using MV (Inputs!F), not original CB (D)."""
+        ws = _comparison(tmp_path)
+        f = ws["F17"].value
+        assert "'Inputs'!F13" in f
+        assert "'Inputs'!D13" not in f
+
+    def test_panels_independent_of_master_reset_toggle(self, tmp_path: Path):
+        """Neither panel formula may reference the reset_on named range."""
+        ws = _comparison(tmp_path)
+        for row in range(17, 67):
+            for col_letter in ("B", "C", "F", "G"):
+                f = ws[f"{col_letter}{row}"].value
+                if f and isinstance(f, str):
+                    assert "reset_on" not in f, (
+                        f"{col_letter}{row} references reset_on; panels must be independent"
+                    )
+
+    def test_helper_columns_hidden(self, tmp_path: Path):
+        ws = _comparison(tmp_path)
+        for col_letter in ("H", "I", "J", "K", "L", "M"):
+            assert ws.column_dimensions[col_letter].hidden, f"col {col_letter} should be hidden"
+
+    def test_subtotals_reference_helpers(self, tmp_path: Path):
+        ws = _comparison(tmp_path)
+        # Subtotal earnings: =H1 / =I1
+        assert ws["C68"].value == "=H1"
+        assert ws["G68"].value == "=I1"
+        # Subtotal tax (headline): =H6 / =I6
+        assert ws["C69"].value == "=H6"
+        assert ws["G69"].value == "=I6"
+
+    def test_neutral_net_effect_footer(self, tmp_path: Path):
+        """Footer is a NEUTRAL net-effect calculation — no recommendation language anywhere."""
+        ws = _comparison(tmp_path)
+        # Net effect label
+        label = ws["A72"].value
+        assert "Net effect" in label
+        # Forbidden words anywhere on the sheet (recommendation language).
+        forbidden = ("saved", "saves", "created", "creates", "should",
+                     "recommend", "we suggest")
+        for row in ws.iter_rows(values_only=True):
+            for v in row:
+                if isinstance(v, str):
+                    for word in forbidden:
+                        assert word.lower() not in v.lower(), (
+                            f"Comparison tab contains forbidden recommendation word "
+                            f"{word!r} in cell value {v!r}"
+                        )
+        # Net effect formula references both headlines.
+        net_formula = ws["C72"].value
+        assert net_formula == "=H6-I6"
+
+    def test_print_setup_landscape_a4(self, tmp_path: Path):
+        ws = _comparison(tmp_path)
+        assert ws.page_setup.orientation == ws.ORIENTATION_LANDSCAPE
+        assert int(ws.page_setup.paperSize) == int(ws.PAPERSIZE_A4)
+        assert int(ws.page_setup.fitToWidth) == 1
+        assert ws.print_area is not None and "G" in ws.print_area
