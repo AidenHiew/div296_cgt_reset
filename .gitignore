@@ -1,0 +1,19 @@
+dist/
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.coverage
+.mypy_cache/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local editor / IDE
+.vscode/
+.idea/
+
+# Excel lock files
+~$*.xlsx
