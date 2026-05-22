@@ -16,13 +16,16 @@ A Microsoft Excel workbook (`.xlsx`) that illustrates Division 296 tax outcomes 
 # 1. Install (dev mode + dev tools)
 python -m pip install -e .[dev]
 
-# 2. Build the workbook
+# 2. Build the workbook (runs a live recalc check at the end)
 python -m div296.build
 # -> dist/Division_296_Model_v0.1.0.xlsx
+# -> Recalc validation: OK (no Excel error cells).
 
 # 3. Run the test suite
 pytest
 ```
+
+Pass `--no-validate` to skip the post-build recalc check (faster, not recommended). The check uses the pure-Python `formulas` package to recalculate every cell and fails the build if any cell resolves to `#REF!`, `#DIV/0!`, `#VALUE!`, `#NAME?`, `#NULL!`, `#NUM!`, or `#N/A`. If `formulas` isn't installed, the build prints a notice and continues.
 
 The build script is the source of truth. The `.xlsx` is a build artifact and is **not** checked in (see `.gitignore`).
 
@@ -96,8 +99,10 @@ Factual disclosures, not recommendations:
 
 ## Roadmap
 
-- **v0.1 (this commit):** scaffolding, empty 4-tab workbook with title banners, build entrypoint, test placeholders.
-- **v1.0:** Inputs zones 1–3, Analyser 9-column audit trail + reconciliation panel, Comparison side-by-side panels with neutral footer + watermark, Notes content, pytest suite asserting §12 numbers, LibreOffice recalc integration.
+- **v0.1:** scaffolding, empty 4-tab workbook with title banners, build entrypoint, test placeholders.
+- **v1.0:** Inputs zones 1–3, Analyser 9-column audit trail + reconciliation panel, Comparison side-by-side panels with neutral footer + watermark, Notes content, pytest suite asserting §12 numbers, live `formulas`-based recalc integration test.
+- **v1.1:** response to independent code review (relative-row CF guarded by test, member-prop edge cases, quantity formatting, terminology consistency).
+- **v1.2 (this commit):** post-build recalc validation gate — `python -m div296.build` fails non-zero if any cell resolves to an Excel error sentinel.
 
 ---
 
