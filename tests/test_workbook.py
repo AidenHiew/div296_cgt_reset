@@ -87,3 +87,87 @@ def test_control_panel_defaults(tmp_path: Path):
     assert ws["B6"].value == "ON"     # CGT discount
     assert ws["B7"].value == "Auto"   # earnings source
     assert ws["B8"].value is None     # manual earnings
+
+
+# --- Analyser tab (chunk 3) ----------------------------------------------
+
+def _analyser(tmp_path: Path):
+    out = tmp_path / "out.xlsx"
+    wb = build_workbook()
+    wb.save(out)
+    return load_workbook(out)["Analyser"]
+
+
+class TestAnalyser:
+    def test_mirror_levers_reference_inputs(self, tmp_path: Path):
+        ws = _analyser(tmp_path)
+        for row in range(4, 9):
+            assert ws.cell(row=row, column=2).value == f"='Inputs'!B{row}"
+
+    def test_fund_earnings_formula_uses_named_ranges(self, tmp_path: Path):
+        ws = _analyser(tmp_path)
+        f = ws["B11"].value
+        assert 'earnings_source="Manual"' in f
+        assert "manual_earnings" in f
+        assert 'SUMIF(G20:G69,">0")' in f
+
+    def test_headline_is_sum_of_member_tax(self, tmp_path: Path):
+        ws = _analyser(tmp_path)
+        assert ws["B16"].value == "=SUM(B12:B15)"
+
+    def test_member_tax_formula_references_inputs_member_rows(self, tmp_path: Path):
+        ws = _analyser(tmp_path)
+        # Member 1 at row 12 should reference Inputs!B66 / C66 / D66 / E66.
+        f = ws["B12"].value
+        for ref in ("'Inputs'!B66", "'Inputs'!C66", "'Inputs'!D66", "'Inputs'!E66"):
+            assert ref in f, f"member 1 formula missing {ref}"
+        assert "rate_tier1" in f
+        assert "rate_tier2" in f
+        assert "threshold_1" in f
+        assert "threshold_2" in f
+
+    def test_first_data_row_columns(self, tmp_path: Path):
+        ws = _analyser(tmp_path)
+        # Row 20 = first asset (Inputs row 13).
+        a, b, c, d, e, f, g, h, i = (ws.cell(row=20, column=col).value for col in range(1, 10))
+        assert "'Inputs'!A13" in a and "'Inputs'!B13" in a
+        assert "'Inputs'!H13" in b
+        assert "'Inputs'!D13" in c
+        assert 'reset_on="ON"' in d and "'Inputs'!F13" in d
+        assert "discount_rate" in e and "'Inputs'!I13" in e
+        assert "fund_cgt_rate" in f and "E20" in f         # uses col 5 of same row
+        assert "discount_rate" in g and 'reset_on="ON"' in g
+        assert "$B$16" in h and 'SUMIF(G20:G69,">0")' in h
+        assert "J20" in i and "K20" in i                    # helper cols
+
+    def test_helper_columns_hidden(self, tmp_path: Path):
+        ws = _analyser(tmp_path)
+        assert ws.column_dimensions["J"].hidden
+        assert ws.column_dimensions["K"].hidden
+
+    def test_totals_row_sums_correct_ranges(self, tmp_path: Path):
+        ws = _analyser(tmp_path)
+        assert ws["B70"].value == "=SUM(B20:B69)"
+        assert ws["F70"].value == "=SUM(F20:F69)"
+        assert ws["G70"].value == "=SUM(G20:G69)"
+        assert ws["H70"].value == "=SUM(H20:H69)"
+
+    def test_reconciliation_panel(self, tmp_path: Path):
+        ws = _analyser(tmp_path)
+        assert ws["A73"].value == "Ordinary CGT payable"
+        assert ws["B73"].value == "=SUM(F20:F69)"
+        assert ws["A74"].value == "Div 296 tax payable (headline)"
+        assert ws["B74"].value == "=B16"
+        assert ws["A75"].value == "Capital losses carried forward"
+        # CF formula sums MAX(0, original − proceeds) across all 50 register rows.
+        cf = ws["B75"].value
+        assert cf.startswith("=")
+        assert cf.count("MAX(0,'Inputs'!D") == 50  # one MAX per register row
+
+    def test_trap_conditional_formatting_applied(self, tmp_path: Path):
+        ws = _analyser(tmp_path)
+        cf_rules = list(ws.conditional_formatting._cf_rules.items())
+        assert cf_rules, "no conditional formatting rules on Analyser"
+        # At least one rule covering the per-asset block.
+        ranges = [str(r[0]) for r in cf_rules]
+        assert any("A20" in r and "I69" in r for r in ranges)
