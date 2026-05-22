@@ -310,6 +310,15 @@ class TestComparison:
         assert int(ws.page_setup.fitToWidth) == 1
         assert ws.print_area is not None and "G" in ws.print_area
 
+    def test_chart_present_referencing_headlines(self, tmp_path: Path):
+        ws = _comparison(tmp_path)
+        assert len(ws._charts) == 1, "Expected one BarChart on Comparison tab"
+        # Chart data must come from the headline cells via I8/I9 (which mirror H6/I6).
+        assert ws["I8"].value == "=H6"
+        assert ws["I9"].value == "=I6"
+        assert ws["H8"].value == "Scenario A — No reset"
+        assert ws["H9"].value == "Scenario B — Reset elected"
+
 
 # --- Notes tab (chunk 5) --------------------------------------------------
 

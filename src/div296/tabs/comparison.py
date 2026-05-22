@@ -24,8 +24,9 @@ Layout:
 
 from __future__ import annotations
 
+from openpyxl.chart import BarChart, Reference
+from openpyxl.chart.label import DataLabelList
 from openpyxl.styles import Alignment, Font, PatternFill, Protection
-from openpyxl.utils import get_column_letter
 from openpyxl.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
@@ -64,6 +65,15 @@ SUBTOTAL_TAX_ROW = SUBTOTAL_EARNINGS_ROW + 1  # row 69
 FOOTER_BAND_ROW = SUBTOTAL_TAX_ROW + 2        # row 71
 NET_EFFECT_ROW = FOOTER_BAND_ROW + 1          # row 72
 REMINDER_ROW = NET_EFFECT_ROW + 2             # row 74
+
+CHART_ANCHOR_ROW = REMINDER_ROW + 3           # row 77 — chart sits below the footer notes
+CHART_BOTTOM_ROW = CHART_ANCHOR_ROW + 14      # ~14 rows tall (≈ 7 cm at default row height)
+
+# Hidden helper cells for the chart data series (cols H/I; rows 8-9)
+CHART_LABEL_A_CELL = "H8"
+CHART_LABEL_B_CELL = "H9"
+CHART_VALUE_A_CELL = "I8"
+CHART_VALUE_B_CELL = "I9"
 
 # Hidden helper rows in cols H..M
 HELPER_FUND_EARNINGS_ROW = 1
@@ -316,6 +326,31 @@ def build(wb: Workbook) -> Worksheet:
     manual_note.font = Font(name="Arial", size=9, italic=True, color="666666")
     ws.merge_cells(f"A{REMINDER_ROW + 1}:G{REMINDER_ROW + 1}")
 
+    # --- Chart data block (hidden cells in cols H/I) + BarChart ---
+    ws[CHART_LABEL_A_CELL] = "Scenario A — No reset"
+    ws[CHART_LABEL_B_CELL] = "Scenario B — Reset elected"
+    ws[CHART_VALUE_A_CELL] = f"={COL_A_EARNINGS}{HELPER_HEADLINE_ROW}"
+    ws[CHART_VALUE_B_CELL] = f"={COL_B_EARNINGS}{HELPER_HEADLINE_ROW}"
+    for coord in (CHART_VALUE_A_CELL, CHART_VALUE_B_CELL):
+        ws[coord].number_format = FMT_CURRENCY
+
+    chart = BarChart()
+    chart.type = "col"
+    chart.style = 11
+    chart.title = "Div 296 tax — Scenario A vs Scenario B"
+    chart.y_axis.title = "Div 296 tax ($)"
+    chart.x_axis.title = None
+    chart.legend = None
+
+    data = Reference(ws, min_col=9, min_row=8, max_col=9, max_row=9)   # I8:I9
+    cats = Reference(ws, min_col=8, min_row=8, max_col=8, max_row=9)   # H8:H9
+    chart.add_data(data, titles_from_data=False)
+    chart.set_categories(cats)
+    chart.dataLabels = DataLabelList(showVal=True)
+    chart.height = 8       # cm
+    chart.width = 18       # cm
+    ws.add_chart(chart, f"A{CHART_ANCHOR_ROW}")
+
     # --- Print header watermark (large gray text on every printed page) ---
     ws.oddHeader.center.text = "ILLUSTRATIVE — NOT ADVICE"
     ws.oddHeader.center.size = 28
@@ -325,14 +360,14 @@ def build(wb: Workbook) -> Worksheet:
     ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
     ws.page_setup.paperSize = ws.PAPERSIZE_A4
     ws.page_setup.fitToWidth = 1
-    ws.page_setup.fitToHeight = 0
+    ws.page_setup.fitToHeight = 1
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.print_options.horizontalCentered = True
     ws.page_margins.left = 0.5
     ws.page_margins.right = 0.5
     ws.page_margins.top = 0.75
     ws.page_margins.bottom = 0.5
-    ws.print_area = f"A1:G{REMINDER_ROW}"
+    ws.print_area = f"A1:G{CHART_BOTTOM_ROW}"
 
     # --- Column widths ---
     widths = {
