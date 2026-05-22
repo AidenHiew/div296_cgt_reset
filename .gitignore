@@ -18,3 +18,6 @@ Thumbs.db
 # Excel lock files
 ~$*.xlsx
 .claude/
+
+# Session handoff notes (per ~/.claude/CLAUDE.md)
+docs/handoffs/
