@@ -40,8 +40,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from div296.assumptions import ASSUMPTIONS
 from div296.styles import (
-    BODY_FONT, CENTER, FMT_CURRENCY, FMT_PERCENT,
-    SECTION_BAND_FILL, SECTION_BAND_FONT, TITLE_FONT, TRAP_FILL,
+    BODY_FONT, CENTER, FMT_CURRENCY, SECTION_BAND_FILL, SECTION_BAND_FONT, TITLE_FONT, TRAP_FILL,
 )
 from div296.tabs.inputs import (
     CONTROL_ROWS, MEMBERS_FIRST_DATA_ROW,

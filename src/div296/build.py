@@ -108,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  ... and {len(errors) - 20} more")
         return 1
 
-    print(f"Recalc validation: OK (no Excel error cells).")
+    print("Recalc validation: OK (no Excel error cells).")
     return 0
 
 

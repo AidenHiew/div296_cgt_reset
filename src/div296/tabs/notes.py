@@ -15,8 +15,7 @@ from __future__ import annotations
 import datetime as _dt
 import subprocess as _sp
 
-from openpyxl.styles import Alignment, Font, PatternFill, Protection
-from openpyxl.utils import get_column_letter
+from openpyxl.styles import Alignment, Font, Protection
 from openpyxl.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
@@ -205,7 +204,6 @@ def build(wb: Workbook) -> Worksheet:
         c.fill = SECTION_BAND_FILL
     row += 1
 
-    valuation_log_first_row = row
     for offset in range(ASSUMPTIONS.asset_register_rows):
         i_row = REGISTER_FIRST_DATA_ROW + offset
         ws.cell(row=row, column=1, value=f"=IF({INPUTS_SHEET}!A{i_row}=\"\",\"\",{INPUTS_SHEET}!A{i_row})")
@@ -214,7 +212,6 @@ def build(wb: Workbook) -> Worksheet:
         ws.cell(row=row, column=4, value=f"=IF({INPUTS_SHEET}!F{i_row}=\"\",\"\",{INPUTS_SHEET}!F{i_row})")
         ws.cell(row=row, column=4).number_format = '$#,##0;($#,##0);"-"'
         row += 1
-    valuation_log_last_row = row - 1
 
     # --- Provenance (hidden) ---
     build_date = _dt.date.today().isoformat()
