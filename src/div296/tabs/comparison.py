@@ -768,5 +768,7 @@ def build(wb: Workbook) -> Worksheet:
         ws[f"B{row}"].protection = Protection(locked=False)
 
     ws.protection.sheet = True
+    ws.protection.formatColumns = False
+    ws.protection.formatRows = False
 
     return ws
