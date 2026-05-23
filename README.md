@@ -4,7 +4,7 @@ A Microsoft Excel workbook (`.xlsx`) that illustrates Division 296 tax outcomes 
 
 **Status:** v2.0.0 — stable. UX pass over v1.0.0; workbook, builder, tests, and PDF export all green.
 
-**Previous release:** v1.0.0 (frozen as reference; tag `v1.0.0`, artifact `dist/Division_296_Model_v2.0.0.xlsx`).
+**Previous release:** v1.0.0 (frozen as reference; tag `v1.0.0`, artifact `dist/Division_296_Model_v1.0.0.xlsx`).
 
 **Audience:** internal use by partners, managers and staff; also printed or shared with clients.
 
@@ -36,7 +36,7 @@ Pass `--no-validate` to skip the post-build recalc check (faster, not recommende
 
 ```bash
 python scripts/export_pdf.py dist/Division_296_Model_v2.0.0.xlsx
-# -> dist/Division_296_Model_v1.0.0_Comparison.pdf
+# -> dist/Division_296_Model_v2.0.0_Comparison.pdf
 
 # Other tabs / whole workbook:
 python scripts/export_pdf.py dist/Division_296_Model_v2.0.0.xlsx --tab Analyser
