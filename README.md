@@ -2,7 +2,9 @@
 
 A Microsoft Excel workbook (`.xlsx`) that illustrates Division 296 tax outcomes for SMSFs and makes the case for pre–30 June 2026 action on assets sitting in an unrealised-loss position (the "reset trap").
 
-**Status:** v1.0.0 — stable. Workbook, builder, tests, PDF export, and CI all green.
+**Status:** v2.0.0 — stable. UX pass over v1.0.0; workbook, builder, tests, and PDF export all green.
+
+**Previous release:** v1.0.0 (frozen as reference; tag `v1.0.0`, artifact `dist/Division_296_Model_v2.0.0.xlsx`).
 
 **Audience:** internal use by partners, managers and staff; also printed or shared with clients.
 
@@ -18,7 +20,7 @@ python -m pip install -e .[dev]
 
 # 2. Build the workbook (runs a live recalc check at the end)
 python -m div296.build
-# -> dist/Division_296_Model_v1.0.0.xlsx
+# -> dist/Division_296_Model_v2.0.0.xlsx
 # -> Recalc validation: OK (no Excel error cells).
 
 # 3. Run the test suite (fast dev loop — skips live-recalc)
@@ -33,12 +35,12 @@ Pass `--no-validate` to skip the post-build recalc check (faster, not recommende
 ### Exporting to PDF (client-shareable Comparison page)
 
 ```bash
-python scripts/export_pdf.py dist/Division_296_Model_v1.0.0.xlsx
+python scripts/export_pdf.py dist/Division_296_Model_v2.0.0.xlsx
 # -> dist/Division_296_Model_v1.0.0_Comparison.pdf
 
 # Other tabs / whole workbook:
-python scripts/export_pdf.py dist/Division_296_Model_v1.0.0.xlsx --tab Analyser
-python scripts/export_pdf.py dist/Division_296_Model_v1.0.0.xlsx --all-tabs
+python scripts/export_pdf.py dist/Division_296_Model_v2.0.0.xlsx --tab Analyser
+python scripts/export_pdf.py dist/Division_296_Model_v2.0.0.xlsx --all-tabs
 ```
 
 Requires [LibreOffice](https://www.libreoffice.org/) installed (`soffice` on PATH, or the default `C:\Program Files\LibreOffice\program\soffice.exe` on Windows).
@@ -126,7 +128,12 @@ Factual disclosures, not recommendations:
 - **v1.4:** PDF render fixes — chart cache injection, footnote wrap, recalc.py source-collision fix.
 - **v1.5:** Inputs zones reordered (members up, advanced down); sample-data warning badge; Analyser column reorder (Div 296 cost base next to its gain); Comparison redesign (subtotals at top, metric cards, fund-context strip, 5-col panels + Δ column, total-tax-burden subtotal).
 - **v1.6:** Comparison PDF fits on one A4 landscape page — chart anchored inline next to subtotals (was below data, on page 2), 5 visible data rows + `fitToHeight=1` removes mid-page whitespace.
-- **v1.7 (this commit):** Manual earnings input removed (Comparison-vs-Analyser divergence eliminated, control panel down to 3 levers); Analyser column label "Proceeds" renamed to "Projected sale proceeds" to match Inputs; Comparison per-asset detail now shows **top 10 assets sorted by |Δ (B − A)|** descending, via LARGE/MATCH/INDEX over a hidden per-register helper grid (cols N/O/P/R).
+- **v1.7:** Manual earnings input removed (Comparison-vs-Analyser divergence eliminated, control panel down to 3 levers); Analyser column label "Proceeds" renamed to "Projected sale proceeds" to match Inputs; Comparison per-asset detail now shows **top 10 assets sorted by |Δ (B − A)|** descending, via LARGE/MATCH/INDEX over a hidden per-register helper grid (cols N/O/P/R).
+- **v2.0.0 (this release) — UX pass.** No calculation changes; v1.0.0 numbers reproduce bit-for-bit. Highlights:
+  - **Comparison:** dead 2-bar headline chart replaced with a per-asset Δ (B − A) horizontal bar chart, sorted by impact.
+  - **Analyser:** fund-state strip across the top, row-number column for printed reference, print titles repeat headers across pages, freeze panes removed for free scroll, column-group tinting (sand / slate / sage-teal / gold palette) to separate inputs / ordinary CGT / Div 296 / reset-impact, distinct totals row, gold accent on the Reset impact column.
+  - **Inputs:** "Total value" renamed to "Current market value (as at today)" for clarity, column A widened, column resize allowed under sheet protection.
+  - **Holistic:** dark-teal section titles unified across all tabs; "ILLUSTRATIVE — NOT ADVICE" print-header watermark now appears on all 4 tabs (was Comparison only).
 
 ---
 
