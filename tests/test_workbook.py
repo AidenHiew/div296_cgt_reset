@@ -110,6 +110,25 @@ def test_all_tabs_protected(tmp_path: Path):
         assert wb_re[tab].protection.sheet is True, f"{tab} is not protected"
 
 
+def test_all_tabs_allow_column_resize_under_protection(tmp_path: Path):
+    """v2.0.0: protection.sheet stays True but formatColumns/formatRows
+    are unlocked so users can drag column borders without unlocking cells."""
+    out = tmp_path / "out.xlsx"
+    wb = build_workbook()
+    wb.save(out)
+    wb_re = load_workbook(out)
+    for sheet in ("Inputs", "Analyser", "Comparison", "Notes"):
+        ws = wb_re[sheet]
+        assert ws.protection.sheet is True, f"{sheet} should be protected"
+        # openpyxl exposes these as bool-ish; allow either False or "0"
+        assert ws.protection.formatColumns in (False, "0", 0), (
+            f"{sheet} formatColumns must be unlocked under v2 protection scope"
+        )
+        assert ws.protection.formatRows in (False, "0", 0), (
+            f"{sheet} formatRows must be unlocked under v2 protection scope"
+        )
+
+
 def test_input_cells_unlocked(tmp_path: Path):
     """Inputs control-panel and register cells must stay editable under protection."""
     out = tmp_path / "out.xlsx"
