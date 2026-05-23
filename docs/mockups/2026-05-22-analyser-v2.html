@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Analyser tab — v2.0.0 proposed layout (mockup)</title>
+<style>
+  :root {
+    --teal: #1D3B34;
+    --teal-band: #1D3B34;
+    --teal-band-text: #FFFFFF;
+    --gold-accent: #FFF8E6;
+    --gold-edge: #BFA45A;
+    --gold-header: #C7A752;
+    --zebra: #F7F8F7;
+    /* v2 column-group palette */
+    --proc-header: #D7CBB8;    /* sand / clay — warm, "raw input" */
+    --proc-data:   #F7F4EE;    /* 5% sand */
+    --ord-header:  #C9D5DA;    /* slate */
+    --ord-data:    #F4F6F7;    /* 5% slate */
+    --div-header:  #B0C9BD;    /* sage-teal */
+    --div-data:    #F2F6F4;    /* 5% sage */
+    --row-border: #E0E2E0;
+    --muted: #666;
+    --state-bg: #EFF5F3;
+    --state-edge: #1D3B34;
+    --total-fill: #E6ECEA;
+    --total-edge: #1D3B34;
+    --col-num-fill: #F2F2F2;
+    --col-num-text: #888;
+    --trap: #FBE9E9;
+  }
+
+  html { background: #ECECEC; }
+  body {
+    font: 13px/1.4 "Segoe UI", Arial, sans-serif;
+    color: #222;
+    margin: 24px;
+  }
+  .legend {
+    background: #fff;
+    border: 1px solid #ccc;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    max-width: 1180px;
+    font-size: 12px;
+  }
+  .legend h2 { font-size: 14px; margin: 0 0 6px; color: var(--teal); }
+  .legend ul { margin: 0; padding-left: 18px; }
+  .legend li { margin: 2px 0; }
+  .legend .swatch {
+    display: inline-block; width: 10px; height: 10px;
+    vertical-align: middle; margin-right: 4px;
+    border: 1px solid #aaa;
+  }
+
+  /* "sheet" wrapper to mimic an Excel sheet appearance */
+  .sheet {
+    background: #fff;
+    border: 1px solid #BFBFBF;
+    box-shadow: 0 2px 6px rgba(0,0,0,.08);
+    padding: 14px 18px 20px;
+    max-width: 1180px;
+  }
+
+  .title {
+    color: var(--teal);
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: .2px;
+    margin: 4px 0 10px;
+  }
+
+  /* NEW: State strip */
+  .state-strip {
+    background: var(--state-bg);
+    border-left: 4px solid var(--state-edge);
+    padding: 8px 14px;
+    margin: 0 0 12px;
+    font-size: 12.5px;
+    color: var(--teal);
+  }
+  .state-strip strong { color: #000; }
+  .state-strip .pill {
+    display: inline-block;
+    background: #fff;
+    border: 1px solid var(--teal);
+    color: var(--teal);
+    border-radius: 9px;
+    padding: 0 6px;
+    margin: 0 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .state-strip .pill.off { color: #888; border-color: #aaa; }
+  .state-strip .head-tax {
+    float: right;
+    font-weight: 700;
+    color: #000;
+  }
+
+  /* Section band (B: reinforced) */
+  .band {
+    background: var(--teal-band);
+    color: var(--teal-band-text);
+    font-weight: 600;
+    font-size: 12.5px;
+    padding: 5px 10px;
+    margin: 14px 0 0;
+    letter-spacing: .3px;
+  }
+
+  table.grid {
+    border-collapse: collapse;
+    width: 100%;
+    margin-top: 0;
+    font-size: 12px;
+  }
+  table.grid th, table.grid td {
+    border: 1px solid var(--row-border);
+    padding: 4px 8px;
+    text-align: right;
+    vertical-align: middle;
+  }
+  table.grid th {
+    background: var(--teal-band);
+    color: var(--teal-band-text);
+    font-weight: 600;
+    text-align: center;
+    font-size: 11.5px;
+  }
+  table.grid td.label { text-align: left; }
+  table.grid td.center { text-align: center; }
+
+  /* NEW: row-number column */
+  table.grid th.rownum, table.grid td.rownum {
+    background: var(--col-num-fill);
+    color: var(--col-num-text);
+    width: 36px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+  }
+
+  /* v2 column-group tints — replace zebra. Header gets saturated tone,
+     data cells get the 5% wash. */
+  table.per-asset thead th.proc-col {
+    background: var(--proc-header);
+    color: var(--teal);
+  }
+  table.per-asset thead th.ord-col {
+    background: var(--ord-header);
+    color: var(--teal);
+  }
+  table.per-asset thead th.div-col {
+    background: var(--div-header);
+    color: var(--teal);
+  }
+  table.per-asset tbody td.proc-col { background: var(--proc-data); }
+  table.per-asset tbody td.ord-col { background: var(--ord-data); }
+  table.per-asset tbody td.div-col { background: var(--div-data); }
+
+  /* C-revised: Reset impact column accent (col I in workbook) */
+  table.per-asset .reset-col {
+    background: var(--gold-accent) !important;
+    font-weight: 600;
+  }
+  table.per-asset thead .reset-col {
+    background: var(--gold-header) !important;
+    color: #FFFFFF;
+  }
+
+  /* 4. Distinct totals row */
+  table.per-asset tbody tr.totals td {
+    background: var(--total-fill) !important;
+    font-weight: 700;
+    color: var(--teal);
+    border-top: 3px double var(--total-edge);
+  }
+  table.per-asset tbody tr.totals td.reset-col {
+    background: #F2E8C9 !important;
+  }
+
+  /* trap row demo (existing CF) */
+  table.per-asset tbody tr.trap td {
+    background: var(--trap) !important;
+  }
+  table.per-asset tbody tr.trap td.rownum { background: #F5D2D2 !important; }
+
+  /* small notes */
+  .note {
+    color: var(--muted);
+    font-size: 11px;
+    font-style: italic;
+    margin: 8px 0 0;
+  }
+
+  /* lever / fund / recon mini-tables */
+  table.kv {
+    border-collapse: collapse;
+    margin-top: 0;
+    font-size: 12px;
+    width: 420px;
+  }
+  table.kv td {
+    border: 1px solid var(--row-border);
+    padding: 4px 10px;
+  }
+  table.kv td:first-child { width: 60%; }
+  table.kv td:last-child {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+  table.kv tr.headline td {
+    background: var(--total-fill);
+    color: var(--teal);
+    font-weight: 700;
+  }
+
+  /* "Print titles" annotation */
+  .print-title-tag {
+    float: right;
+    font-size: 11px;
+    color: var(--muted);
+    font-style: italic;
+    font-weight: 400;
+  }
+</style>
+</head>
+<body>
+
+<div class="legend">
+  <h2>What you're looking at — Analyser tab v2.0.0 (mockup, not a build)</h2>
+  <p>This is an HTML approximation of the proposed Analyser layout with all four agreed changes applied.</p>
+  <ul>
+    <li><strong>B — Section bands</strong> <span class="swatch" style="background:#1D3B34"></span> dark teal, consistent with Comparison tab</li>
+    <li><strong>C-revised — Reset impact column accent</strong> <span class="swatch" style="background:#FFF8E6;border-color:#BFA45A"></span> soft gold header + faint gold data cells</li>
+    <li><strong>NEW — Column-group tinting</strong> Proceeds <span class="swatch" style="background:#D7CBB8"></span> sand (raw input) / Ordinary CGT cols <span class="swatch" style="background:#C9D5DA"></span> slate / Div 296 cols <span class="swatch" style="background:#B0C9BD"></span> sage-teal — header band saturated, data cells washed to ~5%. <em>Replaces zebra striping</em> — column tints do the row-tracking job better.</li>
+    <li><strong>1 — State strip</strong> <span class="swatch" style="background:#EFF5F3;border-left:3px solid #1D3B34"></span> what scenario is active, at a glance</li>
+    <li><strong>2 — Row-number column</strong> <span class="swatch" style="background:#F2F2F2"></span> matches Inputs register row, for cross-tab navigation</li>
+    <li><strong>3 — Print titles</strong> — header row will repeat on every printed page (annotation in mockup, no visual change on screen)</li>
+    <li><strong>4 — Distinct totals row</strong> double top border + bold + filled, clear visual stop</li>
+  </ul>
+  <p class="note">Trap-shaded row demo at #3 (loss-making holding) — existing v1 conditional formatting, kept as-is.</p>
+</div>
+
+<div class="sheet">
+
+  <div class="title">Division 296 Cost Base Reset Model — Analyser</div>
+
+  <!-- NEW: State strip -->
+  <div class="state-strip">
+    <span class="head-tax">Headline Div 296 tax: <strong>$29,025</strong></span>
+    <strong>Current scenario:</strong>
+    Reset <span class="pill">ON</span> ·
+    CGT discount <span class="pill">ON</span> ·
+    $10m / +25% tier <span class="pill off">OFF</span>
+  </div>
+
+  <!-- Lever band -->
+  <div class="band">Current scenario (mirrored from Inputs — read-only)</div>
+  <table class="kv">
+    <tr><td>Reset election</td><td>ON</td></tr>
+    <tr><td>$10m / +25% tier</td><td>OFF</td></tr>
+    <tr><td>CGT discount</td><td>ON</td></tr>
+  </table>
+
+  <!-- Fund summary band -->
+  <div class="band">Fund summary</div>
+  <table class="kv">
+    <tr><td>Fund Div 296 earnings</td><td>$258,000</td></tr>
+    <tr><td>Member 1 Div 296 tax</td><td>$29,025</td></tr>
+    <tr><td>Member 2 Div 296 tax</td><td>$0</td></tr>
+    <tr><td>Member 3 Div 296 tax</td><td>$0</td></tr>
+    <tr><td>Member 4 Div 296 tax</td><td>$0</td></tr>
+    <tr class="headline"><td>Total Div 296 tax (headline)</td><td>$29,025</td></tr>
+  </table>
+
+  <!-- Per-asset analysis band -->
+  <div class="band">
+    Per-asset analysis (50 rows)
+    <span class="print-title-tag">↻ header row repeats on every printed page</span>
+  </div>
+  <table class="grid per-asset">
+    <thead>
+      <tr>
+        <th class="rownum">#</th>
+        <th style="text-align:left;">Asset</th>
+        <th class="proc-col">Projected sale proceeds</th>
+        <th class="ord-col">Original cost base</th>
+        <th class="ord-col">Ordinary taxable gain</th>
+        <th class="ord-col">Ordinary CGT</th>
+        <th class="div-col">Div 296 cost base</th>
+        <th class="div-col">Div 296 adj gain</th>
+        <th class="div-col">Div 296 tax</th>
+        <th class="reset-col">Reset impact</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="rownum">1</td>
+        <td class="label">Commercial property (P1)</td>
+        <td class="proc-col">$2,600,000</td>
+        <td class="ord-col">$800,000</td>
+        <td class="ord-col">$1,200,000</td>
+        <td class="ord-col">$180,000</td>
+        <td class="div-col">$2,400,000</td>
+        <td class="div-col">$133,333</td>
+        <td class="div-col">$15,000</td>
+        <td class="reset-col">($1,066,667)</td>
+      </tr>
+      <tr>
+        <td class="rownum">2</td>
+        <td class="label">Listed shares parcel (S1)</td>
+        <td class="proc-col">$600,000</td>
+        <td class="ord-col">$300,000</td>
+        <td class="ord-col">$200,000</td>
+        <td class="ord-col">$30,000</td>
+        <td class="div-col">$520,000</td>
+        <td class="div-col">$53,333</td>
+        <td class="div-col">$6,000</td>
+        <td class="reset-col">($146,667)</td>
+      </tr>
+      <tr class="trap">
+        <td class="rownum">3</td>
+        <td class="label">Loss-making holding (L1)</td>
+        <td class="proc-col">$200,000</td>
+        <td class="ord-col">$500,000</td>
+        <td class="ord-col">($300,000)</td>
+        <td class="ord-col">$0</td>
+        <td class="div-col">$100,000</td>
+        <td class="div-col">$66,667</td>
+        <td class="div-col">$7,500</td>
+        <td class="reset-col">$366,667</td>
+      </tr>
+      <tr>
+        <td class="rownum">4</td>
+        <td class="label">BHP shares (ABC)</td>
+        <td class="proc-col">$10,000</td>
+        <td class="ord-col">$50,000</td>
+        <td class="ord-col">($40,000)</td>
+        <td class="ord-col">$0</td>
+        <td class="div-col">$3,000</td>
+        <td class="div-col">$4,667</td>
+        <td class="div-col">$525</td>
+        <td class="reset-col">$44,667</td>
+      </tr>
+      <tr>
+        <td class="rownum">5</td>
+        <td class="label">&nbsp;</td>
+        <td class="proc-col">&nbsp;</td>
+        <td class="ord-col">&nbsp;</td><td class="ord-col">&nbsp;</td><td class="ord-col">&nbsp;</td>
+        <td class="div-col">&nbsp;</td><td class="div-col">&nbsp;</td><td class="div-col">&nbsp;</td>
+        <td class="reset-col">&nbsp;</td>
+      </tr>
+      <tr>
+        <td class="rownum">6</td>
+        <td class="label">&nbsp;</td>
+        <td class="proc-col">&nbsp;</td>
+        <td class="ord-col">&nbsp;</td><td class="ord-col">&nbsp;</td><td class="ord-col">&nbsp;</td>
+        <td class="div-col">&nbsp;</td><td class="div-col">&nbsp;</td><td class="div-col">&nbsp;</td>
+        <td class="reset-col">&nbsp;</td>
+      </tr>
+      <tr>
+        <td class="rownum" style="opacity:.5">…</td>
+        <td class="label" style="opacity:.5;font-style:italic">(rows 7–50 — empty in sample data)</td>
+        <td colspan="8" style="opacity:.5;font-style:italic;text-align:center;">…</td>
+      </tr>
+
+      <!-- 4. Distinct totals row -->
+      <tr class="totals">
+        <td class="rownum">Σ</td>
+        <td class="label">TOTALS</td>
+        <td class="proc-col">$3,410,000</td>
+        <td class="ord-col">&nbsp;</td>
+        <td class="ord-col">&nbsp;</td>
+        <td class="ord-col">$210,000</td>
+        <td class="div-col">&nbsp;</td>
+        <td class="div-col">$258,000</td>
+        <td class="div-col">$29,025</td>
+        <td class="reset-col">($802,000)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="note">Per-asset Div 296 tax (col H) is the pro-rata of the headline — same locked calc as v1.</p>
+
+  <!-- Reconciliation band -->
+  <div class="band">Reconciliation</div>
+  <table class="kv">
+    <tr><td>Ordinary CGT payable</td><td>$210,000</td></tr>
+    <tr><td>Div 296 tax payable (headline)</td><td>$29,025</td></tr>
+    <tr><td>Capital losses carried forward</td><td>$340,000</td></tr>
+  </table>
+
+</div>
+
+</body>
+</html>
