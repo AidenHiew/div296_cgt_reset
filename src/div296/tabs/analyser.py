@@ -35,13 +35,15 @@ Per-asset Div 296 tax (col 8) is the pro-rata of the headline (locked decision):
 from __future__ import annotations
 
 from openpyxl.formatting.rule import FormulaRule
+from openpyxl.styles import Alignment
 from openpyxl.utils import get_column_letter
 from openpyxl.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
 from div296.assumptions import ASSUMPTIONS
 from div296.styles import (
-    BODY_FONT, CENTER, FMT_CURRENCY, SECTION_BAND_FILL, SECTION_BAND_FONT, TITLE_FONT, TRAP_FILL,
+    BODY_FONT, CENTER, FMT_CURRENCY, ROWNUM_FILL, ROWNUM_FONT,
+    SECTION_BAND_FILL, SECTION_BAND_FONT, STATE_STRIP_FILL, TITLE_FONT, TRAP_FILL,
 )
 from div296.tabs.inputs import (
     CONTROL_ROWS, MEMBERS_FIRST_DATA_ROW,
@@ -52,34 +54,50 @@ from div296.tabs.inputs import (
 SHEET = "Analyser"
 INPUTS_SHEET = "'Inputs'"
 
-# --- Layout constants ---
+# --- Layout constants (v2.0.0 — state strip + row-num col) ---
 TITLE_ROW = 1
-LEVER_BAND_ROW = 3
-LEVER_FIRST_ROW = 4
+STATE_STRIP_ROW = 2                                    # NEW v2
+LEVER_BAND_ROW = 4                                     # was 3
+LEVER_FIRST_ROW = 5                                    # was 4
 LEVER_LAST_ROW = LEVER_FIRST_ROW + len(CONTROL_ROWS) - 1
 
-FUND_BAND_ROW = 10
-FUND_EARNINGS_ROW = 11
-MEMBER_TAX_FIRST_ROW = 12
+FUND_BAND_ROW = 11                                     # was 10
+FUND_EARNINGS_ROW = 12                                 # was 11
+MEMBER_TAX_FIRST_ROW = 13                              # was 12
 MEMBER_TAX_LAST_ROW = MEMBER_TAX_FIRST_ROW + ASSUMPTIONS.member_count - 1
-HEADLINE_ROW = MEMBER_TAX_LAST_ROW + 1                # row 16
+HEADLINE_ROW = MEMBER_TAX_LAST_ROW + 1                 # row 17 (was 16)
 
-PERASSET_BAND_ROW = 18
-PERASSET_HEADER_ROW = 19
-PERASSET_FIRST_ROW = 20
-PERASSET_LAST_ROW = PERASSET_FIRST_ROW + ASSUMPTIONS.asset_register_rows - 1
-TOTALS_ROW = PERASSET_LAST_ROW + 1
+PERASSET_BAND_ROW = 19                                 # was 18
+PERASSET_HEADER_ROW = 20                               # was 19
+PERASSET_FIRST_ROW = 21                                # was 20
+PERASSET_LAST_ROW = PERASSET_FIRST_ROW + ASSUMPTIONS.asset_register_rows - 1   # row 70
+TOTALS_ROW = PERASSET_LAST_ROW + 1                     # row 71
 
-RECON_BAND_ROW = TOTALS_ROW + 2
+RECON_BAND_ROW = TOTALS_ROW + 2                        # row 73 (was 72)
 RECON_ORD_CGT_ROW = RECON_BAND_ROW + 1
 RECON_DIV296_ROW = RECON_BAND_ROW + 2
 RECON_LOSSES_ROW = RECON_BAND_ROW + 3
 
 # Inputs↔Analyser offset (Inputs row = Analyser row - OFFSET)
-ROW_OFFSET = PERASSET_FIRST_ROW - REGISTER_FIRST_DATA_ROW   # 20 - 13 = 7
+ROW_OFFSET = PERASSET_FIRST_ROW - REGISTER_FIRST_DATA_ROW   # 21 - 20 = 1
+
+# --- Column constants (v2.0.0 — row-number col inserted as col A) ---
+ROWNUM_COL = 1
+ASSET_COL = 2          # was 1
+PROCEEDS_COL = 3       # was 2
+ORIG_CB_COL = 4        # was 3
+ORD_GAIN_COL = 5       # was 4
+ORD_CGT_COL = 6        # was 5
+DIV_CB_COL = 7         # was 6
+DIV_GAIN_COL = 8       # was 7
+DIV_TAX_COL = 9        # was 8
+RESET_IMPACT_COL = 10  # was 9
+HELPER_J_COL = 11      # was 10 (now col K in letters)
+HELPER_K_COL = 12      # was 11 (now col L in letters)
+LAST_VISIBLE_COL_LETTER = "J"     # was "I"; widens by 1 for row-num
 
 
-def _band(ws: Worksheet, row: int, text: str, last_col_letter: str = "K") -> None:
+def _band(ws: Worksheet, row: int, text: str, last_col_letter: str = "L") -> None:
     ws.cell(row=row, column=1, value=text).font = SECTION_BAND_FONT
     ws.merge_cells(f"A{row}:{last_col_letter}{row}")
     for col_idx in range(1, ord(last_col_letter) - ord("A") + 2):
@@ -132,7 +150,23 @@ def build(wb: Workbook) -> Worksheet:
     # --- Title ---
     ws.cell(row=TITLE_ROW, column=1,
             value="Division 296 Cost Base Reset Model — Analyser").font = TITLE_FONT
-    ws.merge_cells(f"A{TITLE_ROW}:K{TITLE_ROW}")
+    ws.merge_cells(f"A{TITLE_ROW}:L{TITLE_ROW}")
+
+    # --- State strip (NEW v2.0.0) ---
+    # One-line summary of the active scenario, anchored above the lever mirror.
+    # Pulls live from named ranges + the Analyser headline cell.
+    state_cell = ws.cell(row=STATE_STRIP_ROW, column=1)
+    state_cell.value = (
+        '="Current scenario:  Reset ["&reset_on&"]  ·  '
+        'CGT discount ["&discount_on&"]  ·  '
+        '$10m / +25% tier ["&tier10_on&"]  ·  '
+        'Headline Div 296 tax: "&TEXT(B' + str(HEADLINE_ROW) + ',"$#,##0")'
+    )
+    state_cell.font = BODY_FONT
+    state_cell.fill = STATE_STRIP_FILL
+    state_cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+    ws.merge_cells(f"A{STATE_STRIP_ROW}:L{STATE_STRIP_ROW}")
+    ws.row_dimensions[STATE_STRIP_ROW].height = 22
 
     # --- Mirror-lever strip ---
     _band(ws, LEVER_BAND_ROW, "Current scenario (mirrored from Inputs — read-only)")
@@ -147,8 +181,9 @@ def build(wb: Workbook) -> Worksheet:
     # --- Fund summary block ---
     _band(ws, FUND_BAND_ROW, "Fund summary")
 
-    # Fund earnings — sum of positive col-G realised Div 296 gains.
-    g_first, g_last = f"G{PERASSET_FIRST_ROW}", f"G{PERASSET_LAST_ROW}"
+    # Fund earnings — sum of positive col-H realised Div 296 gains (was col G
+    # in v1; per-asset block shifted right by 1 due to row-number col A).
+    g_first, g_last = f"H{PERASSET_FIRST_ROW}", f"H{PERASSET_LAST_ROW}"
     ws.cell(row=FUND_EARNINGS_ROW, column=1,
             value="Fund Div 296 earnings").font = BODY_FONT
     ws.cell(
@@ -175,6 +210,7 @@ def build(wb: Workbook) -> Worksheet:
     # --- Per-asset analysis ---
     _band(ws, PERASSET_BAND_ROW, "Per-asset analysis (50 rows)")
     headers = [
+        "#",                                                  # NEW v2.0.0 — row number
         "Asset", "Projected sale proceeds", "Original cost base",
         "Ordinary taxable capital gain", "Ordinary CGT",
         "Div 296 cost base",
@@ -187,12 +223,14 @@ def build(wb: Workbook) -> Worksheet:
         c.fill = SECTION_BAND_FILL
         c.alignment = CENTER
 
-    # Hide helper columns.
-    ws.column_dimensions["J"].hidden = True
+    # Hide helper columns (shifted to K/L after row-number col A insertion).
     ws.column_dimensions["K"].hidden = True
+    ws.column_dimensions["L"].hidden = True
 
-    # Currency formats per column.
-    currency_cols = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    # Currency formats per column (v2 cols 3..12 — proceeds through helpers).
+    currency_cols = [PROCEEDS_COL, ORIG_CB_COL, ORD_GAIN_COL, ORD_CGT_COL,
+                     DIV_CB_COL, DIV_GAIN_COL, DIV_TAX_COL, RESET_IMPACT_COL,
+                     HELPER_J_COL, HELPER_K_COL]
 
     for offset in range(ASSUMPTIONS.asset_register_rows):
         a_row = PERASSET_FIRST_ROW + offset
@@ -205,63 +243,78 @@ def build(wb: Workbook) -> Worksheet:
         proceeds = f"{INPUTS_SHEET}!H{i_row}"
         held = f"{INPUTS_SHEET}!I{i_row}"
 
-        # Col 1 — Asset
-        ws.cell(row=a_row, column=1,
+        # Col A — Row number (v2.0.0)
+        rn = ws.cell(row=a_row, column=ROWNUM_COL, value=offset + 1)
+        rn.fill = ROWNUM_FILL
+        rn.font = ROWNUM_FONT
+        rn.alignment = Alignment(horizontal="center", vertical="center")
+        # Col B — Asset
+        ws.cell(row=a_row, column=ASSET_COL,
                 value=f'=IF({code}="","",{name}&" ("&{code}&")")')
-        # Col 2 — Proceeds
-        ws.cell(row=a_row, column=2, value=f'=IF({proceeds}="","",{proceeds})')
-        # Col 3 — Original cost base
-        ws.cell(row=a_row, column=3, value=f'=IF({orig}="","",{orig})')
-        # Col 4 — Ordinary taxable capital gain
-        ws.cell(row=a_row, column=4,
+        # Col C — Proceeds
+        ws.cell(row=a_row, column=PROCEEDS_COL, value=f'=IF({proceeds}="","",{proceeds})')
+        # Col D — Original cost base
+        ws.cell(row=a_row, column=ORIG_CB_COL, value=f'=IF({orig}="","",{orig})')
+        # Col E — Ordinary taxable capital gain
+        ws.cell(row=a_row, column=ORD_GAIN_COL,
                 value=_ord_taxable_formula(proceeds, orig, held))
-        # Col 5 — Ordinary CGT (per-asset silo)
+        # Col F — Ordinary CGT (per-asset silo)
         ws.cell(
-            row=a_row, column=5,
-            value=f'=IF({proceeds}="","",MAX(0,D{a_row})*fund_cgt_rate)',
+            row=a_row, column=ORD_CGT_COL,
+            value=f'=IF({proceeds}="","",MAX(0,E{a_row})*fund_cgt_rate)',
         )
-        # Col 6 — Div 296 cost base (moved here from col 4 for v1.5)
+        # Col G — Div 296 cost base (moved here from col 4 for v1.5)
         ws.cell(
-            row=a_row, column=6,
+            row=a_row, column=DIV_CB_COL,
             value=f'=IF({proceeds}="","",IF(reset_on="ON",{mv},{orig}))',
         )
-        # Col 7 — Div 296 adjusted gain (current scenario)
+        # Col H — Div 296 adjusted gain (current scenario)
         cb_current = f'IF(reset_on="ON",{mv},{orig})'
-        ws.cell(row=a_row, column=7,
+        ws.cell(row=a_row, column=DIV_GAIN_COL,
                 value=_div296_adj_formula(proceeds, cb_current, held))
-        # Col 8 — Div 296 tax (pro-rata of headline)
+        # Col I — Div 296 tax (pro-rata of headline). Headline lives at col B
+        # in the fund block (which doesn't shift cols), only row → 17.
         ws.cell(
-            row=a_row, column=8,
+            row=a_row, column=DIV_TAX_COL,
             value=(
                 f'=IF({proceeds}="","",'
                 f'IF(SUMIF({g_first}:{g_last},">0")=0,0,'
-                f'MAX(0,G{a_row})/SUMIF({g_first}:{g_last},">0")*$B${HEADLINE_ROW}))'
+                f'MAX(0,H{a_row})/SUMIF({g_first}:{g_last},">0")*$B${HEADLINE_ROW}))'
             ),
         )
-        # Helper J — col G WITH reset (cost base = MV)
-        ws.cell(row=a_row, column=10,
+        # Helper K — col H WITH reset (cost base = MV)
+        ws.cell(row=a_row, column=HELPER_J_COL,
                 value=_div296_adj_formula(proceeds, mv, held))
-        # Helper K — col G WITHOUT reset (cost base = original)
-        ws.cell(row=a_row, column=11,
+        # Helper L — col H WITHOUT reset (cost base = original)
+        ws.cell(row=a_row, column=HELPER_K_COL,
                 value=_div296_adj_formula(proceeds, orig, held))
-        # Col 9 — Reset impact = J − K
+        # Col J — Reset impact = K − L (helpers shifted J/K → K/L)
         ws.cell(
-            row=a_row, column=9,
-            value=f'=IF({proceeds}="","",J{a_row}-K{a_row})',
+            row=a_row, column=RESET_IMPACT_COL,
+            value=f'=IF({proceeds}="","",K{a_row}-L{a_row})',
         )
 
         for col_idx in currency_cols:
             ws.cell(row=a_row, column=col_idx).number_format = FMT_CURRENCY
 
     # --- Totals row ---
-    ws.cell(row=TOTALS_ROW, column=1, value="TOTALS").font = SECTION_BAND_FONT
-    ws.cell(row=TOTALS_ROW, column=1).fill = SECTION_BAND_FILL
-    # Totals on Proceeds (B), Ord CGT (E — moved from F in v1.5),
-    # Div 296 adj gain (G), Div 296 tax (H).
-    for col_idx in (2, 5, 7, 8):
-        col_letter = get_column_letter(col_idx)
+    # v2.0.0: Σ glyph in col A (row-num col); "TOTALS" label shifts to col B.
+    sigma_cell = ws.cell(row=TOTALS_ROW, column=ROWNUM_COL, value="Σ")
+    sigma_cell.fill = SECTION_BAND_FILL
+    sigma_cell.font = SECTION_BAND_FONT
+    sigma_cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    ws.cell(row=TOTALS_ROW, column=ASSET_COL, value="TOTALS").font = SECTION_BAND_FONT
+    ws.cell(row=TOTALS_ROW, column=ASSET_COL).fill = SECTION_BAND_FILL
+    # Totals on Proceeds (C), Ord CGT (F), Div 296 adj gain (H), Div 296 tax (I).
+    for col_letter, col_const in (
+        ("C", PROCEEDS_COL),         # Proceeds (was B)
+        ("F", ORD_CGT_COL),          # Ord CGT (was E)
+        ("H", DIV_GAIN_COL),         # Div 296 adj gain (was G)
+        ("I", DIV_TAX_COL),          # Div 296 tax (was H)
+    ):
         rng = f"{col_letter}{PERASSET_FIRST_ROW}:{col_letter}{PERASSET_LAST_ROW}"
-        cell = ws.cell(row=TOTALS_ROW, column=col_idx, value=f"=SUM({rng})")
+        cell = ws.cell(row=TOTALS_ROW, column=col_const, value=f"=SUM({rng})")
         cell.number_format = FMT_CURRENCY
         cell.font = SECTION_BAND_FONT
         cell.fill = SECTION_BAND_FILL
@@ -272,7 +325,7 @@ def build(wb: Workbook) -> Worksheet:
             value="Ordinary CGT payable").font = BODY_FONT
     ws.cell(
         row=RECON_ORD_CGT_ROW, column=2,
-        value=f"=SUM(E{PERASSET_FIRST_ROW}:E{PERASSET_LAST_ROW})",
+        value=f"=SUM(F{PERASSET_FIRST_ROW}:F{PERASSET_LAST_ROW})",
     ).number_format = FMT_CURRENCY
 
     ws.cell(row=RECON_DIV296_ROW, column=1,
@@ -294,25 +347,27 @@ def build(wb: Workbook) -> Worksheet:
         value="=" + "+".join(cf_terms),
     ).number_format = FMT_CURRENCY
 
-    # --- Trap shading: row red when ord raw gain < 0 AND col 7 > 0 ---
+    # --- Trap shading: row red when ord raw gain < 0 AND Div 296 adj gain > 0 ---
     rng = (
-        f"A{PERASSET_FIRST_ROW}:I{PERASSET_LAST_ROW}"
+        f"A{PERASSET_FIRST_ROW}:J{PERASSET_LAST_ROW}"
     )
     trap_rule = FormulaRule(
         formula=[
-            f"AND($A{PERASSET_FIRST_ROW}<>\"\","
-            f"($B{PERASSET_FIRST_ROW}-$C{PERASSET_FIRST_ROW})<0,"
-            f"$G{PERASSET_FIRST_ROW}>0)"
+            f"AND($B{PERASSET_FIRST_ROW}<>\"\","
+            f"($C{PERASSET_FIRST_ROW}-$D{PERASSET_FIRST_ROW})<0,"
+            f"$H{PERASSET_FIRST_ROW}>0)"
         ],
         fill=TRAP_FILL,
     )
     ws.conditional_formatting.add(rng, trap_rule)
 
-    # --- Column widths + freeze ---
-    widths = [32, 14, 16, 16, 22, 14, 24, 14, 14, 14, 14]
+    # --- Column widths (v2: row-num col A=5, then existing widths) ---
+    widths = [5, 32, 14, 16, 16, 22, 14, 24, 14, 14, 14, 14]
     for col_idx, w in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(col_idx)].width = w
-    ws.freeze_panes = f"A{PERASSET_HEADER_ROW + 1}"
+    # v2.0.0: free scroll (no freeze panes). Header row repeats on every
+    # printed page via print_title_rows below.
+    ws.print_title_rows = f"{PERASSET_HEADER_ROW}:{PERASSET_HEADER_ROW}"
 
     # --- Print header watermark (compliance signal on every printed page) ---
     ws.oddHeader.center.text = "ILLUSTRATIVE — NOT ADVICE"
