@@ -1,41 +1,42 @@
-"""Analyser tab — full 9-column audit trail per spec §5.
+"""Analyser tab — full audit trail (v2.0.0 layout).
 
 Layout (every formula references either an Inputs cell or a named range —
 never a magic number):
 
     Row 1     Title
-    Row 3     Section band: "Current scenario (mirrored from Inputs)"
-    Rows 4–8  Lever mirrors (read-only =Inputs!B*)
+    Row 2     State strip (current scenario at a glance — new in v2)
+    Row 4     Section band: "Current scenario (mirrored from Inputs)"
+    Rows 5–7  Lever mirrors (read-only =Inputs!B*)
 
-    Row 10    Section band: "Fund summary"
-    Row 11    Fund Div 296 earnings (sum of positive realised gains)
-    Rows 12–15 Member 1–4 attributed Div 296 tax
-    Row 16    Total Div 296 tax (the headline)
+    Row 11    Section band: "Fund summary"
+    Row 12    Fund Div 296 earnings (sum of positive realised gains)
+    Rows 13–16 Member 1–4 attributed Div 296 tax
+    Row 17    Total Div 296 tax (the headline)
 
-    Row 18    Section band: "Per-asset analysis"
-    Row 19    Column headers (A..I visible, J..K hidden helpers)
-    Rows 20–69 50 data rows; column mapping (v1.5 reordered so each cost base
-               sits next to the gain it computes):
-                  A Asset                 B Proceeds              C Original CB
-                  D Ordinary taxable gn   E Ordinary CGT          F Div 296 CB
-                  G Div 296 adj gn        H Div 296 tax           I Reset impact
-                  J helper (with reset col G)  K helper (without reset col G)
-    Row 70    Totals
+    Row 19    Section band: "Per-asset analysis"
+    Row 20    Column headers (A..J visible, K..L hidden helpers)
+    Rows 21–70 50 data rows; column mapping (v2 row-num col inserted; per-asset
+               cols shifted right by 1):
+                  A #row-num             B Asset                C Proceeds
+                  D Original CB          E Ordinary taxable gn  F Ordinary CGT
+                  G Div 296 CB           H Div 296 adj gn       I Div 296 tax
+                  J Reset impact         K helper (with reset)  L helper (without reset)
+    Row 71    Totals
 
-    Row 72    Section band: "Reconciliation"
-    Row 73    Ordinary CGT payable
-    Row 74    Div 296 tax payable (= headline)
-    Row 75    Capital losses carried forward
+    Row 73    Section band: "Reconciliation"
+    Row 74    Ordinary CGT payable
+    Row 75    Div 296 tax payable (= headline)
+    Row 76    Capital losses carried forward
 
-Per-asset Div 296 tax (col 8) is the pro-rata of the headline (locked decision):
-    H{r} = IF(SUMIF(G$20:G$69,">0")=0, 0,
-              MAX(0, G{r}) / SUMIF(G$20:G$69,">0") * $B$16)
+Per-asset Div 296 tax (col I) is the pro-rata of the headline (locked decision):
+    I{r} = IF(SUMIF(H$21:H$70,">0")=0, 0,
+              MAX(0, H{r}) / SUMIF(H$21:H$70,">0") * $B$17)
 """
 
 from __future__ import annotations
 
 from openpyxl.formatting.rule import FormulaRule
-from openpyxl.styles import Alignment
+from openpyxl.styles import Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
@@ -44,6 +45,12 @@ from div296.assumptions import ASSUMPTIONS
 from div296.styles import (
     BODY_FONT, CENTER, FMT_CURRENCY, ROWNUM_FILL, ROWNUM_FONT,
     SECTION_BAND_FILL, SECTION_BAND_FONT, STATE_STRIP_FILL, TITLE_FONT, TRAP_FILL,
+    PROC_HEADER_FILL, PROC_DATA_FILL,
+    ORD_HEADER_FILL, ORD_DATA_FILL,
+    DIV_HEADER_FILL, DIV_DATA_FILL,
+    RESET_HEADER_FILL, RESET_DATA_FILL,
+    RESET_HEADER_FONT, GROUP_HEADER_FONT,
+    TOTALS_FILL, TOTALS_FONT,
 )
 from div296.tabs.inputs import (
     CONTROL_ROWS, MEMBERS_FIRST_DATA_ROW,
@@ -217,10 +224,29 @@ def build(wb: Workbook) -> Worksheet:
         "Div 296 adjusted taxable capital gain", "Div 296 tax",
         "Reset impact", "Helper: col G with reset", "Helper: col G without reset",
     ]
+    # v2.0.0: column-group tinting on header row.
+    # Col 1 (#) and Col 2 (Asset) stay dark teal (standard band).
+    # Col 3 (Proceeds) = sand. Cols 4-6 = slate. Cols 7-9 = sage-teal.
+    # Col 10 = gold (Reset impact). Cols 11-12 = helpers (will be hidden).
+    HEADER_STYLE = {
+        ROWNUM_COL:       (SECTION_BAND_FILL,  SECTION_BAND_FONT),
+        ASSET_COL:        (SECTION_BAND_FILL,  SECTION_BAND_FONT),
+        PROCEEDS_COL:     (PROC_HEADER_FILL,   GROUP_HEADER_FONT),
+        ORIG_CB_COL:      (ORD_HEADER_FILL,    GROUP_HEADER_FONT),
+        ORD_GAIN_COL:     (ORD_HEADER_FILL,    GROUP_HEADER_FONT),
+        ORD_CGT_COL:      (ORD_HEADER_FILL,    GROUP_HEADER_FONT),
+        DIV_CB_COL:       (DIV_HEADER_FILL,    GROUP_HEADER_FONT),
+        DIV_GAIN_COL:     (DIV_HEADER_FILL,    GROUP_HEADER_FONT),
+        DIV_TAX_COL:      (DIV_HEADER_FILL,    GROUP_HEADER_FONT),
+        RESET_IMPACT_COL: (RESET_HEADER_FILL,  RESET_HEADER_FONT),
+        HELPER_J_COL:     (SECTION_BAND_FILL,  SECTION_BAND_FONT),
+        HELPER_K_COL:     (SECTION_BAND_FILL,  SECTION_BAND_FONT),
+    }
     for col_idx, header in enumerate(headers, start=1):
         c = ws.cell(row=PERASSET_HEADER_ROW, column=col_idx, value=header)
-        c.font = SECTION_BAND_FONT
-        c.fill = SECTION_BAND_FILL
+        fill, font = HEADER_STYLE[col_idx]
+        c.font = font
+        c.fill = fill
         c.alignment = CENTER
 
     # Hide helper columns (shifted to K/L after row-number col A insertion).
@@ -231,6 +257,18 @@ def build(wb: Workbook) -> Worksheet:
     currency_cols = [PROCEEDS_COL, ORIG_CB_COL, ORD_GAIN_COL, ORD_CGT_COL,
                      DIV_CB_COL, DIV_GAIN_COL, DIV_TAX_COL, RESET_IMPACT_COL,
                      HELPER_J_COL, HELPER_K_COL]
+
+    # v2.0.0: per-column data fills (visible cols only — helpers stay unfilled).
+    DATA_FILL = {
+        PROCEEDS_COL:     PROC_DATA_FILL,
+        ORIG_CB_COL:      ORD_DATA_FILL,
+        ORD_GAIN_COL:     ORD_DATA_FILL,
+        ORD_CGT_COL:      ORD_DATA_FILL,
+        DIV_CB_COL:       DIV_DATA_FILL,
+        DIV_GAIN_COL:     DIV_DATA_FILL,
+        DIV_TAX_COL:      DIV_DATA_FILL,
+        RESET_IMPACT_COL: RESET_DATA_FILL,
+    }
 
     for offset in range(ASSUMPTIONS.asset_register_rows):
         a_row = PERASSET_FIRST_ROW + offset
@@ -295,17 +333,28 @@ def build(wb: Workbook) -> Worksheet:
         )
 
         for col_idx in currency_cols:
-            ws.cell(row=a_row, column=col_idx).number_format = FMT_CURRENCY
+            cell = ws.cell(row=a_row, column=col_idx)
+            cell.number_format = FMT_CURRENCY
+            if col_idx in DATA_FILL:
+                cell.fill = DATA_FILL[col_idx]
 
     # --- Totals row ---
-    # v2.0.0: Σ glyph in col A (row-num col); "TOTALS" label shifts to col B.
-    sigma_cell = ws.cell(row=TOTALS_ROW, column=ROWNUM_COL, value="Σ")
-    sigma_cell.fill = SECTION_BAND_FILL
-    sigma_cell.font = SECTION_BAND_FONT
-    sigma_cell.alignment = Alignment(horizontal="center", vertical="center")
+    # v2.0.0: distinct totals styling — medium teal fill, dark-teal bold text,
+    # double top border to visually detach from the per-asset rows.
+    DOUBLE_TOP = Border(top=Side(style="double", color="1D3B34"))
 
-    ws.cell(row=TOTALS_ROW, column=ASSET_COL, value="TOTALS").font = SECTION_BAND_FONT
-    ws.cell(row=TOTALS_ROW, column=ASSET_COL).fill = SECTION_BAND_FILL
+    # Σ glyph in col A (row-num col); "TOTALS" label in col B.
+    sigma_cell = ws.cell(row=TOTALS_ROW, column=ROWNUM_COL, value="Σ")
+    sigma_cell.fill = TOTALS_FILL
+    sigma_cell.font = TOTALS_FONT
+    sigma_cell.alignment = Alignment(horizontal="center", vertical="center")
+    sigma_cell.border = DOUBLE_TOP
+
+    totals_label = ws.cell(row=TOTALS_ROW, column=ASSET_COL, value="TOTALS")
+    totals_label.font = TOTALS_FONT
+    totals_label.fill = TOTALS_FILL
+    totals_label.border = DOUBLE_TOP
+
     # Totals on Proceeds (C), Ord CGT (F), Div 296 adj gain (H), Div 296 tax (I).
     for col_letter, col_const in (
         ("C", PROCEEDS_COL),         # Proceeds (was B)
@@ -316,8 +365,16 @@ def build(wb: Workbook) -> Worksheet:
         rng = f"{col_letter}{PERASSET_FIRST_ROW}:{col_letter}{PERASSET_LAST_ROW}"
         cell = ws.cell(row=TOTALS_ROW, column=col_const, value=f"=SUM({rng})")
         cell.number_format = FMT_CURRENCY
-        cell.font = SECTION_BAND_FONT
-        cell.fill = SECTION_BAND_FILL
+        cell.font = TOTALS_FONT
+        cell.fill = TOTALS_FILL
+        cell.border = DOUBLE_TOP
+
+    # Empty totals-row cells (cols not summed) still get the band fill + border
+    # so the row reads as one continuous stripe.
+    for col_const in (ORIG_CB_COL, ORD_GAIN_COL, DIV_CB_COL, RESET_IMPACT_COL):
+        c = ws.cell(row=TOTALS_ROW, column=col_const)
+        c.fill = TOTALS_FILL
+        c.border = DOUBLE_TOP
 
     # --- Reconciliation panel ---
     _band(ws, RECON_BAND_ROW, "Reconciliation")
@@ -349,7 +406,7 @@ def build(wb: Workbook) -> Worksheet:
 
     # --- Trap shading: row red when ord raw gain < 0 AND Div 296 adj gain > 0 ---
     rng = (
-        f"A{PERASSET_FIRST_ROW}:J{PERASSET_LAST_ROW}"
+        f"A{PERASSET_FIRST_ROW}:{LAST_VISIBLE_COL_LETTER}{PERASSET_LAST_ROW}"
     )
     trap_rule = FormulaRule(
         formula=[
