@@ -314,7 +314,14 @@ def build(wb: Workbook) -> Worksheet:
         ws.column_dimensions[get_column_letter(col_idx)].width = w
     ws.freeze_panes = f"A{PERASSET_HEADER_ROW + 1}"
 
-    # --- Sheet protection (read-only; recalc allowed) ---
+    # --- Print header watermark (compliance signal on every printed page) ---
+    ws.oddHeader.center.text = "ILLUSTRATIVE — NOT ADVICE"
+    ws.oddHeader.center.size = 28
+    ws.oddHeader.center.color = "CCCCCC"
+
+    # --- Sheet protection (read-only; recalc + column resize allowed) ---
     ws.protection.sheet = True
+    ws.protection.formatColumns = False
+    ws.protection.formatRows = False
 
     return ws
