@@ -110,6 +110,25 @@ def test_all_tabs_protected(tmp_path: Path):
         assert wb_re[tab].protection.sheet is True, f"{tab} is not protected"
 
 
+def test_all_tabs_allow_column_resize_under_protection(tmp_path: Path):
+    """v2.0.0: protection.sheet stays True but formatColumns/formatRows
+    are unlocked so users can drag column borders without unlocking cells."""
+    out = tmp_path / "out.xlsx"
+    wb = build_workbook()
+    wb.save(out)
+    wb_re = load_workbook(out)
+    for sheet in ("Inputs", "Analyser", "Comparison", "Notes"):
+        ws = wb_re[sheet]
+        assert ws.protection.sheet is True, f"{sheet} should be protected"
+        # openpyxl exposes these as bool-ish; allow either False or "0"
+        assert ws.protection.formatColumns in (False, "0", 0), (
+            f"{sheet} formatColumns must be unlocked under v2 protection scope"
+        )
+        assert ws.protection.formatRows in (False, "0", 0), (
+            f"{sheet} formatRows must be unlocked under v2 protection scope"
+        )
+
+
 def test_input_cells_unlocked(tmp_path: Path):
     """Inputs control-panel and register cells must stay editable under protection."""
     out = tmp_path / "out.xlsx"
@@ -138,27 +157,29 @@ def _analyser(tmp_path: Path):
 
 class TestAnalyser:
     def test_mirror_levers_reference_inputs(self, tmp_path: Path):
-        """v1.7: Mirror strip at Analyser rows 4-6; references Inputs rows 5-7."""
+        """v2.0.0: state strip pushes everything down by 1; mirror strip now at rows 5-7."""
         ws = _analyser(tmp_path)
         for offset in range(3):
-            analyser_row = 4 + offset
+            analyser_row = 5 + offset
             inputs_row = 5 + offset
             assert ws.cell(row=analyser_row, column=2).value == f"='Inputs'!B{inputs_row}"
 
     def test_fund_earnings_formula(self, tmp_path: Path):
-        """v1.7: fund earnings = SUMIF over col-G positive Div 296 gains. No Manual switch."""
-        ws = _analyser(tmp_path)
-        f = ws["B11"].value
-        assert f == '=SUMIF(G20:G69,">0")'
-
-    def test_headline_is_sum_of_member_tax(self, tmp_path: Path):
-        ws = _analyser(tmp_path)
-        assert ws["B16"].value == "=SUM(B12:B15)"
-
-    def test_member_tax_formula_references_inputs_member_rows(self, tmp_path: Path):
-        """v1.7: members moved up another two rows — member 1 now on Inputs row 11."""
+        """v2.0.0: fund earnings = SUMIF over col-H positive Div 296 gains
+        (col shifted G→H due to row-num col A insert; range shifted to 21-70)."""
         ws = _analyser(tmp_path)
         f = ws["B12"].value
+        assert f == '=SUMIF(H21:H70,">0")'
+
+    def test_headline_is_sum_of_member_tax(self, tmp_path: Path):
+        """v2.0.0: headline now at B17 (was B16); members 13-16 (were 12-15)."""
+        ws = _analyser(tmp_path)
+        assert ws["B17"].value == "=SUM(B13:B16)"
+
+    def test_member_tax_formula_references_inputs_member_rows(self, tmp_path: Path):
+        """v2.0.0: member 1 Analyser row → 13 (was 12); Inputs row 11 unchanged."""
+        ws = _analyser(tmp_path)
+        f = ws["B13"].value
         for ref in ("'Inputs'!B11", "'Inputs'!C11", "'Inputs'!D11", "'Inputs'!E11"):
             assert ref in f, f"member 1 formula missing {ref}"
         assert "rate_tier1" in f
@@ -167,57 +188,89 @@ class TestAnalyser:
         assert "threshold_2" in f
 
     def test_first_data_row_columns(self, tmp_path: Path):
-        """v1.7 column order unchanged; Inputs reference shifted by -2 to row 20."""
+        """v2.0.0: per-asset first row now 21 (was 20), cols shifted right by 1
+        (col A is row-num). Inputs references unchanged at row 20."""
         ws = _analyser(tmp_path)
-        # Analyser row 20 = first asset (Inputs row 20 after v1.7 Manual removal).
-        a, b, c, d, e, f, g, h, i = (ws.cell(row=20, column=col).value for col in range(1, 10))
+        # Analyser row 21 = first asset; visible data cols 2..10.
+        a, b, c, d, e, f, g, h, i = (ws.cell(row=21, column=col).value for col in range(2, 11))
         assert "'Inputs'!A20" in a and "'Inputs'!B20" in a
         assert "'Inputs'!H20" in b                      # Proceeds
         assert "'Inputs'!D20" in c                      # Original CB
-        # Col D = Ordinary taxable gain
+        # Col E = Ordinary taxable gain
         assert "discount_rate" in d and "'Inputs'!H20" in d and "'Inputs'!D20" in d
-        # Col E = Ordinary CGT = MAX(0, D{row}) * fund_cgt_rate
-        assert "fund_cgt_rate" in e and "D20" in e
-        # Col F = Div 296 cost base
+        # Col F = Ordinary CGT = MAX(0, E{row}) * fund_cgt_rate
+        assert "fund_cgt_rate" in e and "E21" in e
+        # Col G = Div 296 cost base
         assert 'reset_on="ON"' in f and "'Inputs'!F20" in f and "'Inputs'!D20" in f
-        # Col G = Div 296 adjusted gain
+        # Col H = Div 296 adjusted gain
         assert "discount_rate" in g and 'reset_on="ON"' in g
-        # Col H = Div 296 tax (pro-rata of headline)
-        assert "$B$16" in h and 'SUMIF(G20:G69,">0")' in h
-        # Col I = Reset impact (J − K helper diff)
-        assert "J20" in i and "K20" in i
+        # Col I = Div 296 tax (pro-rata of headline)
+        assert "$B$17" in h and 'SUMIF(H21:H70,">0")' in h
+        # Col J = Reset impact (K − L helper diff)
+        assert "K21" in i and "L21" in i
 
     def test_helper_columns_hidden(self, tmp_path: Path):
+        """v2.0.0: helpers shifted from J/K to K/L."""
         ws = _analyser(tmp_path)
-        assert ws.column_dimensions["J"].hidden
         assert ws.column_dimensions["K"].hidden
+        assert ws.column_dimensions["L"].hidden
 
     def test_totals_row_sums_correct_ranges(self, tmp_path: Path):
-        """v1.5: Ord CGT total moved from col F to col E."""
+        """v2.0.0: totals row now 71; cols shifted by +1 (B→C, E→F, G→H, H→I)."""
         ws = _analyser(tmp_path)
-        assert ws["B70"].value == "=SUM(B20:B69)"        # Proceeds
-        assert ws["E70"].value == "=SUM(E20:E69)"        # Ord CGT (was F)
-        assert ws["G70"].value == "=SUM(G20:G69)"        # Div 296 adj gain
-        assert ws["H70"].value == "=SUM(H20:H69)"        # Div 296 tax
+        assert ws["C71"].value == "=SUM(C21:C70)"        # Proceeds (was B70)
+        assert ws["F71"].value == "=SUM(F21:F70)"        # Ord CGT (was E70)
+        assert ws["H71"].value == "=SUM(H21:H70)"        # Div 296 adj gain (was G70)
+        assert ws["I71"].value == "=SUM(I21:I70)"        # Div 296 tax (was H70)
 
     def test_reconciliation_panel(self, tmp_path: Path):
-        """v1.5: Ord CGT payable now SUMs col E (was col F)."""
+        """v2.0.0: recon block rows shift down by 1 (73→74 etc); cols unchanged
+        in recon (fund block stays A:B), but per-asset col E→F for the SUMIF."""
         ws = _analyser(tmp_path)
-        assert ws["A73"].value == "Ordinary CGT payable"
-        assert ws["B73"].value == "=SUM(E20:E69)"
-        assert ws["A74"].value == "Div 296 tax payable (headline)"
-        assert ws["B74"].value == "=B16"
-        assert ws["A75"].value == "Capital losses carried forward"
-        cf = ws["B75"].value
+        assert ws["A74"].value == "Ordinary CGT payable"
+        assert ws["B74"].value == "=SUM(F21:F70)"
+        assert ws["A75"].value == "Div 296 tax payable (headline)"
+        assert ws["B75"].value == "=B17"
+        assert ws["A76"].value == "Capital losses carried forward"
+        cf = ws["B76"].value
         assert cf.startswith("=")
         assert cf.count("MAX(0,'Inputs'!D") == 50  # one MAX per register row
 
     def test_trap_conditional_formatting_applied(self, tmp_path: Path):
+        """v2.0.0: trap CF range now A21:J70 (was A20:I69)."""
         ws = _analyser(tmp_path)
         cf_rules = list(ws.conditional_formatting._cf_rules.items())
         assert cf_rules, "no conditional formatting rules on Analyser"
         ranges = [str(r[0]) for r in cf_rules]
-        assert any("A20" in r and "I69" in r for r in ranges)
+        assert any("A21" in r and "J70" in r for r in ranges)
+
+    def test_state_strip_present(self, tmp_path: Path):
+        """v2.0.0: state strip in row 2 references all 3 named ranges + headline."""
+        ws = _analyser(tmp_path)
+        cell = ws["A2"]
+        assert "reset_on" in cell.value
+        assert "discount_on" in cell.value
+        assert "tier10_on" in cell.value
+        assert "B17" in cell.value  # HEADLINE_ROW after shift
+
+    def test_row_number_column(self, tmp_path: Path):
+        """v2.0.0: col A is row numbers 1..50 matching Inputs register offset."""
+        ws = _analyser(tmp_path)
+        assert ws["A20"].value == "#"        # header row (PERASSET_HEADER_ROW)
+        assert ws["A21"].value == 1          # first data row
+        assert ws["A70"].value == 50         # last data row
+        assert ws["A71"].value == "Σ"        # totals row
+
+    def test_print_titles_repeat_header(self, tmp_path: Path):
+        """v2.0.0: per-asset header row repeats on every printed page.
+        openpyxl round-trips with $-prefix on absolute row refs."""
+        ws = _analyser(tmp_path)
+        assert ws.print_title_rows in ("20:20", "$20:$20")
+
+    def test_no_freeze_panes(self, tmp_path: Path):
+        """v2.0.0: free scroll — no freeze panes."""
+        ws = _analyser(tmp_path)
+        assert ws.freeze_panes is None
 
     def test_trap_cf_formula_uses_relative_rows(self, tmp_path: Path):
         """The CF formula must NOT have $ before row numbers (must adjust per row)."""
@@ -380,30 +433,17 @@ class TestComparison:
         # Print area now spans through col K (widened from G in v1.5).
         assert ws.print_area is not None and "K" in ws.print_area
 
-    def test_chart_present_referencing_headlines(self, tmp_path: Path):
-        """v1.5: chart data cells moved to L8/L9 (labels) and M8/M9 (values)."""
+    def test_per_asset_delta_chart(self, tmp_path: Path):
+        """v2.0.0: chart is a horizontal bar of col F per-asset Δ values."""
         ws = _comparison(tmp_path)
-        assert len(ws._charts) == 1, "Expected one BarChart on Comparison tab"
-        assert ws["M8"].value == "=L6"
-        assert ws["M9"].value == "=M6"
-        assert ws["L8"].value == "Scenario A — No reset"
-        assert ws["L9"].value == "Scenario B — Reset elected"
-
-    def test_chart_has_cached_values_for_headless_pdf_render(self, tmp_path: Path):
-        """Chart ships with numCache/strCache populated so headless PDF render draws bars."""
-        ws = _comparison(tmp_path)
+        assert len(ws._charts) == 1, "Comparison should have exactly one chart"
         chart = ws._charts[0]
+        assert chart.type == "bar"
+        # Series data range covers DELTA_COL across the 10 display rows
         series = chart.ser[0]
-        num_cache = series.val.numRef.numCache
-        assert num_cache is not None, "Chart value cache missing"
-        assert num_cache.ptCount == 2
-        cached_values = sorted(round(float(p.v)) for p in num_cache.pt)
-        assert cached_values == [28_500, 157_500]
-        str_cache = series.cat.strRef.strCache
-        assert str_cache is not None, "Chart category cache missing"
-        cached_labels = [p.v for p in str_cache.pt]
-        assert "Scenario A — No reset" in cached_labels
-        assert "Scenario B — Reset elected" in cached_labels
+        assert "F" in series.val.numRef.f      # delta col
+        # Plot visible-only is OFF so the chart renders even if source is filtered
+        assert chart.visible_cells_only is False
 
 
 # --- Notes tab ------------------------------------------------------------

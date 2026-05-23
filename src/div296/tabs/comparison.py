@@ -34,17 +34,12 @@ neutral ("Net effect = A − B") — no recommendation language.
 from __future__ import annotations
 
 from openpyxl.chart import BarChart, Reference
-from openpyxl.chart.data_source import (
-    AxDataSource, NumData, NumDataSource, NumRef, NumVal,
-    StrData, StrRef, StrVal,
-)
 from openpyxl.chart.label import DataLabelList
 from openpyxl.formatting.rule import FormulaRule
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Protection, Side
 from openpyxl.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
-from div296 import calcs
 from div296.assumptions import ASSUMPTIONS
 from div296.styles import (
     BODY_FONT, CENTER, FMT_CURRENCY, FMT_PERCENT, INPUT_FILL, INPUT_FONT,
@@ -52,7 +47,7 @@ from div296.styles import (
 )
 from div296.tabs.inputs import (
     MEMBERS_FIRST_DATA_ROW, REGISTER_FIRST_DATA_ROW,
-    REGISTER_LAST_DATA_ROW, SAMPLE_REGISTER_ROWS,
+    REGISTER_LAST_DATA_ROW,
 )
 
 
@@ -132,12 +127,6 @@ HELPER_MEMBER_TAX_FIRST_ROW = 2
 HELPER_MEMBER_TAX_LAST_ROW = HELPER_MEMBER_TAX_FIRST_ROW + ASSUMPTIONS.member_count - 1
 HELPER_HEADLINE_ROW = HELPER_MEMBER_TAX_LAST_ROW + 1   # row 6
 
-# Hidden chart data block (cols L/M, rows 8-9 — labels and computed values)
-CHART_LABEL_A_CELL = "L8"
-CHART_LABEL_B_CELL = "L9"
-CHART_VALUE_A_CELL = "M8"
-CHART_VALUE_B_CELL = "M9"
-
 # --- Styling palette specific to v1.5 ---
 CARD_FILL_A = PatternFill("solid", fgColor="EFF5F3")    # very light teal
 CARD_FILL_B = PatternFill("solid", fgColor="EAF3FB")    # very light blue
@@ -157,38 +146,6 @@ TOTAL_BURDEN_FILL = PatternFill("solid", fgColor="EFF5F3")
 COST_BASE_ACCENT_FILL = PatternFill("solid", fgColor="FFF8E6")   # subtle gold tint
 DELTA_HEADER_FILL = PatternFill("solid", fgColor="FFF5E1")
 DELTA_FONT = Font(name="Arial", size=10, italic=True, color="8A6D00")
-
-
-# --- Sample-data computation for chart cache + sanity ---
-
-def _sample_scenario_headlines() -> tuple[float, float]:
-    """Compute the Scenario A / Scenario B Div 296 headline tax from the
-    sample register baked into Inputs. Used to pre-populate the chart's
-    cache so headless PDF renderers draw the bars."""
-    assets = [
-        calcs.Asset(
-            code=r[0], name=r[1], quantity=r[2], original_cost_base=r[3],
-            total_value=r[4], market_value_30jun2026=r[5],
-            valuation_source=r[6], projected_sale_proceeds=r[7],
-            held_over_12_months=(r[8] == "Yes"),
-        )
-        for r in SAMPLE_REGISTER_ROWS
-    ]
-    member = calcs.Member(tsb=12_000_000.0, split_pct=1.0)
-    kwargs = dict(
-        assets=assets,
-        members=[member],
-        discount_on=True,
-        discount_rate=ASSUMPTIONS.discount_rate,
-        tier10_on=False,
-        threshold_1=ASSUMPTIONS.threshold_1,
-        threshold_2=ASSUMPTIONS.threshold_2,
-        rate_tier1=ASSUMPTIONS.rate_tier1,
-        rate_tier2=ASSUMPTIONS.rate_tier2,
-    )
-    scenario_a = calcs.div296_headline_tax(reset_on=False, **kwargs)
-    scenario_b = calcs.div296_headline_tax(reset_on=True, **kwargs)
-    return scenario_a, scenario_b
 
 
 # --- Small builders ---
@@ -357,7 +314,7 @@ def _build_helpers(
     ws: Worksheet, gain_a_range: str, gain_b_range: str,
 ) -> tuple[str, str]:
     """Hidden L/M block: fund earnings (over the full register), per-member tax,
-    and the chart cache cells. Returns (headline_a_abs, headline_b_abs)."""
+    and headline totals. Returns (headline_a_abs, headline_b_abs)."""
     ws[f"{HELPER_COL_A}{HELPER_FUND_EARNINGS_ROW}"] = f'=SUMIF({gain_a_range},">0")'
     ws[f"{HELPER_COL_B}{HELPER_FUND_EARNINGS_ROW}"] = f'=SUMIF({gain_b_range},">0")'
 
@@ -380,14 +337,6 @@ def _build_helpers(
         f"=SUM({HELPER_COL_B}{HELPER_MEMBER_TAX_FIRST_ROW}:"
         f"{HELPER_COL_B}{HELPER_MEMBER_TAX_LAST_ROW})"
     )
-
-    # Chart data labels & values (hidden)
-    ws[CHART_LABEL_A_CELL] = "Scenario A — No reset"
-    ws[CHART_LABEL_B_CELL] = "Scenario B — Reset elected"
-    ws[CHART_VALUE_A_CELL] = f"={headline_a_cell}"
-    ws[CHART_VALUE_B_CELL] = f"={headline_b_cell}"
-    for coord in (CHART_VALUE_A_CELL, CHART_VALUE_B_CELL):
-        ws[coord].number_format = FMT_CURRENCY
 
     # Hide helper columns (L/M plus the per-register grid + matched-row col R).
     for col_letter in (HELPER_COL_A, HELPER_COL_B,
@@ -661,50 +610,52 @@ def _build_footer_notes(ws: Worksheet) -> None:
     ws.row_dimensions[SORT_NOTE_ROW].height = 30
 
 
-def _build_chart(ws: Worksheet, headline_a_cell: str, headline_b_cell: str) -> None:
-    chart = BarChart()
-    chart.type = "col"
-    chart.style = 11
-    chart.title = "Div 296 tax — Scenario A vs Scenario B"
-    chart.y_axis.title = "Div 296 tax ($)"
-    chart.x_axis.title = None
-    chart.legend = None
+def _build_chart(ws: Worksheet, *_unused) -> None:
+    """v2.0.0: horizontal bar chart of per-asset Δ values (col F of the
+    visible per-asset detail block, rows DATA_FIRST_ROW..DATA_LAST_ROW).
 
-    data = Reference(ws, min_col=13, min_row=8, max_col=13, max_row=9)   # M8:M9
-    cats = Reference(ws, min_col=12, min_row=8, max_col=12, max_row=9)   # L8:L9
+    Each bar = one displayed asset; length = (Scenario B − Scenario A)
+    gain delta; sorted descending (table already sorts this way via
+    LARGE/MATCH). Anchored below the footer notes, full panel width."""
+    chart = BarChart()
+    chart.type = "bar"          # horizontal
+    chart.style = 11
+    chart.title = "Per-asset Δ (Scenario B − Scenario A) — top 10 by |Δ|"
+    chart.y_axis.title = None
+    chart.x_axis.title = "Δ ($)"
+    chart.legend = None
+    # belt-and-braces; source is visible anyway. openpyxl exposes the
+    # plotVisOnly chartSpace flag as `display_blanks`/`visible_cells_only`.
+    chart.visible_cells_only = False
+
+    # Data = col F (DELTA_COL), rows DATA_FIRST_ROW..DATA_LAST_ROW.
+    # Categories = col A (Asset name + code), same rows.
+    data = Reference(
+        ws,
+        min_col=ord(DELTA_COL) - ord("A") + 1,
+        max_col=ord(DELTA_COL) - ord("A") + 1,
+        min_row=DATA_FIRST_ROW,
+        max_row=DATA_LAST_ROW,
+    )
+    cats = Reference(
+        ws,
+        min_col=1,                      # col A — Asset
+        max_col=1,
+        min_row=DATA_FIRST_ROW,
+        max_row=DATA_LAST_ROW,
+    )
     chart.add_data(data, titles_from_data=False)
     chart.set_categories(cats)
     chart.dataLabels = DataLabelList(
         showVal=True, showCatName=False, showSerName=False, showLegendKey=False,
     )
-    # Sized to fit cols F-K (~75 char widths) × ~7 rows next to the subtotals.
-    chart.height = 6.5
-    chart.width = 14
+    # Sized to fit the full visible panel width (A:K).
+    chart.height = 9
+    chart.width = 22
 
-    scenario_a, scenario_b = _sample_scenario_headlines()
-    series = chart.ser[0]
-    series.val = NumDataSource(numRef=NumRef(
-        f=f"'{SHEET}'!${CHART_VALUE_A_CELL[0]}${CHART_VALUE_A_CELL[1:]}:"
-          f"${CHART_VALUE_B_CELL[0]}${CHART_VALUE_B_CELL[1:]}",
-        numCache=NumData(
-            formatCode='"$"#,##0',
-            ptCount=2,
-            pt=[NumVal(idx=0, v=scenario_a), NumVal(idx=1, v=scenario_b)],
-        ),
-    ))
-    series.cat = AxDataSource(strRef=StrRef(
-        f=f"'{SHEET}'!${CHART_LABEL_A_CELL[0]}${CHART_LABEL_A_CELL[1:]}:"
-          f"${CHART_LABEL_B_CELL[0]}${CHART_LABEL_B_CELL[1:]}",
-        strCache=StrData(
-            ptCount=2,
-            pt=[
-                StrVal(idx=0, v="Scenario A — No reset"),
-                StrVal(idx=1, v="Scenario B — Reset elected"),
-            ],
-        ),
-    ))
-
-    ws.add_chart(chart, f"{CHART_ANCHOR_COL}{CHART_ANCHOR_ROW}")
+    # Anchor BELOW the existing footer notes block (CHART_BOTTOM_ROW + 2),
+    # full panel width.
+    ws.add_chart(chart, f"A{CHART_BOTTOM_ROW + 2}")
 
 
 def build(wb: Workbook) -> Worksheet:
@@ -728,7 +679,7 @@ def build(wb: Workbook) -> Worksheet:
         ws, gain_a_range, gain_b_range, delta_range, headline_a, headline_b,
     )
     _build_footer_notes(ws)
-    _build_chart(ws, headline_a, headline_b)
+    _build_chart(ws)
 
     # --- Print header watermark (large grey text on every printed page) ---
     ws.oddHeader.center.text = "ILLUSTRATIVE — NOT ADVICE"
@@ -739,16 +690,17 @@ def build(wb: Workbook) -> Worksheet:
     ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
     ws.page_setup.paperSize = ws.PAPERSIZE_A4
     ws.page_setup.fitToWidth = 1
-    # v1.6: fitToHeight=1 — scale the whole print area to a single A4 landscape
-    # page rather than letting footer notes overflow onto a near-empty page 2.
-    ws.page_setup.fitToHeight = 1
+    # v2.0.0: allow second page for chart (per-asset detail + chart together
+    # can exceed one landscape A4).
+    ws.page_setup.fitToHeight = 2
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.print_options.horizontalCentered = True
     ws.page_margins.left = 0.25
     ws.page_margins.right = 0.25
     ws.page_margins.top = 0.5
     ws.page_margins.bottom = 0.4
-    ws.print_area = f"A1:{LAST_VISIBLE_COL}{CHART_BOTTOM_ROW}"
+    CHART_PRINT_BOTTOM = CHART_BOTTOM_ROW + 22       # 2-row gap + ~20-row chart
+    ws.print_area = f"A1:{LAST_VISIBLE_COL}{CHART_PRINT_BOTTOM}"
 
     # --- Column widths ---
     # Panel A: Asset 24 / Proceeds 13 / Cost base 14 / Adj gain 14 / Tax 12
@@ -768,5 +720,7 @@ def build(wb: Workbook) -> Worksheet:
         ws[f"B{row}"].protection = Protection(locked=False)
 
     ws.protection.sheet = True
+    ws.protection.formatColumns = False
+    ws.protection.formatRows = False
 
     return ws

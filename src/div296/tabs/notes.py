@@ -232,7 +232,14 @@ def build(wb: Workbook) -> Worksheet:
     for col_letter, w in widths.items():
         ws.column_dimensions[col_letter].width = w
 
+    # --- Print header watermark (compliance signal on every printed page) ---
+    ws.oddHeader.center.text = "ILLUSTRATIVE — NOT ADVICE"
+    ws.oddHeader.center.size = 28
+    ws.oddHeader.center.color = "CCCCCC"
+
     # --- Sheet protection ---
     ws.protection.sheet = True
+    ws.protection.formatColumns = False
+    ws.protection.formatRows = False
 
     return ws
