@@ -71,7 +71,7 @@ REGISTER_HEADERS = [
     ("Asset name", FMT_TEXT),
     ("Quantity", FMT_INT),
     ("Original cost base", FMT_CURRENCY),
-    ("Total value", FMT_CURRENCY),
+    ("Current market value (as at today)", FMT_CURRENCY),
     ("Market value at 30 Jun 2026", FMT_CURRENCY),
     ("Valuation source / date", FMT_TEXT),
     ("Projected sale proceeds", FMT_CURRENCY),
@@ -235,7 +235,7 @@ def build(wb: Workbook) -> Worksheet:
         _define_name(wb, name, coord)
 
     # --- Column widths + freeze ---
-    widths = [10, 26, 10, 18, 18, 22, 26, 20, 18]
+    widths = [32, 26, 10, 18, 18, 26, 26, 20, 18]
     for col_idx, w in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(col_idx)].width = w
     # Freeze below the title + sample badge so they remain sticky.
@@ -245,6 +245,8 @@ def build(wb: Workbook) -> Worksheet:
     # Input cells were individually unlocked via _input_cell();
     # everything else is locked by default.
     ws.protection.sheet = True
+    ws.protection.formatColumns = False
+    ws.protection.formatRows = False
     ws.protection.selectLockedCells = False
     ws.protection.selectUnlockedCells = False
 
