@@ -433,30 +433,17 @@ class TestComparison:
         # Print area now spans through col K (widened from G in v1.5).
         assert ws.print_area is not None and "K" in ws.print_area
 
-    def test_chart_present_referencing_headlines(self, tmp_path: Path):
-        """v1.5: chart data cells moved to L8/L9 (labels) and M8/M9 (values)."""
+    def test_per_asset_delta_chart(self, tmp_path: Path):
+        """v2.0.0: chart is a horizontal bar of col F per-asset Δ values."""
         ws = _comparison(tmp_path)
-        assert len(ws._charts) == 1, "Expected one BarChart on Comparison tab"
-        assert ws["M8"].value == "=L6"
-        assert ws["M9"].value == "=M6"
-        assert ws["L8"].value == "Scenario A — No reset"
-        assert ws["L9"].value == "Scenario B — Reset elected"
-
-    def test_chart_has_cached_values_for_headless_pdf_render(self, tmp_path: Path):
-        """Chart ships with numCache/strCache populated so headless PDF render draws bars."""
-        ws = _comparison(tmp_path)
+        assert len(ws._charts) == 1, "Comparison should have exactly one chart"
         chart = ws._charts[0]
+        assert chart.type == "bar"
+        # Series data range covers DELTA_COL across the 10 display rows
         series = chart.ser[0]
-        num_cache = series.val.numRef.numCache
-        assert num_cache is not None, "Chart value cache missing"
-        assert num_cache.ptCount == 2
-        cached_values = sorted(round(float(p.v)) for p in num_cache.pt)
-        assert cached_values == [28_500, 157_500]
-        str_cache = series.cat.strRef.strCache
-        assert str_cache is not None, "Chart category cache missing"
-        cached_labels = [p.v for p in str_cache.pt]
-        assert "Scenario A — No reset" in cached_labels
-        assert "Scenario B — Reset elected" in cached_labels
+        assert "F" in series.val.numRef.f      # delta col
+        # Plot visible-only is OFF so the chart renders even if source is filtered
+        assert chart.visible_cells_only is False
 
 
 # --- Notes tab ------------------------------------------------------------
