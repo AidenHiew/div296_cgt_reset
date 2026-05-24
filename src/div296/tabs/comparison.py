@@ -35,6 +35,7 @@ from __future__ import annotations
 
 from openpyxl.chart import BarChart, Reference
 from openpyxl.chart.label import DataLabelList
+from openpyxl.comments import Comment
 from openpyxl.formatting.rule import FormulaRule
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Protection, Side
 from openpyxl.workbook import Workbook
@@ -78,6 +79,7 @@ CONTEXT_VALUE_ROW = 14
 BAND_HEADLINE_ROW = 16
 CARD_LABEL_ROW = 17
 CARD_VALUE_ROW = 18
+CARD_FOOTNOTE_ROW = 19   # v2.2.0: "Year 1 only" caveat under the metric cards
 
 BAND_SUBTOTALS_ROW = 20
 SUBTOTAL_HEADER_ROW = 21
@@ -235,6 +237,34 @@ def _build_header_block(ws: Worksheet) -> None:
     logo.fill = PatternFill("solid", fgColor="F5F5F5")
     ws.merge_cells(f"J{HEADER_LOGO_ROW}:{LAST_VISIBLE_COL}{HEADER_LOGO_ROW + 1}")
 
+    # v2.2.0: Sample-data warning (row 9, full width left of the logo block).
+    # Formula returns the warning string ONLY when the first three asset codes
+    # still match the sample register; CF paints amber only in that case.
+    sample_detect = (
+        f'AND({INPUTS_SHEET}!A{REGISTER_FIRST_DATA_ROW}="P1",'
+        f'{INPUTS_SHEET}!A{REGISTER_FIRST_DATA_ROW + 1}="S1",'
+        f'{INPUTS_SHEET}!A{REGISTER_FIRST_DATA_ROW + 2}="L1")'
+    )
+    sample_row = HEADER_DISCLAIMER_ROW + 1   # row 9
+    badge = ws.cell(
+        row=sample_row, column=1,
+        value=(
+            f'=IF({sample_detect},'
+            '"⚠  Sample data detected — the figures shown are illustrative '
+            'only until the asset register on Inputs is replaced with the '
+            "actual fund's holdings.\",\"\")"
+        ),
+    )
+    badge.font = Font(name="Arial", size=10, bold=True, italic=True, color="8A6D00")
+    badge.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+    ws.merge_cells(f"A{sample_row}:I{sample_row}")
+    ws.row_dimensions[sample_row].height = 20
+    amber_rule = FormulaRule(
+        formula=[sample_detect],
+        fill=PatternFill("solid", fgColor="FFF4CE"),
+    )
+    ws.conditional_formatting.add(f"A{sample_row}:I{sample_row}", amber_rule)
+
 
 def _build_context_strip(ws: Worksheet) -> None:
     """A small block showing the assumptions driving the headline numbers.
@@ -354,9 +384,9 @@ def _build_metric_cards(ws: Worksheet, headline_a: str, headline_b: str) -> None
     _band(ws, BAND_HEADLINE_ROW, "Headline — total Div 296 tax")
 
     cards = [
-        ("A:D", "Scenario A — No reset",     f"={headline_a[1:]}",                     CARD_FILL_A),
-        ("E:H", "Scenario B — Reset elected", f"={headline_b[1:]}",                    CARD_FILL_B),
-        ("I:K", "Net effect (A − B)",        f"={headline_a[1:]}-{headline_b[1:]}",   CARD_FILL_DELTA),
+        ("A:D", "Default outcome (no election lodged)", f"={headline_a[1:]}",                     CARD_FILL_A),
+        ("E:H", "If you elect the reset by 30 Jun 2026", f"={headline_b[1:]}",                    CARD_FILL_B),
+        ("I:K", "Change if you elect",                   f"={headline_a[1:]}-{headline_b[1:]}",   CARD_FILL_DELTA),
     ]
     for merge_range, label, value_formula, fill in cards:
         start = merge_range.split(":")[0]
@@ -387,6 +417,19 @@ def _build_metric_cards(ws: Worksheet, headline_a: str, headline_b: str) -> None
     ws.row_dimensions[CARD_LABEL_ROW].height = 18
     ws.row_dimensions[CARD_VALUE_ROW].height = 36
 
+    # v2.2.0: Year-1 footnote under the headline cards.
+    footnote = ws.cell(
+        row=CARD_FOOTNOTE_ROW, column=1,
+        value=("Headline figures are Year 1 only. Div 296 is assessed annually; "
+               "the thresholds are indexed over time, but the same earnings hit "
+               "recurs each year that a member's TSB remains above $3m."),
+    )
+    footnote.font = Font(name="Arial", size=9, italic=True, color="666666")
+    footnote.alignment = Alignment(horizontal="left", vertical="center",
+                                   wrap_text=True, indent=1)
+    ws.merge_cells(f"A{CARD_FOOTNOTE_ROW}:{LAST_VISIBLE_COL}{CARD_FOOTNOTE_ROW}")
+    ws.row_dimensions[CARD_FOOTNOTE_ROW].height = 24
+
 
 def _expand_cols(start: str, end: str) -> list[str]:
     return [chr(c) for c in range(ord(start), ord(end) + 1)]
@@ -400,9 +443,9 @@ def _build_subtotals(ws: Worksheet, headline_a: str, headline_b: str,
     # Header row
     header_cells = [
         ("A", "Subtotal"),
-        ("B", "Scenario A"),
-        ("C", "Scenario B"),
-        ("D", "Δ (B − A)"),
+        ("B", "Default outcome"),
+        ("C", "If you elect"),
+        ("D", "Change"),
     ]
     for col, text in header_cells:
         c = ws[f"{col}{SUBTOTAL_HEADER_ROW}"]
@@ -413,8 +456,10 @@ def _build_subtotals(ws: Worksheet, headline_a: str, headline_b: str,
 
     # Reference to the Analyser's Ordinary CGT total — this is the same in both
     # scenarios (ordinary CGT doesn't depend on reset election).
-    # Analyser B73 = Ordinary CGT payable (reconciliation panel).
-    ord_cgt_ref = f"={ANALYSER_SHEET}!B73"
+    # Analyser B74 = Ordinary CGT payable (reconciliation panel). The state strip
+    # added in v2.0.0 shifted this from B73 → B74 but the Comparison reference
+    # wasn't updated; fixed in v2.2.0.
+    ord_cgt_ref = f"={ANALYSER_SHEET}!B74"
 
     rows = [
         (SUBTOTAL_EARNINGS_ROW, "Div 296 earnings",
@@ -455,26 +500,26 @@ def _build_per_asset_detail(
     headline_a: str, headline_b: str,
 ) -> None:
     _band(ws, BAND_DETAIL_ROW,
-          f"Per-asset detail — top {DISPLAY_ROWS} by |Δ (B − A)|")
+          f"Per-asset detail — top {DISPLAY_ROWS} assets most affected by the election")
 
     # Panel titles row (28)
     panel_a_first, panel_a_last = PANEL_A_COLS[0], PANEL_A_COLS[-1]
     panel_b_first, panel_b_last = PANEL_B_COLS[0], PANEL_B_COLS[-1]
     panel_a_title = ws[f"{panel_a_first}{PANEL_TITLE_ROW}"]
-    panel_a_title.value = "Scenario A — No reset"
+    panel_a_title.value = "Default outcome (no election lodged)"
     panel_a_title.font = SECTION_BAND_FONT
     panel_a_title.fill = SECTION_BAND_FILL
     panel_a_title.alignment = CENTER
     ws.merge_cells(f"{panel_a_first}{PANEL_TITLE_ROW}:{panel_a_last}{PANEL_TITLE_ROW}")
 
     delta_title = ws[f"{DELTA_COL}{PANEL_TITLE_ROW}"]
-    delta_title.value = "Δ"
+    delta_title.value = "Change"
     delta_title.font = DELTA_FONT
     delta_title.fill = DELTA_HEADER_FILL
     delta_title.alignment = CENTER
 
     panel_b_title = ws[f"{panel_b_first}{PANEL_TITLE_ROW}"]
-    panel_b_title.value = "Scenario B — Reset elected"
+    panel_b_title.value = "If you elect the reset by 30 Jun 2026"
     panel_b_title.font = SECTION_BAND_FONT
     panel_b_title.fill = SECTION_BAND_FILL
     panel_b_title.alignment = CENTER
@@ -490,7 +535,7 @@ def _build_per_asset_detail(
         c.fill = SECTION_BAND_FILL
         c.alignment = CENTER
     delta_sub = ws[f"{DELTA_COL}{PANEL_HEADER_ROW}"]
-    delta_sub.value = "gain (B − A)"
+    delta_sub.value = "gain change"
     delta_sub.font = DELTA_FONT
     delta_sub.fill = DELTA_HEADER_FILL
     delta_sub.alignment = CENTER
@@ -579,8 +624,8 @@ def _build_per_asset_detail(
     # Overflow note
     overflow = ws.cell(
         row=DATA_OVERFLOW_NOTE_ROW, column=1,
-        value=(f"Showing top {DISPLAY_ROWS} assets by |Δ (B − A)| — see the "
-               f"Analyser tab for the full register "
+        value=(f"Showing top {DISPLAY_ROWS} assets by how much the election changes "
+               f"their Div 296 gain — see the Analyser tab for the full register "
                f"(up to {ASSUMPTIONS.asset_register_rows} rows)."),
     )
     overflow.font = Font(name="Arial", size=9, italic=True, color="666666")
@@ -590,8 +635,9 @@ def _build_per_asset_detail(
 def _build_footer_notes(ws: Worksheet) -> None:
     reminder = ws.cell(
         row=REMINDER_ROW, column=1,
-        value=("Note: loss-position assets may contribute Div 296 tax under Scenario B "
-               "that they do not under Scenario A — see the Analyser tab for per-asset detail."),
+        value=("Note: assets currently in an unrealised-loss position may contribute "
+               "Div 296 tax IF you elect the reset that they do not contribute under "
+               "the default outcome — see the Analyser tab for per-asset detail."),
     )
     reminder.font = Font(name="Arial", size=9, italic=True, color="666666")
     reminder.alignment = Alignment(wrap_text=True, vertical="top")
@@ -600,9 +646,9 @@ def _build_footer_notes(ws: Worksheet) -> None:
 
     sort_note = ws.cell(
         row=SORT_NOTE_ROW, column=1,
-        value=("Note: per-asset detail shows the top 10 assets by absolute "
-               "Δ (Scenario B − Scenario A) — i.e. those where the reset election "
-               "moves the Div 296 gain the most. See the Analyser tab for the full register."),
+        value=("Note: per-asset detail shows the top 10 assets where the reset "
+               "election moves the Div 296 gain the most (by absolute change, "
+               "either direction). See the Analyser tab for the full register."),
     )
     sort_note.font = Font(name="Arial", size=9, italic=True, color="666666")
     sort_note.alignment = Alignment(wrap_text=True, vertical="top")
@@ -620,9 +666,9 @@ def _build_chart(ws: Worksheet, *_unused) -> None:
     chart = BarChart()
     chart.type = "bar"          # horizontal
     chart.style = 11
-    chart.title = "Per-asset Δ (Scenario B − Scenario A) — top 10 by |Δ|"
+    chart.title = "Per-asset change in Div 296 gain if you elect the reset — top 10"
     chart.y_axis.title = None
-    chart.x_axis.title = "Δ ($)"
+    chart.x_axis.title = "Change in Div 296 gain ($)"
     chart.legend = None
     # belt-and-braces; source is visible anyway. openpyxl exposes the
     # plotVisOnly chartSpace flag as `display_blanks`/`visible_cells_only`.

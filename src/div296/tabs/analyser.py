@@ -35,8 +35,9 @@ Per-asset Div 296 tax (col I) is the pro-rata of the headline (locked decision):
 
 from __future__ import annotations
 
+from openpyxl.comments import Comment
 from openpyxl.formatting.rule import FormulaRule
-from openpyxl.styles import Alignment, Border, Side
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
@@ -80,10 +81,12 @@ PERASSET_FIRST_ROW = 21                                # was 20
 PERASSET_LAST_ROW = PERASSET_FIRST_ROW + ASSUMPTIONS.asset_register_rows - 1   # row 70
 TOTALS_ROW = PERASSET_LAST_ROW + 1                     # row 71
 
+TRAP_LEGEND_ROW = TOTALS_ROW + 1                       # row 72 (v2.2.0)
 RECON_BAND_ROW = TOTALS_ROW + 2                        # row 73 (was 72)
 RECON_ORD_CGT_ROW = RECON_BAND_ROW + 1
 RECON_DIV296_ROW = RECON_BAND_ROW + 2
 RECON_LOSSES_ROW = RECON_BAND_ROW + 3
+RECON_LOSSES_CAPTION_ROW = RECON_LOSSES_ROW + 1        # row 77 (v2.2.0)
 
 # Inputs↔Analyser offset (Inputs row = Analyser row - OFFSET)
 ROW_OFFSET = PERASSET_FIRST_ROW - REGISTER_FIRST_DATA_ROW   # 21 - 20 = 1
@@ -162,18 +165,45 @@ def build(wb: Workbook) -> Worksheet:
     # --- State strip (NEW v2.0.0) ---
     # One-line summary of the active scenario, anchored above the lever mirror.
     # Pulls live from named ranges + the Analyser headline cell.
+    # v2.2.0: humanised — reads as a sentence rather than a log line.
     state_cell = ws.cell(row=STATE_STRIP_ROW, column=1)
     state_cell.value = (
-        '="Current scenario:  Reset ["&reset_on&"]  ·  '
-        'CGT discount ["&discount_on&"]  ·  '
-        '$10m / +25% tier ["&tier10_on&"]  ·  '
-        'Headline Div 296 tax: "&TEXT(B' + str(HEADLINE_ROW) + ',"$#,##0")'
+        '="Right now you are viewing: reset "&LOWER(reset_on)&'
+        '", CGT discount "&LOWER(discount_on)&'
+        '", $10m tier "&LOWER(tier10_on)&'
+        '".  Headline Div 296 tax in this view: "'
+        '&TEXT(B' + str(HEADLINE_ROW) + ',"$#,##0")&"."'
     )
     state_cell.font = BODY_FONT
     state_cell.fill = STATE_STRIP_FILL
     state_cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
     ws.merge_cells(f"A{STATE_STRIP_ROW}:L{STATE_STRIP_ROW}")
     ws.row_dimensions[STATE_STRIP_ROW].height = 22
+
+    # --- v2.2.0: Sample-data warning (row 3, between state strip and lever band) ---
+    sample_detect = (
+        f'AND({INPUTS_SHEET}!A{REGISTER_FIRST_DATA_ROW}="P1",'
+        f'{INPUTS_SHEET}!A{REGISTER_FIRST_DATA_ROW + 1}="S1",'
+        f'{INPUTS_SHEET}!A{REGISTER_FIRST_DATA_ROW + 2}="L1")'
+    )
+    badge = ws.cell(
+        row=3, column=1,
+        value=(
+            f'=IF({sample_detect},'
+            '"⚠  Sample data detected — figures below are illustrative only '
+            'until the asset register on Inputs is replaced with the actual '
+            'fund\'s holdings.","")'
+        ),
+    )
+    badge.font = Font(name="Arial", size=10, bold=True, italic=True, color="8A6D00")
+    badge.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+    ws.merge_cells("A3:L3")
+    ws.row_dimensions[3].height = 20
+    sample_amber_rule = FormulaRule(
+        formula=[sample_detect],
+        fill=PatternFill("solid", fgColor="FFF4CE"),
+    )
+    ws.conditional_formatting.add("A3:L3", sample_amber_rule)
 
     # --- Mirror-lever strip ---
     _band(ws, LEVER_BAND_ROW, "Current scenario (mirrored from Inputs — read-only)")
@@ -343,14 +373,15 @@ def build(wb: Workbook) -> Worksheet:
     # double top border to visually detach from the per-asset rows.
     DOUBLE_TOP = Border(top=Side(style="double", color="1D3B34"))
 
-    # Σ glyph in col A (row-num col); "TOTALS" label in col B.
-    sigma_cell = ws.cell(row=TOTALS_ROW, column=ROWNUM_COL, value="Σ")
+    # v2.2.0: "Total" word in col A (row-num col) instead of the Σ glyph;
+    # "TOTAL" label in col B.
+    sigma_cell = ws.cell(row=TOTALS_ROW, column=ROWNUM_COL, value="Total")
     sigma_cell.fill = TOTALS_FILL
     sigma_cell.font = TOTALS_FONT
     sigma_cell.alignment = Alignment(horizontal="center", vertical="center")
     sigma_cell.border = DOUBLE_TOP
 
-    totals_label = ws.cell(row=TOTALS_ROW, column=ASSET_COL, value="TOTALS")
+    totals_label = ws.cell(row=TOTALS_ROW, column=ASSET_COL, value="TOTAL")
     totals_label.font = TOTALS_FONT
     totals_label.fill = TOTALS_FILL
     totals_label.border = DOUBLE_TOP
@@ -375,6 +406,23 @@ def build(wb: Workbook) -> Worksheet:
         c = ws.cell(row=TOTALS_ROW, column=col_const)
         c.fill = TOTALS_FILL
         c.border = DOUBLE_TOP
+
+    # --- v2.2.0: Trap-row legend (one-line key for the red row CF below) ---
+    legend = ws.cell(
+        row=TRAP_LEGEND_ROW, column=1,
+        value=("Red row = reset would create Div 296 tax on an asset currently "
+               "in an unrealised-loss position (the 'reset trap'). "
+               "Gold column = how much the reset election shifts each asset's "
+               "Div 296 gain."),
+    )
+    legend.font = Font(name="Arial", size=9, italic=True, color="666666")
+    legend.alignment = Alignment(horizontal="left", vertical="center",
+                                 wrap_text=True, indent=1)
+    # Small red swatch in the row-number cell as visual cue.
+    swatch = ws.cell(row=TRAP_LEGEND_ROW, column=1)
+    swatch.fill = PatternFill("solid", fgColor="FBE9E9")
+    ws.merge_cells(f"A{TRAP_LEGEND_ROW}:L{TRAP_LEGEND_ROW}")
+    ws.row_dimensions[TRAP_LEGEND_ROW].height = 20
 
     # --- Reconciliation panel ---
     _band(ws, RECON_BAND_ROW, "Reconciliation")
@@ -403,6 +451,18 @@ def build(wb: Workbook) -> Worksheet:
         row=RECON_LOSSES_ROW, column=2,
         value="=" + "+".join(cf_terms),
     ).number_format = FMT_CURRENCY
+
+    # v2.2.0: Plain-English caption under the CF losses row.
+    caption = ws.cell(
+        row=RECON_LOSSES_CAPTION_ROW, column=1,
+        value=("These losses can be applied against future realised capital "
+               "gains within the fund — they have no effect on Div 296."),
+    )
+    caption.font = Font(name="Arial", size=9, italic=True, color="666666")
+    caption.alignment = Alignment(horizontal="left", vertical="center",
+                                  wrap_text=True, indent=1)
+    ws.merge_cells(f"A{RECON_LOSSES_CAPTION_ROW}:L{RECON_LOSSES_CAPTION_ROW}")
+    ws.row_dimensions[RECON_LOSSES_CAPTION_ROW].height = 20
 
     # --- Trap shading: row red when ord raw gain < 0 AND Div 296 adj gain > 0 ---
     rng = (

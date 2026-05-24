@@ -36,7 +36,7 @@ PROPERTY = Asset(
     name="Commercial property",
     quantity=1,
     original_cost_base=800_000,
-    total_value=2_400_000,
+    current_market_value=2_400_000,
     market_value_30jun2026=2_400_000,
     valuation_source="Independent val, 30/06/26",
     projected_sale_proceeds=2_600_000,
@@ -48,7 +48,7 @@ SHARES = Asset(
     name="Listed shares parcel",
     quantity=5_000,
     original_cost_base=300_000,
-    total_value=520_000,
+    current_market_value=520_000,
     market_value_30jun2026=520_000,
     valuation_source="ASX close 30/06/26",
     projected_sale_proceeds=600_000,
@@ -60,7 +60,7 @@ LOSS = Asset(
     name="Loss-making holding",
     quantity=2_000,
     original_cost_base=500_000,
-    total_value=100_000,
+    current_market_value=100_000,
     market_value_30jun2026=100_000,
     valuation_source="Independent val, 30/06/26",
     projected_sale_proceeds=200_000,
@@ -83,7 +83,7 @@ def _r(x: float) -> int:
 # --- package sanity -------------------------------------------------------
 
 def test_package_version():
-    assert __version__ == "2.0.0"
+    assert __version__ == "2.2.0"
 
 
 # --- §12 scenario: reset ON, discount ON, tier OFF -----------------------

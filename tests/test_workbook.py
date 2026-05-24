@@ -259,7 +259,8 @@ class TestAnalyser:
         assert ws["A20"].value == "#"        # header row (PERASSET_HEADER_ROW)
         assert ws["A21"].value == 1          # first data row
         assert ws["A70"].value == 50         # last data row
-        assert ws["A71"].value == "Σ"        # totals row
+        # v2.2.0: Σ glyph replaced with the word "Total" for client readability.
+        assert ws["A71"].value == "Total"    # totals row
 
     def test_print_titles_repeat_header(self, tmp_path: Path):
         """v2.0.0: per-asset header row repeats on every printed page.
@@ -319,12 +320,14 @@ class TestComparison:
         assert "tier10_on" in values_row_text
 
     def test_metric_cards_present(self, tmp_path: Path):
-        """v1.5: three metric cards at rows 17-18 show scenario A / B / net effect."""
+        """v2.2.0: card labels rewritten in client-readable English."""
         ws = _comparison(tmp_path)
-        # Card labels
-        assert ws["A17"].value == "Scenario A — No reset"
-        assert ws["E17"].value == "Scenario B — Reset elected"
-        assert "Net effect" in ws["I17"].value
+        # Card labels — plain-English framing
+        assert "Default outcome" in ws["A17"].value
+        assert "no election" in ws["A17"].value
+        assert "elect the reset" in ws["E17"].value
+        assert "30 Jun 2026" in ws["E17"].value
+        assert "Change if you elect" in ws["I17"].value
         # Card values point at the headline cells L6/M6.
         assert "L$6" in ws["A18"].value or "L6" in ws["A18"].value
         assert "M$6" in ws["E18"].value or "M6" in ws["E18"].value
@@ -335,9 +338,9 @@ class TestComparison:
     def test_subtotals_table(self, tmp_path: Path):
         """v1.5: subtotals at rows 22-25 — earnings, ord CGT (unchanged), Div 296 tax, total burden."""
         ws = _comparison(tmp_path)
-        # Header row 21
-        assert ws["B21"].value == "Scenario A"
-        assert ws["C21"].value == "Scenario B"
+        # Header row 21 — v2.2.0 plain-English column labels
+        assert ws["B21"].value == "Default outcome"
+        assert ws["C21"].value == "If you elect"
 
         # Row labels
         assert ws["A22"].value == "Div 296 earnings"
@@ -402,6 +405,8 @@ class TestComparison:
         assert ws["A39"].value and ws["A39"].value.startswith("=")  # last data row
         overflow = ws["A40"].value
         assert overflow and "top 10" in overflow.lower()
+        # v2.2.0: greek delta dropped — must read as plain English now.
+        assert "Δ" not in overflow
 
     def test_per_asset_detail_uses_large_match_sort(self, tmp_path: Path):
         """v1.7: each visible row's matched register row is computed via LARGE/MATCH
