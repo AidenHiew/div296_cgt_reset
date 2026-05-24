@@ -22,7 +22,8 @@ change row numbers without grepping for the constant names first.
 
 from __future__ import annotations
 
-from openpyxl.formatting.rule import CellIsRule
+from openpyxl.comments import Comment
+from openpyxl.formatting.rule import CellIsRule, FormulaRule
 from openpyxl.styles import Alignment, Font, PatternFill, Protection
 from openpyxl.utils import get_column_letter
 from openpyxl.workbook import Workbook
@@ -149,6 +150,37 @@ def build(wb: Workbook) -> Worksheet:
     ws.merge_cells("A2:I2")
     ws.row_dimensions[2].height = 22
 
+    # --- Row 3: TSB diagnostic (v2.2.0 — "does Div 296 even apply?") ---
+    # Auto-checks the highest member TSB against the $3m threshold and shows
+    # a green / amber line. Conditional formatting paints the row.
+    last_member_row = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count - 1
+    max_tsb_expr = f"MAX(B{MEMBERS_FIRST_DATA_ROW}:B{last_member_row})"
+    diag_formula = (
+        f'=IF({max_tsb_expr}=0,'
+        f'"➤  Enter member TSBs below to see whether Div 296 applies to this fund.",'
+        f'IF({max_tsb_expr}<=threshold_1,'
+        f'"✓  All members are below the $3m TSB threshold — Div 296 does not currently apply to this fund.",'
+        f'"⚠  At least one member has a TSB above $3m — Div 296 applies. See the Comparison tab for the modelled impact."))'
+    )
+    diag = ws.cell(row=3, column=1, value=diag_formula)
+    diag.font = Font(name="Arial", size=10, bold=True, color="666666")
+    diag.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+    ws.merge_cells("A3:I3")
+    ws.row_dimensions[3].height = 22
+
+    # Green when no member exceeds $3m.
+    green_rule = FormulaRule(
+        formula=[f"AND({max_tsb_expr}>0,{max_tsb_expr}<=threshold_1)"],
+        fill=PatternFill("solid", fgColor="E1F5EE"),
+    )
+    # Amber when at least one member is above $3m.
+    amber_rule = FormulaRule(
+        formula=[f"{max_tsb_expr}>threshold_1"],
+        fill=PatternFill("solid", fgColor="FBE9E9"),
+    )
+    ws.conditional_formatting.add("A3:I3", green_rule)
+    ws.conditional_formatting.add("A3:I3", amber_rule)
+
     # --- Zone 1: Control panel ---
     _band(ws, 4, "1. Control panel (the demo levers)")
     for name, (label, row, coord, options, default) in CONTROL_ROWS.items():
@@ -159,6 +191,15 @@ def build(wb: Workbook) -> Worksheet:
             dv = DataValidation(type="list", formula1=f'"{",".join(options)}"', allow_blank=False)
             ws.add_data_validation(dv)
             dv.add(coord)
+        # v2.2.0: scope comment on the Reset election toggle.
+        if name == nr.RESET_ON:
+            ws[coord].comment = Comment(
+                ("This toggle affects the Analyser tab only.\n\n"
+                 "The Comparison tab always shows both paths (default vs "
+                 "election) regardless of what is selected here, so you can "
+                 "compare side-by-side without flipping back and forth."),
+                "v2.2 UX",
+            )
 
     # --- Zone 2: Members (moved up — short, fund-level context) ---
     _band(ws, MEMBERS_HEADER_ROW - 1, "2. Members")
@@ -225,6 +266,17 @@ def build(wb: Workbook) -> Worksheet:
             _input_cell(ws, coord, value=value, number_format=fmt)
         held_dv.add(f"I{row}")
 
+    # v2.2.0: Loss-position highlight — tint any register row whose current
+    # market value (col E) is below its original cost base (col D). Cosmetic
+    # only; nothing in the calc engine reads from this.
+    reg_first = REGISTER_FIRST_DATA_ROW
+    reg_last = REGISTER_LAST_DATA_ROW
+    loss_rule = FormulaRule(
+        formula=[f'AND($D{reg_first}<>"",$E{reg_first}<>"",$E{reg_first}<$D{reg_first})'],
+        fill=PatternFill("solid", fgColor="FBE9E9"),
+    )
+    ws.conditional_formatting.add(f"A{reg_first}:I{reg_last}", loss_rule)
+
     # --- Zone 4: Advanced assumptions (set-once constants — bottom) ---
     _band(ws, ADV_BAND_ROW, "4. Advanced assumptions (set once)")
     for i, (name, label, value, fmt) in enumerate(ADV_ROWS):
@@ -238,8 +290,8 @@ def build(wb: Workbook) -> Worksheet:
     widths = [32, 26, 10, 18, 18, 26, 26, 20, 18]
     for col_idx, w in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(col_idx)].width = w
-    # Freeze below the title + sample badge so they remain sticky.
-    ws.freeze_panes = "A3"
+    # Freeze below the title + sample badge + TSB diagnostic so they remain sticky.
+    ws.freeze_panes = "A4"
 
     # --- Sheet protection (tamper-evident, passwordless) ---
     # Input cells were individually unlocked via _input_cell();
