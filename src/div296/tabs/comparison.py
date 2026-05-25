@@ -74,19 +74,24 @@ HEADER_LOGO_ROW = 10
 
 BAND_BODY_ROW = 12
 CONTEXT_LABEL_ROW = 13
-CONTEXT_VALUE_ROW = 14
+# v2.5 FB-8: strip now shows per-member TSB (rows 14..14+member_count-1)
+# plus a Total row. Other context tiles (proportion, discount, tier) get
+# vertically merged across those rows on the right.
+CONTEXT_VALUE_ROW = 14   # first member row (kept name for back-compat)
+CONTEXT_MEMBER_LAST_ROW = CONTEXT_VALUE_ROW + ASSUMPTIONS.member_count - 1   # row 17
+CONTEXT_TOTAL_ROW = CONTEXT_MEMBER_LAST_ROW + 1                              # row 18
 
-BAND_HEADLINE_ROW = 16
-CARD_LABEL_ROW = 17
-CARD_VALUE_ROW = 18
-CARD_FOOTNOTE_ROW = 19   # v2.2.0: "Year 1 only" caveat under the metric cards
+BAND_HEADLINE_ROW = CONTEXT_TOTAL_ROW + 1    # row 19 (was 16)
+CARD_LABEL_ROW = BAND_HEADLINE_ROW + 1       # row 20 (was 17)
+CARD_VALUE_ROW = CARD_LABEL_ROW + 1          # row 21 (was 18)
+CARD_FOOTNOTE_ROW = CARD_VALUE_ROW + 1       # row 22 (was 19)
 
-BAND_SUBTOTALS_ROW = 20
-SUBTOTAL_HEADER_ROW = 21
-SUBTOTAL_EARNINGS_ROW = 22
-SUBTOTAL_ORD_CGT_ROW = 23
-SUBTOTAL_DIV296_ROW = 24
-SUBTOTAL_BURDEN_ROW = 25
+BAND_SUBTOTALS_ROW = CARD_FOOTNOTE_ROW + 1   # row 23 (was 20)
+SUBTOTAL_HEADER_ROW = BAND_SUBTOTALS_ROW + 1 # row 24 (was 21)
+SUBTOTAL_EARNINGS_ROW = SUBTOTAL_HEADER_ROW + 1   # row 25
+SUBTOTAL_ORD_CGT_ROW = SUBTOTAL_EARNINGS_ROW + 1  # row 26
+SUBTOTAL_DIV296_ROW = SUBTOTAL_ORD_CGT_ROW + 1    # row 27
+SUBTOTAL_BURDEN_ROW = SUBTOTAL_DIV296_ROW + 1     # row 28
 
 # v2.3: Per-member breakdown block between subtotals and per-asset detail.
 PER_MEMBER_BAND_ROW = SUBTOTAL_BURDEN_ROW + 2          # row 27
@@ -268,67 +273,83 @@ def _build_header_block(ws: Worksheet) -> None:
 
 
 def _build_context_strip(ws: Worksheet) -> None:
-    """A small block showing the assumptions driving the headline numbers.
-    Computed live from Inputs.
-
-    v2.4 FB-3: TSB + proportion cells are now FUND-LEVEL aggregates rather
-    than Member-1-only. Per-member detail lives in the Per-member breakdown
-    block lower down (added v2.3). The user's complaint was that with 4
-    members entered, the top strip still read "Member 1 TSB" — fixed here.
+    """Top context block. v2.5 FB-8: the left tile now shows a per-member
+    TSB mini-table (Member 1..4 + Total) instead of a single fund aggregate.
+    The other three tiles (proportion, discount, tier) sit on the right and
+    vertically merge across the same row range so the strip reads as one panel.
     """
-    last_member_row = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count - 1
+    last_input_member_row = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count - 1
 
-    # Labels (row 13)
+    # --- Row 13 labels (four horizontal merges across cols A:K) ---
     labels = [
-        ("A:C", "Total fund TSB"),
+        ("A:C", "Members & TSB"),
         ("D:F", "Highest member proportion above $3m"),
         ("G:H", "CGT discount"),
         ("I:K", "$10m / +25% tier"),
     ]
     for merge_range, label in labels:
-        start = merge_range.split(":")[0]
-        ws[f"{start}{CONTEXT_LABEL_ROW}"] = label
-        ws[f"{start}{CONTEXT_LABEL_ROW}"].font = CONTEXT_LABEL_FONT
-        ws[f"{start}{CONTEXT_LABEL_ROW}"].alignment = Alignment(horizontal="left", indent=1)
-        ws.merge_cells(f"{merge_range.split(':')[0]}{CONTEXT_LABEL_ROW}:"
-                       f"{merge_range.split(':')[1]}{CONTEXT_LABEL_ROW}")
+        start, end = merge_range.split(":")
+        cell = ws[f"{start}{CONTEXT_LABEL_ROW}"]
+        cell.value = label
+        cell.font = CONTEXT_LABEL_FONT
+        cell.alignment = Alignment(horizontal="left", indent=1)
+        ws.merge_cells(f"{start}{CONTEXT_LABEL_ROW}:{end}{CONTEXT_LABEL_ROW}")
 
-    # Values (row 14) — fund-aggregate references to Inputs.
-    # MAX of col D (auto-proportion) gives the threshold-trigger reading
-    # the user actually needs at a glance: when MAX > 0, Div 296 applies
-    # to at least one member.
-    values = [
-        ("A:C", f"=SUM({INPUTS_SHEET}!B{MEMBERS_FIRST_DATA_ROW}:B{last_member_row})", FMT_CURRENCY),
-        ("D:F", f"=MAX({INPUTS_SHEET}!D{MEMBERS_FIRST_DATA_ROW}:D{last_member_row})", FMT_PERCENT),
-        ("G:H", "=discount_on",                                               None),
-        ("I:K", "=tier10_on",                                                 None),
+    # --- Left tile (cols A:C) — per-member TSB mini-table ---
+    # Col A always shows the placeholder label; col B-C merged for TSB value
+    # (blank when the corresponding Inputs row has no TSB).
+    for i in range(ASSUMPTIONS.member_count):
+        c_row = CONTEXT_VALUE_ROW + i
+        inputs_row = MEMBERS_FIRST_DATA_ROW + i
+        tsb_ref = f"{INPUTS_SHEET}!B{inputs_row}"
+
+        label_cell = ws.cell(row=c_row, column=1, value=f"Member {i+1}")
+        label_cell.font = CONTEXT_LABEL_FONT
+        label_cell.alignment = Alignment(horizontal="left", indent=1)
+
+        value_cell = ws.cell(row=c_row, column=2,
+                             value=f'=IF({tsb_ref}>0,{tsb_ref},"")')
+        value_cell.font = CONTEXT_VALUE_FONT
+        value_cell.number_format = FMT_CURRENCY
+        value_cell.alignment = Alignment(horizontal="right", indent=1)
+        ws.merge_cells(f"B{c_row}:C{c_row}")
+
+        ws.row_dimensions[c_row].height = 16
+
+    # Total row underneath the members.
+    total_label = ws.cell(row=CONTEXT_TOTAL_ROW, column=1, value="Total")
+    total_label.font = Font(name="Arial", size=10, bold=True, color="1D3B34")
+    total_label.alignment = Alignment(horizontal="left", indent=1)
+
+    total_value = ws.cell(
+        row=CONTEXT_TOTAL_ROW, column=2,
+        value=f"=SUM({INPUTS_SHEET}!B{MEMBERS_FIRST_DATA_ROW}:B{last_input_member_row})",
+    )
+    total_value.font = Font(name="Arial", size=11, bold=True, color="1D3B34")
+    total_value.number_format = FMT_CURRENCY
+    total_value.alignment = Alignment(horizontal="right", indent=1)
+    ws.merge_cells(f"B{CONTEXT_TOTAL_ROW}:C{CONTEXT_TOTAL_ROW}")
+    ws.row_dimensions[CONTEXT_TOTAL_ROW].height = 18
+
+    # --- Right tiles (D:F, G:H, I:K) — vertically merged across the
+    # member-rows + total-row range so each value reads as one panel.
+    strip_first_row = CONTEXT_VALUE_ROW
+    strip_last_row = CONTEXT_TOTAL_ROW
+    tile_values = [
+        ("D", "F",
+         f"=MAX({INPUTS_SHEET}!D{MEMBERS_FIRST_DATA_ROW}:D{last_input_member_row})",
+         FMT_PERCENT),
+        ("G", "H", "=discount_on", None),
+        ("I", "K", "=tier10_on",   None),
     ]
-    for merge_range, formula, fmt in values:
-        start = merge_range.split(":")[0]
-        end = merge_range.split(":")[1]
-        cell = ws[f"{start}{CONTEXT_VALUE_ROW}"]
+    for start, end, formula, fmt in tile_values:
+        cell = ws[f"{start}{strip_first_row}"]
         cell.value = formula
         cell.font = CONTEXT_VALUE_FONT
-        cell.alignment = Alignment(horizontal="left", indent=1)
+        cell.alignment = Alignment(horizontal="center", vertical="center")
         if fmt:
             cell.number_format = fmt
-        ws.merge_cells(f"{start}{CONTEXT_VALUE_ROW}:{end}{CONTEXT_VALUE_ROW}")
-
-    ws.row_dimensions[CONTEXT_VALUE_ROW].height = 22
-
-    # v2.4 FB-3: breadcrumb pointing at the Per-member breakdown block,
-    # so a reader who wants individual-member detail knows where to look.
-    # Fills the empty row that sits between the strip and the headline cards
-    # (row 15 — no row shift).
-    breadcrumb_row = CONTEXT_VALUE_ROW + 1
-    bc = ws.cell(
-        row=breadcrumb_row, column=1,
-        value="See the Per-member breakdown block below for individual member figures.",
-    )
-    bc.font = Font(name="Arial", size=9, italic=True, color="666666")
-    bc.alignment = Alignment(horizontal="left", vertical="center", indent=1)
-    ws.merge_cells(f"A{breadcrumb_row}:{LAST_VISIBLE_COL}{breadcrumb_row}")
-    ws.row_dimensions[breadcrumb_row].height = 14
+        ws.merge_cells(f"{start}{strip_first_row}:{end}{strip_last_row}")
 
 
 def _build_per_register_helpers(ws: Worksheet) -> tuple[str, str, str]:

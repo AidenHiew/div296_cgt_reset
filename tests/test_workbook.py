@@ -321,66 +321,73 @@ class TestComparison:
         assert "ILLUSTRATIVE" in ws.oddHeader.center.text
 
     def test_context_strip_present(self, tmp_path: Path):
-        """v2.4 FB-3: context strip is now fund-aggregate, not Member-1-only.
-        TSB cell = SUM across all members; Proportion cell = MAX across members."""
+        """v2.5 FB-8: strip shows per-member TSB on the left (rows 14-17 = members,
+        row 18 = total) with the other three tiles vertically merged on the right."""
         ws = _comparison(tmp_path)
+        # Row 13 labels
         labels_row_text = " ".join(
             str(c.value) for c in ws[13] if c.value is not None
         )
-        assert "Total fund TSB" in labels_row_text
+        assert "Members & TSB" in labels_row_text
         assert "Highest member proportion above $3m" in labels_row_text
         assert "CGT discount" in labels_row_text
         assert "tier" in labels_row_text.lower()
-        values_row_text = " ".join(
-            str(c.value) for c in ws[14] if c.value is not None
+        # Per-member rows: A14..A17 carry placeholder labels regardless of TSB.
+        assert ws["A14"].value == "Member 1"
+        assert ws["A15"].value == "Member 2"
+        assert ws["A16"].value == "Member 3"
+        assert ws["A17"].value == "Member 4"
+        # Total row 18 sums all member TSBs from Inputs.
+        assert ws["A18"].value == "Total"
+        assert "SUM('Inputs'!B11:B14)" in ws["B18"].value
+        # Right-side tiles — values live on the first member row (vertically merged).
+        right_tile_row_text = " ".join(
+            str(ws[f"{c}14"].value) for c in ("D", "G", "I") if ws[f"{c}14"].value is not None
         )
-        # Fund-aggregate references: SUM of TSB col, MAX of auto-proportion col
-        assert "SUM('Inputs'!B11:B14)" in values_row_text
-        assert "MAX('Inputs'!D11:D14)" in values_row_text
-        assert "discount_on" in values_row_text
-        assert "tier10_on" in values_row_text
+        assert "MAX('Inputs'!D11:D14)" in right_tile_row_text
+        assert "discount_on" in right_tile_row_text
+        assert "tier10_on" in right_tile_row_text
 
     def test_metric_cards_present(self, tmp_path: Path):
-        """v2.5 FB-4: card labels standardised across all sections; Change card is SIGNED."""
+        """v2.5 FB-4 + FB-8: cards shifted to rows 20/21 (strip expanded)."""
         ws = _comparison(tmp_path)
-        assert ws["A17"].value == "If no reset (default)"
-        assert ws["E17"].value == "If elected to reset"
-        assert ws["I17"].value == "Change"
+        assert ws["A20"].value == "If no reset (default)"
+        assert ws["E20"].value == "If elected to reset"
+        assert ws["I20"].value == "Change"
         # Card values point at the headline cells L6/M6.
-        assert "L$6" in ws["A18"].value or "L6" in ws["A18"].value
-        assert "M$6" in ws["E18"].value or "M6" in ws["E18"].value
-        # v2.5: Change card is now SIGNED — reset − default (negative = saving).
-        net = ws["I18"].value
+        assert "L$6" in ws["A21"].value or "L6" in ws["A21"].value
+        assert "M$6" in ws["E21"].value or "M6" in ws["E21"].value
+        # Change card is SIGNED — reset − default (negative = saving).
+        net = ws["I21"].value
         assert ("M" in net and "L" in net and "-" in net), f"unexpected change formula {net!r}"
-        # M must appear before L (i.e. M-L, not L-M).
         assert net.index("M") < net.index("L"), (
             f"Change card should be reset − default (M-L), got {net!r}"
         )
 
     def test_subtotals_table(self, tmp_path: Path):
-        """v2.5 FB-5: rows 22-25; labels standardised; Change col is SIGNED."""
+        """v2.5 FB-5 + FB-8: subtotals shifted to rows 25-28 (strip expanded)."""
         ws = _comparison(tmp_path)
-        # Header row 21 — v2.5 standardised wording
-        assert ws["B21"].value == "If no reset (default)"
-        assert ws["C21"].value == "If elected to reset"
-        assert ws["D21"].value == "Change"
+        # Header row 24
+        assert ws["B24"].value == "If no reset (default)"
+        assert ws["C24"].value == "If elected to reset"
+        assert ws["D24"].value == "Change"
 
-        # Row labels
-        assert ws["A22"].value == "Div 296 earnings"
-        assert "Ordinary CGT" in ws["A23"].value and "unchanged" in ws["A23"].value
-        assert ws["A24"].value == "Div 296 tax (headline)"
-        assert "TOTAL TAX BURDEN" in ws["A25"].value
+        # Row labels (25-28)
+        assert ws["A25"].value == "Div 296 earnings"
+        assert "Ordinary CGT" in ws["A26"].value and "unchanged" in ws["A26"].value
+        assert ws["A27"].value == "Div 296 tax (headline)"
+        assert "TOTAL TAX BURDEN" in ws["A28"].value
 
         # Ordinary CGT row pulls from Analyser (same value in both scenarios)
-        assert "Analyser" in ws["B23"].value
-        assert ws["B23"].value == ws["C23"].value
+        assert "Analyser" in ws["B26"].value
+        assert ws["B26"].value == ws["C26"].value
 
         # Total burden = ord CGT + Div 296 tax for each scenario
-        assert ws["B25"].value == "=B23+B24"
-        assert ws["C25"].value == "=C23+C24"
+        assert ws["B28"].value == "=B26+B27"
+        assert ws["C28"].value == "=C26+C27"
 
-        # v2.5: Change col is SIGNED (reset − default).
-        for row in (22, 23, 24, 25):
+        # Change col is SIGNED (reset − default).
+        for row in (25, 26, 27, 28):
             assert ws[f"D{row}"].value == f"=C{row}-B{row}", (
                 f"D{row} should be =C{row}-B{row}, got {ws[f'D{row}'].value!r}"
             )
