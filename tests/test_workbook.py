@@ -13,6 +13,11 @@ from openpyxl import load_workbook
 
 from div296 import named_ranges as nr
 from div296.build import build_workbook
+from div296.tabs.comparison import (
+    DATA_FIRST_ROW as CMP_DATA_FIRST_ROW,
+    DATA_LAST_ROW as CMP_DATA_LAST_ROW,
+    DATA_OVERFLOW_NOTE_ROW as CMP_OVERFLOW_ROW,
+)
 
 
 EXPECTED_TABS = ["Inputs", "Analyser", "Comparison", "Notes"]
@@ -47,7 +52,8 @@ def test_every_named_range_resolves(tmp_path: Path):
 
 
 def test_inputs_sample_data_preloaded(tmp_path: Path):
-    """v1.7: Manual earnings dropped → register rows shift up to 20-22; member 1 → 11."""
+    """v2.3: Quantity col dropped; cols shift D→C (orig CB), F→E (MV today),
+    F→E (MV 30 Jun), G→F (val source), H→G (proceeds). New col H = projected G/L."""
     out = tmp_path / "out.xlsx"
     wb = build_workbook()
     wb.save(out)
@@ -56,24 +62,36 @@ def test_inputs_sample_data_preloaded(tmp_path: Path):
     # Row 20: Commercial property
     assert ws["A20"].value == "P1"
     assert ws["B20"].value == "Commercial property"
-    assert ws["D20"].value == 800_000
-    assert ws["F20"].value == 2_400_000
-    assert ws["H20"].value == 2_600_000
-    assert ws["I20"].value == "Yes"
+    assert ws["C20"].value == 800_000             # Original cost base (was D)
+    assert ws["E20"].value == 2_400_000           # MV at 30 Jun 2026 (was F)
+    assert ws["G20"].value == 2_600_000           # Projected sale proceeds (was H)
+    assert ws["I20"].value == "Yes"               # Held>12m (still col I)
 
     # Row 21: Listed shares parcel
     assert ws["A21"].value == "S1"
-    assert ws["D21"].value == 300_000
-    assert ws["F21"].value == 520_000
+    assert ws["C21"].value == 300_000
+    assert ws["E21"].value == 520_000
 
     # Row 22: Loss-making holding
     assert ws["A22"].value == "L1"
-    assert ws["D22"].value == 500_000
-    assert ws["F22"].value == 100_000
+    assert ws["C22"].value == 500_000
+    assert ws["E22"].value == 100_000
 
-    # Sole member on row 11: TSB $12m, split 100%
+    # NEW v2.3: Projected gain/loss formula in col H for every row.
+    pg_formula = ws["H20"].value
+    assert pg_formula and "G20" in pg_formula and "C20" in pg_formula
+
+    # Sole member on row 11: TSB $12m.
+    # v2.4 FB-1: Split % is now an auto formula derived from TSB share,
+    # not a typed value. With only Member 1 having a TSB, the formula
+    # returns 1.0 at runtime, but openpyxl reads back the formula string
+    # (data_only=False). Verify the formula shape instead.
     assert ws["B11"].value == 12_000_000
-    assert ws["C11"].value == 1.0
+    c11 = ws["C11"].value
+    assert isinstance(c11, str) and c11.startswith("="), (
+        f"C11 should be a formula in v2.4+, got {c11!r}"
+    )
+    assert "SUM($B$11:$B$14)" in c11 and "B11/" in c11
 
 
 def test_control_panel_defaults(tmp_path: Path):
@@ -84,7 +102,7 @@ def test_control_panel_defaults(tmp_path: Path):
     ws = load_workbook(out)["Inputs"]
 
     assert ws["B5"].value == "ON"     # Reset election
-    assert ws["B6"].value == "OFF"    # $10m / +25% tier
+    assert ws["B6"].value == "ON"     # $10m / +25% tier (v2.5: flipped to ON — Bill-correct)
     assert ws["B7"].value == "ON"     # CGT discount
     # B8/B9 used to hold earnings source + manual override — removed in v1.7.
 
@@ -102,22 +120,25 @@ def test_sample_data_badge_present(tmp_path: Path):
 
 
 def test_all_tabs_protected(tmp_path: Path):
+    """v2.5 step 13: Comparison re-locked after Aiden's formatting pass was
+    ported back into source. All tabs now protected."""
     out = tmp_path / "out.xlsx"
     wb = build_workbook()
     wb.save(out)
     wb_re = load_workbook(out)
-    for tab in ("Inputs", "Analyser", "Comparison", "Notes"):
+    for tab in ("Inputs", "Analyser", "Notes", "Comparison"):
         assert wb_re[tab].protection.sheet is True, f"{tab} is not protected"
 
 
 def test_all_tabs_allow_column_resize_under_protection(tmp_path: Path):
     """v2.0.0: protection.sheet stays True but formatColumns/formatRows
-    are unlocked so users can drag column borders without unlocking cells."""
+    are unlocked so users can drag column borders without unlocking cells.
+    v2.5 step 13: Comparison re-locked → invariant applies to it too."""
     out = tmp_path / "out.xlsx"
     wb = build_workbook()
     wb.save(out)
     wb_re = load_workbook(out)
-    for sheet in ("Inputs", "Analyser", "Comparison", "Notes"):
+    for sheet in ("Inputs", "Analyser", "Notes", "Comparison"):
         ws = wb_re[sheet]
         assert ws.protection.sheet is True, f"{sheet} should be protected"
         # openpyxl exposes these as bool-ish; allow either False or "0"
@@ -140,8 +161,8 @@ def test_input_cells_unlocked(tmp_path: Path):
         assert ws.cell(row=row, column=2).protection.locked is False, (
             f"Inputs!B{row} should be unlocked"
         )
-    # Sample register row D20 (Original cost base of Property) must be unlocked.
-    assert ws["D20"].protection.locked is False
+    # v2.3: Original cost base shifted to col C after Quantity dropped.
+    assert ws["C20"].protection.locked is False
     # Member 1 TSB (B11) must be unlocked.
     assert ws["B11"].protection.locked is False
 
@@ -188,20 +209,20 @@ class TestAnalyser:
         assert "threshold_2" in f
 
     def test_first_data_row_columns(self, tmp_path: Path):
-        """v2.0.0: per-asset first row now 21 (was 20), cols shifted right by 1
-        (col A is row-num). Inputs references unchanged at row 20."""
+        """v2.3: Inputs col shifts — D→C (orig CB), F→E (MV at 30 Jun),
+        H→G (proceeds). Held>12m still col I."""
         ws = _analyser(tmp_path)
         # Analyser row 21 = first asset; visible data cols 2..10.
         a, b, c, d, e, f, g, h, i = (ws.cell(row=21, column=col).value for col in range(2, 11))
         assert "'Inputs'!A20" in a and "'Inputs'!B20" in a
-        assert "'Inputs'!H20" in b                      # Proceeds
-        assert "'Inputs'!D20" in c                      # Original CB
+        assert "'Inputs'!G20" in b                      # Proceeds (was H)
+        assert "'Inputs'!C20" in c                      # Original CB (was D)
         # Col E = Ordinary taxable gain
-        assert "discount_rate" in d and "'Inputs'!H20" in d and "'Inputs'!D20" in d
+        assert "discount_rate" in d and "'Inputs'!G20" in d and "'Inputs'!C20" in d
         # Col F = Ordinary CGT = MAX(0, E{row}) * fund_cgt_rate
         assert "fund_cgt_rate" in e and "E21" in e
         # Col G = Div 296 cost base
-        assert 'reset_on="ON"' in f and "'Inputs'!F20" in f and "'Inputs'!D20" in f
+        assert 'reset_on="ON"' in f and "'Inputs'!E20" in f and "'Inputs'!C20" in f
         # Col H = Div 296 adjusted gain
         assert "discount_rate" in g and 'reset_on="ON"' in g
         # Col I = Div 296 tax (pro-rata of headline)
@@ -234,7 +255,7 @@ class TestAnalyser:
         assert ws["A76"].value == "Capital losses carried forward"
         cf = ws["B76"].value
         assert cf.startswith("=")
-        assert cf.count("MAX(0,'Inputs'!D") == 50  # one MAX per register row
+        assert cf.count("MAX(0,'Inputs'!C") == 50  # v2.3: orig CB col D→C
 
     def test_trap_conditional_formatting_applied(self, tmp_path: Path):
         """v2.0.0: trap CF range now A21:J70 (was A20:I69)."""
@@ -259,7 +280,8 @@ class TestAnalyser:
         assert ws["A20"].value == "#"        # header row (PERASSET_HEADER_ROW)
         assert ws["A21"].value == 1          # first data row
         assert ws["A70"].value == 50         # last data row
-        assert ws["A71"].value == "Σ"        # totals row
+        # v2.2.0: Σ glyph replaced with the word "Total" for client readability.
+        assert ws["A71"].value == "Total"    # totals row
 
     def test_print_titles_repeat_header(self, tmp_path: Path):
         """v2.0.0: per-asset header row repeats on every printed page.
@@ -302,78 +324,102 @@ class TestComparison:
         assert "ILLUSTRATIVE" in ws.oddHeader.center.text
 
     def test_context_strip_present(self, tmp_path: Path):
-        """v1.7: context strip values reference Inputs!B11 (member 1 TSB after Manual removal)."""
+        """v2.5 polish: strip is per-member TSB only (cols A:C, rows 14-18).
+        The earlier v2.5 right-side tiles (proportion / discount / tier) were
+        dropped — cols D:K of the strip are deliberately blank."""
         ws = _comparison(tmp_path)
-        labels_row_text = " ".join(
-            str(c.value) for c in ws[13] if c.value is not None
-        )
-        assert "TSB" in labels_row_text
-        assert "Proportion above $3m" in labels_row_text
-        assert "CGT discount" in labels_row_text
-        assert "tier" in labels_row_text.lower()
-        values_row_text = " ".join(
-            str(c.value) for c in ws[14] if c.value is not None
-        )
-        assert "'Inputs'!B11" in values_row_text   # member 1 TSB
-        assert "discount_on" in values_row_text
-        assert "tier10_on" in values_row_text
+        # Row 12 section band — renamed to "Members & TSB" (no parenthetical).
+        assert "Members & TSB" in str(ws["A12"].value)
+        # Row 13 (v2.5 step 13 — Aiden polish): 2-column header row, not a
+        # merged sub-header anymore. A13 = "Members", B13 = "Total Super Balance".
+        assert ws["A13"].value == "Members"
+        assert ws["B13"].value == "Total Super Balance"
+        # Per-member rows: A14..A17 carry placeholder labels regardless of TSB.
+        assert ws["A14"].value == "Member 1"
+        assert ws["A15"].value == "Member 2"
+        assert ws["A16"].value == "Member 3"
+        assert ws["A17"].value == "Member 4"
+        # Total row 18 sums all member TSBs from Inputs.
+        assert ws["A18"].value == "Total"
+        assert "SUM('Inputs'!B11:B14)" in ws["B18"].value
+        # Right-side tiles must be GONE — every cell D14..K18 should be None.
+        for col in ("D", "E", "F", "G", "H", "I", "J", "K"):
+            for row in range(14, 19):
+                val = ws[f"{col}{row}"].value
+                assert val is None, (
+                    f"{col}{row} should be empty (right-side tiles dropped); got {val!r}"
+                )
 
     def test_metric_cards_present(self, tmp_path: Path):
-        """v1.5: three metric cards at rows 17-18 show scenario A / B / net effect."""
+        """v2.5 step 13 (Aiden polish): headline cards use VERBOSE labels —
+        long form on the big tile, short form everywhere else. Rows shifted
+        +1 from spacer row inserted at r19."""
         ws = _comparison(tmp_path)
-        # Card labels
-        assert ws["A17"].value == "Scenario A — No reset"
-        assert ws["E17"].value == "Scenario B — Reset elected"
-        assert "Net effect" in ws["I17"].value
-        # Card values point at the headline cells L6/M6.
-        assert "L$6" in ws["A18"].value or "L6" in ws["A18"].value
-        assert "M$6" in ws["E18"].value or "M6" in ws["E18"].value
-        # Net-effect card is A − B = L6 − M6
-        net = ws["I18"].value
-        assert ("L" in net and "M" in net and "-" in net), f"unexpected net-effect formula {net!r}"
+        # Card labels at row 21 use the verbose variant (CONTEXT.md headline
+        # override). Short form lives on subtotal r26 + per-member r34.
+        assert ws["A21"].value == "If no Div 296 CostBase Reset (default)"
+        assert ws["E21"].value == "If elected to reset Div 296 CostBase Reset"
+        assert ws["I21"].value == "Difference (Net Div 296 Tax)"
+        # Card values at row 22 point at the headline cells L6/M6.
+        assert "L$6" in ws["A22"].value or "L6" in ws["A22"].value
+        assert "M$6" in ws["E22"].value or "M6" in ws["E22"].value
+        # Difference card is SIGNED — reset − default (negative = saving).
+        net = ws["I22"].value
+        assert ("M" in net and "L" in net and "-" in net), f"unexpected difference formula {net!r}"
+        assert net.index("M") < net.index("L"), (
+            f"Difference card should be reset − default (M-L), got {net!r}"
+        )
 
     def test_subtotals_table(self, tmp_path: Path):
-        """v1.5: subtotals at rows 22-25 — earnings, ord CGT (unchanged), Div 296 tax, total burden."""
+        """v2.5 step 13 (Aiden polish): subtotal rows shifted +2 from spacer
+        inserts. Header at r26, data r27-30. Short-form labels (glossary)."""
         ws = _comparison(tmp_path)
-        # Header row 21
-        assert ws["B21"].value == "Scenario A"
-        assert ws["C21"].value == "Scenario B"
+        # Header row 26
+        assert ws["B26"].value == "If no reset (default)"
+        assert ws["C26"].value == "If elected to reset"
+        assert ws["D26"].value == "Difference"
 
-        # Row labels
-        assert ws["A22"].value == "Div 296 earnings"
-        assert "Ordinary CGT" in ws["A23"].value and "unchanged" in ws["A23"].value
-        assert ws["A24"].value == "Div 296 tax (headline)"
-        assert "TOTAL TAX BURDEN" in ws["A25"].value
+        # Row labels (27-30)
+        assert ws["A27"].value == "Div 296 earnings"
+        assert "Ordinary CGT" in ws["A28"].value and "unchanged" in ws["A28"].value
+        assert ws["A29"].value == "Div 296 tax (headline)"
+        assert "TOTAL TAX BURDEN" in ws["A30"].value
 
         # Ordinary CGT row pulls from Analyser (same value in both scenarios)
-        assert "Analyser" in ws["B23"].value
-        assert ws["B23"].value == ws["C23"].value
+        assert "Analyser" in ws["B28"].value
+        assert ws["B28"].value == ws["C28"].value
 
         # Total burden = ord CGT + Div 296 tax for each scenario
-        assert ws["B25"].value == "=B23+B24"
-        assert ws["C25"].value == "=C23+C24"
+        assert ws["B30"].value == "=B28+B29"
+        assert ws["C30"].value == "=C28+C29"
+
+        # Change col is SIGNED (reset − default).
+        for row in (27, 28, 29, 30):
+            assert ws[f"D{row}"].value == f"=C{row}-B{row}", (
+                f"D{row} should be =C{row}-B{row}, got {ws[f'D{row}'].value!r}"
+            )
 
     def test_panel_a_uses_original_cost_base(self, tmp_path: Path):
-        """v1.7: panels use INDEX(Inputs!col, matched_row) — col D = original CB."""
+        """Panels use INDEX(Inputs!col, matched_row).
+        v2.3: orig CB shifted from col D to col C (Quantity dropped)."""
         ws = _comparison(tmp_path)
-        # Panel A cost base for first visible row pulls Inputs col D via INDEX.
-        cb_formula = ws["C30"].value
-        assert "'Inputs'!$D:$D" in cb_formula
-        assert "'Inputs'!$F:$F" not in cb_formula
+        cb_formula = ws[f"C{CMP_DATA_FIRST_ROW}"].value
+        assert "'Inputs'!$C:$C" in cb_formula
+        assert "'Inputs'!$E:$E" not in cb_formula
 
     def test_panel_b_uses_market_value(self, tmp_path: Path):
-        """v1.7: panels use INDEX(Inputs!col, matched_row) — col F = MV."""
+        """v2.5 FB-7: Panel B moved to F-J. Cost base is now col H."""
         ws = _comparison(tmp_path)
-        cb_formula = ws["I30"].value
-        assert "'Inputs'!$F:$F" in cb_formula
-        assert "'Inputs'!$D:$D" not in cb_formula
+        cb_formula = ws[f"H{CMP_DATA_FIRST_ROW}"].value
+        assert "'Inputs'!$E:$E" in cb_formula
+        assert "'Inputs'!$C:$C" not in cb_formula
 
     def test_panels_independent_of_master_reset_toggle(self, tmp_path: Path):
         """Neither panel formula may reference the reset_on named range."""
         ws = _comparison(tmp_path)
-        # v1.7: 10 visible data rows (30..39).
-        for row in range(30, 40):
-            for col_letter in ("B", "C", "D", "E", "H", "I", "J", "K"):
+        for row in range(CMP_DATA_FIRST_ROW, CMP_DATA_LAST_ROW + 1):
+            # v2.5 FB-7: Panel A B-E, Panel B G-J (col F = Panel B asset label).
+            for col_letter in ("B", "C", "D", "E", "G", "H", "I", "J"):
                 f = ws[f"{col_letter}{row}"].value
                 if f and isinstance(f, str):
                     assert "reset_on" not in f, (
@@ -381,11 +427,17 @@ class TestComparison:
                     )
 
     def test_delta_column_formula(self, tmp_path: Path):
-        """Δ column F = panel B adj gain (J) − panel A adj gain (D)."""
+        """v2.5 FB-7: Change col K = panel B tax (J) − panel A tax (E) — signed tax delta."""
         ws = _comparison(tmp_path)
-        delta = ws["F30"].value
-        assert "J30" in delta and "D30" in delta
+        delta = ws[f"K{CMP_DATA_FIRST_ROW}"].value
+        assert f"J{CMP_DATA_FIRST_ROW}" in delta and f"E{CMP_DATA_FIRST_ROW}" in delta, (
+            f"Change formula must reference panel B tax (J) and panel A tax (E); got {delta!r}"
+        )
         assert "-" in delta
+        # Reset (J) − default (E): the J reference comes BEFORE the E reference.
+        assert delta.index(f"J{CMP_DATA_FIRST_ROW}") < delta.index(f"E{CMP_DATA_FIRST_ROW}"), (
+            f"Change must be reset − default (J before E), got {delta!r}"
+        )
 
     def test_helper_columns_hidden(self, tmp_path: Path):
         """v1.7: helpers in cols L/M plus per-register grid N/O/P + matched-row R."""
@@ -396,21 +448,26 @@ class TestComparison:
             assert not ws.column_dimensions[col_letter].hidden, f"col {col_letter} must be visible"
 
     def test_top_10_sorted_rendered(self, tmp_path: Path):
-        """v1.7: display top 10 assets by |Δ (B − A)| descending. Rows 30..39."""
+        """Display top 10 assets by |Δ (B − A)| descending."""
         ws = _comparison(tmp_path)
-        assert ws["A30"].value and ws["A30"].value.startswith("=")
-        assert ws["A39"].value and ws["A39"].value.startswith("=")  # last data row
-        overflow = ws["A40"].value
+        first = ws[f"A{CMP_DATA_FIRST_ROW}"].value
+        last = ws[f"A{CMP_DATA_LAST_ROW}"].value
+        assert first and first.startswith("=")
+        assert last and last.startswith("=")
+        overflow = ws[f"A{CMP_OVERFLOW_ROW}"].value
         assert overflow and "top 10" in overflow.lower()
+        # v2.2.0: greek delta dropped — must read as plain English now.
+        assert "Δ" not in overflow
 
     def test_per_asset_detail_uses_large_match_sort(self, tmp_path: Path):
-        """v1.7: each visible row's matched register row is computed via LARGE/MATCH
+        """Each visible row's matched register row is computed via LARGE/MATCH
         in the hidden col R, and panel cells INDEX into Inputs by that row."""
         ws = _comparison(tmp_path)
-        matched_formula = ws["R30"].value
+        matched_formula = ws[f"R{CMP_DATA_FIRST_ROW}"].value
         assert "LARGE" in matched_formula and "MATCH" in matched_formula
-        # Panel cells should reference R30 (the matched row).
-        assert "$R30" in ws["B30"].value or "R30" in ws["B30"].value
+        # Panel cells should reference the matched row.
+        assert (f"$R{CMP_DATA_FIRST_ROW}" in ws[f"B{CMP_DATA_FIRST_ROW}"].value
+                or f"R{CMP_DATA_FIRST_ROW}" in ws[f"B{CMP_DATA_FIRST_ROW}"].value)
 
     def test_no_recommendation_language(self, tmp_path: Path):
         """Comparison tab must use neutral net-effect language only."""
@@ -433,17 +490,10 @@ class TestComparison:
         # Print area now spans through col K (widened from G in v1.5).
         assert ws.print_area is not None and "K" in ws.print_area
 
-    def test_per_asset_delta_chart(self, tmp_path: Path):
-        """v2.0.0: chart is a horizontal bar of col F per-asset Δ values."""
+    def test_no_chart_v25(self, tmp_path: Path):
+        """v2.5 FB-3: chart removed — Aiden's feedback was it didn't tell a story."""
         ws = _comparison(tmp_path)
-        assert len(ws._charts) == 1, "Comparison should have exactly one chart"
-        chart = ws._charts[0]
-        assert chart.type == "bar"
-        # Series data range covers DELTA_COL across the 10 display rows
-        series = chart.ser[0]
-        assert "F" in series.val.numRef.f      # delta col
-        # Plot visible-only is OFF so the chart renders even if source is filtered
-        assert chart.visible_cells_only is False
+        assert len(ws._charts) == 0, "Comparison should have no chart (removed v2.5)"
 
 
 # --- Notes tab ------------------------------------------------------------
@@ -488,14 +538,18 @@ class TestNotes:
                         )
 
     def test_valuation_log_mirrors_register(self, tmp_path: Path):
-        """Valuation log has one row per asset, formulas pointing at Inputs."""
+        """Valuation log has one row per asset, formulas pointing at Inputs.
+        v2.3: Valuation source/date moved from Inputs col G to col F (Quantity dropped)."""
         ws = _notes(tmp_path)
         ref_count = 0
         for row in ws.iter_rows():
             for c in row:
-                if isinstance(c.value, str) and "'Inputs'!G" in c.value:
+                if isinstance(c.value, str) and "'Inputs'!F" in c.value:
                     ref_count += 1
-        assert ref_count == 50, f"Expected 50 valuation-source mirrors, got {ref_count}"
+        # 50 valuation-source mirrors + 50 MV-at-30Jun mirrors (col E, not col F)
+        # → only valuation-source contributes 'Inputs'!F refs in the log block.
+        # However Notes also references Inputs!F elsewhere; assert >= 50.
+        assert ref_count >= 50, f"Expected ≥50 valuation-source mirrors, got {ref_count}"
 
     def test_provenance_cells_present(self, tmp_path: Path):
         """Hidden provenance block carries build_version / build_date / git SHA."""

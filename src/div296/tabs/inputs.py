@@ -22,7 +22,8 @@ change row numbers without grepping for the constant names first.
 
 from __future__ import annotations
 
-from openpyxl.formatting.rule import CellIsRule
+from openpyxl.comments import Comment
+from openpyxl.formatting.rule import CellIsRule, FormulaRule
 from openpyxl.styles import Alignment, Font, PatternFill, Protection
 from openpyxl.utils import get_column_letter
 from openpyxl.workbook import Workbook
@@ -33,7 +34,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 from div296 import named_ranges as nr
 from div296.assumptions import ASSUMPTIONS
 from div296.styles import (
-    BODY_FONT, CENTER, FMT_CURRENCY, FMT_INT, FMT_PERCENT, FMT_PERCENT_3,
+    BODY_FONT, CENTER, FMT_CURRENCY, FMT_PERCENT, FMT_PERCENT_3,
     FMT_TEXT, INPUT_FILL, INPUT_FONT, SECTION_BAND_FILL,
     SECTION_BAND_FONT, THIN_BOX, TITLE_FONT,
 )
@@ -45,7 +46,7 @@ SHEET = "Inputs"
 # --- Zone 1: Control panel (rows 5-7) ---
 CONTROL_ROWS = {
     nr.RESET_ON:        ("Reset election",                        5, "B5", ["ON", "OFF"], "ON"),
-    nr.TIER10_ON:       ("$10m / +25% tier",                      6, "B6", ["ON", "OFF"], "OFF"),
+    nr.TIER10_ON:       ("$10m / +25% tier",                      6, "B6", ["ON", "OFF"], "ON"),
     nr.DISCOUNT_ON:     ("CGT discount",                          7, "B7", ["ON", "OFF"], "ON"),
 }
 
@@ -55,11 +56,13 @@ MEMBERS_FIRST_DATA_ROW = 11
 MEMBER_HEADERS = [
     "Member",
     "TSB ($)",
-    "Split % of fund earnings",
+    "Split % of fund earnings (auto)",   # v2.4: now a TSB-derived formula, not user input
     "Proportion above $3m (auto)",
     "Proportion override (optional)",
+    # v2.4: Suggested split column dropped — col C now IS the auto split.
 ]
-SPLIT_CHECK_ROW = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count + 1   # row 18
+MEMBERS_TOTAL_ROW = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count    # row 15 (v2.3)
+SPLIT_CHECK_ROW = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count + 1   # row 16
 
 # --- Zone 3: Asset register (rows 18-69) ---
 REGISTER_HEADER_ROW = 19
@@ -69,21 +72,29 @@ REGISTER_LAST_DATA_ROW = REGISTER_FIRST_DATA_ROW + ASSUMPTIONS.asset_register_ro
 REGISTER_HEADERS = [
     ("Asset code", FMT_TEXT),
     ("Asset name", FMT_TEXT),
-    ("Quantity", FMT_INT),
-    ("Original cost base", FMT_CURRENCY),
-    ("Current market value (as at today)", FMT_CURRENCY),
-    ("Market value at 30 Jun 2026", FMT_CURRENCY),
-    ("Valuation source / date", FMT_TEXT),
-    ("Projected sale proceeds", FMT_CURRENCY),
-    ("Held > 12 months?", FMT_TEXT),
+    # v2.3: Quantity column dropped — unused by every downstream tab.
+    ("Original cost base", FMT_CURRENCY),                # was col D
+    ("Current market value (as at today)", FMT_CURRENCY),# was col E
+    ("Market value at 30 Jun 2026", FMT_CURRENCY),       # was col F
+    ("Valuation source / date", FMT_TEXT),               # was col G (kept — Notes audit log mirrors this)
+    ("Projected sale proceeds", FMT_CURRENCY),           # was col H
+    ("Projected gain/loss", FMT_CURRENCY),               # NEW col H v2.3 (= proceeds − original CB)
+    ("Held > 12 months?", FMT_TEXT),                     # was col I, still col I
 ]
 
+# Indices (1-based) for special-case col handling in the register loop.
+REGISTER_COL_ORIG_CB = 3            # was 4
+REGISTER_COL_PROCEEDS = 7           # was 8
+REGISTER_COL_PROJ_GL = 8            # NEW
+REGISTER_COL_HELD = 9               # was 9 (col letter unchanged)
+
 SAMPLE_REGISTER_ROWS = [
-    ("P1", "Commercial property",   1,     800_000, 2_400_000, 2_400_000,
+    # Order matches REGISTER_HEADERS minus the Projected gain/loss col (formula-driven).
+    ("P1", "Commercial property",   800_000, 2_400_000, 2_400_000,
      "Independent val, 30/06/26",   2_600_000, "Yes"),
-    ("S1", "Listed shares parcel",  5_000, 300_000, 520_000,   520_000,
+    ("S1", "Listed shares parcel",  300_000, 520_000,   520_000,
      "ASX close 30/06/26",          600_000,   "Yes"),
-    ("L1", "Loss-making holding",   2_000, 500_000, 100_000,   100_000,
+    ("L1", "Loss-making holding",   500_000, 100_000,   100_000,
      "Independent val, 30/06/26",   200_000,   "Yes"),
 ]
 
@@ -149,6 +160,56 @@ def build(wb: Workbook) -> Worksheet:
     ws.merge_cells("A2:I2")
     ws.row_dimensions[2].height = 22
 
+    # --- Row 3: TSB diagnostic (v2.2.0 + v2.3 — three-tier traffic light) ---
+    # Auto-checks the highest member TSB against $3m / $10m thresholds and shows
+    # a green / amber / darker-amber line, with a nudge to flip the $10m tier
+    # toggle (B6) when applicable. CF paints the row.
+    last_member_row = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count - 1
+    max_tsb_expr = f"MAX(B{MEMBERS_FIRST_DATA_ROW}:B{last_member_row})"
+    diag_formula = (
+        f'=IF({max_tsb_expr}=0,'
+        f'"➤  Enter member TSBs below to see whether Div 296 applies to this fund.",'
+        f'IF({max_tsb_expr}<=threshold_1,'
+        f'"✓  All members are below the $3m TSB threshold — Div 296 does not currently apply to this fund.",'
+        f'IF({max_tsb_expr}<=threshold_2,'
+        f'"⚠  At least one member has a TSB above $3m — Div 296 applies. See the Comparison tab for the modelled impact.",'
+        f'"⚠⚠  At least one member has a TSB above $10m — consider enabling the $10m / +25% tier toggle in cell B6 to model the higher rate band.")))'
+    )
+    diag = ws.cell(row=3, column=1, value=diag_formula)
+    diag.font = Font(name="Arial", size=10, bold=True, color="666666")
+    diag.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+    ws.merge_cells("A3:I3")
+    ws.row_dimensions[3].height = 22
+
+    # Green when no member exceeds $3m.
+    green_rule = FormulaRule(
+        formula=[f"AND({max_tsb_expr}>0,{max_tsb_expr}<=threshold_1)"],
+        fill=PatternFill("solid", fgColor="E1F5EE"),
+    )
+    # Light amber when at least one member is above $3m but below $10m.
+    amber_rule = FormulaRule(
+        formula=[f"AND({max_tsb_expr}>threshold_1,{max_tsb_expr}<=threshold_2)"],
+        fill=PatternFill("solid", fgColor="FBE9E9"),
+    )
+    # v2.3: Darker amber when at least one member is above $10m. Sits on top
+    # of the light-amber rule so the strongest match wins.
+    deep_amber_rule = FormulaRule(
+        formula=[f"{max_tsb_expr}>threshold_2"],
+        fill=PatternFill("solid", fgColor="F4C28A"),
+    )
+    ws.conditional_formatting.add("A3:I3", green_rule)
+    ws.conditional_formatting.add("A3:I3", amber_rule)
+    ws.conditional_formatting.add("A3:I3", deep_amber_rule)
+
+    # v2.3: Pulse the $10m tier toggle cell (B6) amber when MAX TSB > $10m
+    # AND the toggle is still OFF — visually links the banner above to the
+    # action needed below so the user can't miss the mismatch.
+    tier10_nudge = FormulaRule(
+        formula=[f'AND({max_tsb_expr}>threshold_2,B6="OFF")'],
+        fill=PatternFill("solid", fgColor="F4C28A"),
+    )
+    ws.conditional_formatting.add("B6", tier10_nudge)
+
     # --- Zone 1: Control panel ---
     _band(ws, 4, "1. Control panel (the demo levers)")
     for name, (label, row, coord, options, default) in CONTROL_ROWS.items():
@@ -159,6 +220,15 @@ def build(wb: Workbook) -> Worksheet:
             dv = DataValidation(type="list", formula1=f'"{",".join(options)}"', allow_blank=False)
             ws.add_data_validation(dv)
             dv.add(coord)
+        # v2.2.0: scope comment on the Reset election toggle.
+        if name == nr.RESET_ON:
+            ws[coord].comment = Comment(
+                ("This toggle affects the Analyser tab only.\n\n"
+                 "The Comparison tab always shows both paths (default vs "
+                 "election) regardless of what is selected here, so you can "
+                 "compare side-by-side without flipping back and forth."),
+                "v2.2 UX",
+            )
 
     # --- Zone 2: Members (moved up — short, fund-level context) ---
     _band(ws, MEMBERS_HEADER_ROW - 1, "2. Members")
@@ -168,19 +238,53 @@ def build(wb: Workbook) -> Worksheet:
         c.fill = SECTION_BAND_FILL
         c.alignment = CENTER
 
+    last_mr = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count - 1
+    tsb_sum = f"SUM($B${MEMBERS_FIRST_DATA_ROW}:$B${last_mr})"
+    # v2.5 FB-2: seed two members (Aiden's feedback — show split-balance behaviour).
+    # Member 1 = $12m (§12 high-TSB case), Member 2 = $3.5m (just-above-threshold case).
+    # Members 3–4 stay blank as illustrative placeholders.
+    SAMPLE_TSB_BY_MEMBER = (12_000_000, 3_500_000, None, None)
     for i in range(ASSUMPTIONS.member_count):
         row = MEMBERS_FIRST_DATA_ROW + i
         ws.cell(row=row, column=1, value=f"Member {i+1}").font = BODY_FONT
-        is_first = i == 0
-        # Defaults: row 1 populated with §12 sample (single member, TSB $12m, split 100%);
-        # rows 2–4 left blank.
-        _input_cell(ws, f"B{row}", value=12_000_000 if is_first else None, number_format=FMT_CURRENCY)
-        _input_cell(ws, f"C{row}", value=1.0 if is_first else None, number_format=FMT_PERCENT)
+        seed = SAMPLE_TSB_BY_MEMBER[i] if i < len(SAMPLE_TSB_BY_MEMBER) else None
+        _input_cell(ws, f"B{row}", value=seed, number_format=FMT_CURRENCY)
+
+        # v2.4 FB-1: Col C "Split %" is now an AUTO formula derived from
+        # the member's TSB share. Removed the _input_cell wrapper so the cell
+        # stays default-locked under sheet protection — manual entry is
+        # impossible, eliminating the v2.3 "user typed 50% + 60% = 110%"
+        # failure mode. Italic grey to visually read as derived.
+        split_formula = f"=IF({tsb_sum}>0,B{row}/{tsb_sum},0)"
+        split_cell = ws.cell(row=row, column=3, value=split_formula)
+        split_cell.number_format = FMT_PERCENT
+        split_cell.font = Font(name="Arial", size=10, italic=True, color="1D3B34")
+        split_cell.alignment = Alignment(horizontal="right", indent=1)
+
         # Auto proportion = MAX(0, (TSB - threshold_1) / TSB), guarded for blank TSB
         prop_formula = f"=IF(B{row}>0, MAX(0,(B{row}-threshold_1)/B{row}), 0)"
         prop_cell = ws.cell(row=row, column=4, value=prop_formula)
         prop_cell.number_format = FMT_PERCENT
         _input_cell(ws, f"E{row}", value=None, number_format=FMT_PERCENT)
+        # v2.4: Suggested split (col F) dropped — col C above now IS the auto split.
+
+    # v2.3: Member TSB total row — combined TSB across members for quick read.
+    last_member_data_row = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count - 1
+    total_label = ws.cell(row=MEMBERS_TOTAL_ROW, column=1, value="Total")
+    total_label.font = Font(name="Arial", size=10, bold=True, color="1D3B34")
+    total_label.alignment = Alignment(horizontal="left", indent=1)
+    total_tsb = ws.cell(
+        row=MEMBERS_TOTAL_ROW, column=2,
+        value=f"=SUM(B{MEMBERS_FIRST_DATA_ROW}:B{last_member_data_row})",
+    )
+    total_tsb.font = Font(name="Arial", size=10, bold=True, color="1D3B34")
+    total_tsb.number_format = FMT_CURRENCY
+    total_tsb.border = THIN_BOX
+    total_tsb.fill = PatternFill("solid", fgColor="EFF5F3")  # light teal band
+    # Apply the same light teal band to cols C-E for visual continuity.
+    for col_idx in range(3, 6):
+        c = ws.cell(row=MEMBERS_TOTAL_ROW, column=col_idx)
+        c.fill = PatternFill("solid", fgColor="EFF5F3")
 
     # Member-split sanity row + visual flag (spec §4 Zone 3).
     ws.cell(row=SPLIT_CHECK_ROW, column=1, value="Split % sum (must equal 100%)").font = BODY_FONT
@@ -206,10 +310,27 @@ def build(wb: Workbook) -> Worksheet:
         f"3. Asset register (50 rows; sample data pre-loaded in rows "
         f"{REGISTER_FIRST_DATA_ROW}–{REGISTER_FIRST_DATA_ROW + len(SAMPLE_REGISTER_ROWS) - 1})",
     )
+
+    # v2.3: Header row coloured by column group for visual grouping
+    # (Identity / Cost & value / Sale & CGT outcome) without inserting a
+    # sub-header row — keeps REGISTER_FIRST_DATA_ROW stable so downstream
+    # tabs do not need cascading row updates.
+    REG_HEADER_GROUPS = {
+        # col_idx (1-based): group_fill
+        1: SECTION_BAND_FILL,           # Identity
+        2: SECTION_BAND_FILL,           # Identity
+        3: PatternFill("solid", fgColor="3F4F4A"),  # Cost & value (slate)
+        4: PatternFill("solid", fgColor="3F4F4A"),
+        5: PatternFill("solid", fgColor="3F4F4A"),
+        6: PatternFill("solid", fgColor="3F4F4A"),
+        7: PatternFill("solid", fgColor="4A6B5E"),  # Sale & CGT outcome (sage-teal)
+        8: PatternFill("solid", fgColor="4A6B5E"),
+        9: PatternFill("solid", fgColor="4A6B5E"),
+    }
     for col_idx, (header, _fmt) in enumerate(REGISTER_HEADERS, start=1):
         c = ws.cell(row=REGISTER_HEADER_ROW, column=col_idx, value=header)
         c.font = SECTION_BAND_FONT
-        c.fill = SECTION_BAND_FILL
+        c.fill = REG_HEADER_GROUPS.get(col_idx, SECTION_BAND_FILL)
         c.alignment = CENTER
 
     # Held>12mo dropdown shared across all 50 rows.
@@ -219,11 +340,68 @@ def build(wb: Workbook) -> Worksheet:
     for offset in range(ASSUMPTIONS.asset_register_rows):
         row = REGISTER_FIRST_DATA_ROW + offset
         sample = SAMPLE_REGISTER_ROWS[offset] if offset < len(SAMPLE_REGISTER_ROWS) else None
+        # Sample data covers cols 1..7 + 9 (skip the formula-driven Projected G/L).
+        # When walking REGISTER_HEADERS, the sample tuple index trails by 1 once
+        # we pass col 8 (Projected G/L).
         for col_idx, (_header, fmt) in enumerate(REGISTER_HEADERS, start=1):
             coord = ws.cell(row=row, column=col_idx).coordinate
-            value = sample[col_idx - 1] if sample else None
-            _input_cell(ws, coord, value=value, number_format=fmt)
+            if col_idx == REGISTER_COL_PROJ_GL:
+                # Formula: proceeds (col G) − original cost base (col C).
+                # Blank if either source cell is empty.
+                value = (
+                    f'=IF(AND(C{row}<>"",G{row}<>""),G{row}-C{row},"")'
+                )
+                _input_cell(ws, coord, value=value, number_format=fmt)
+            else:
+                # Sample data indexing: cols < PROJ_GL use col_idx-1 directly;
+                # cols > PROJ_GL shift back by one to skip the formula col.
+                if sample is None:
+                    value = None
+                elif col_idx < REGISTER_COL_PROJ_GL:
+                    value = sample[col_idx - 1]
+                else:
+                    value = sample[col_idx - 2]
+                _input_cell(ws, coord, value=value, number_format=fmt)
         held_dv.add(f"I{row}")
+
+    # v2.3: CF for Projected gain/loss column — green text for gain (>0),
+    # red text for loss (<0). Subtle so the column doesn't shout.
+    pl_first = REGISTER_FIRST_DATA_ROW
+    pl_last = REGISTER_LAST_DATA_ROW
+    gl_range = f"H{pl_first}:H{pl_last}"
+    ws.conditional_formatting.add(
+        gl_range,
+        FormulaRule(
+            formula=[f'AND(ISNUMBER(H{pl_first}),H{pl_first}>0)'],
+            font=Font(name="Arial", size=10, color="0B6E4F"),
+        ),
+    )
+    ws.conditional_formatting.add(
+        gl_range,
+        FormulaRule(
+            formula=[f'AND(ISNUMBER(H{pl_first}),H{pl_first}<0)'],
+            font=Font(name="Arial", size=10, color="A61B1B"),
+        ),
+    )
+
+    # v2.2.0/v2.3: Loss-position highlight — tint any register row whose current
+    # market value (col D, was E) is below its original cost base (col C, was D).
+    # Cosmetic only; nothing in the calc engine reads from this.
+    reg_first = REGISTER_FIRST_DATA_ROW
+    reg_last = REGISTER_LAST_DATA_ROW
+    loss_rule = FormulaRule(
+        formula=[f'AND($C{reg_first}<>"",$D{reg_first}<>"",$D{reg_first}<$C{reg_first})'],
+        fill=PatternFill("solid", fgColor="FBE9E9"),
+    )
+    ws.conditional_formatting.add(f"A{reg_first}:I{reg_last}", loss_rule)
+
+    # v2.3: Alternating row shading (zebra) for readability — odd offsets only,
+    # subtle so it doesn't fight the loss-position pink CF when both apply.
+    zebra_rule = FormulaRule(
+        formula=['MOD(ROW(),2)=0'],
+        fill=PatternFill("solid", fgColor="F7F9F8"),
+    )
+    ws.conditional_formatting.add(f"A{reg_first}:I{reg_last}", zebra_rule)
 
     # --- Zone 4: Advanced assumptions (set-once constants — bottom) ---
     _band(ws, ADV_BAND_ROW, "4. Advanced assumptions (set once)")
@@ -235,11 +413,14 @@ def build(wb: Workbook) -> Worksheet:
         _define_name(wb, name, coord)
 
     # --- Column widths + freeze ---
-    widths = [32, 26, 10, 18, 18, 26, 26, 20, 18]
+    # v2.3 layout (9 cols):
+    # A Code 32 / B Name 26 / C Orig CB 18 / D MV today 18 / E MV 30Jun 22
+    # F Val source 24 / G Proceeds 18 / H Projected G/L 18 / I Held>12m 16
+    widths = [32, 26, 18, 18, 22, 24, 18, 18, 16]
     for col_idx, w in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(col_idx)].width = w
-    # Freeze below the title + sample badge so they remain sticky.
-    ws.freeze_panes = "A3"
+    # Freeze below the title + sample badge + TSB diagnostic so they remain sticky.
+    ws.freeze_panes = "A4"
 
     # --- Sheet protection (tamper-evident, passwordless) ---
     # Input cells were individually unlocked via _input_cell();

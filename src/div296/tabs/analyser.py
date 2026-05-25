@@ -35,8 +35,9 @@ Per-asset Div 296 tax (col I) is the pro-rata of the headline (locked decision):
 
 from __future__ import annotations
 
+from openpyxl.comments import Comment
 from openpyxl.formatting.rule import FormulaRule
-from openpyxl.styles import Alignment, Border, Side
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
@@ -68,6 +69,7 @@ LEVER_BAND_ROW = 4                                     # was 3
 LEVER_FIRST_ROW = 5                                    # was 4
 LEVER_LAST_ROW = LEVER_FIRST_ROW + len(CONTROL_ROWS) - 1
 
+ESTIMATE_BANNER_ROW = 9                                # v2.3 — single-source estimate disclaimer
 FUND_BAND_ROW = 11                                     # was 10
 FUND_EARNINGS_ROW = 12                                 # was 11
 MEMBER_TAX_FIRST_ROW = 13                              # was 12
@@ -80,10 +82,12 @@ PERASSET_FIRST_ROW = 21                                # was 20
 PERASSET_LAST_ROW = PERASSET_FIRST_ROW + ASSUMPTIONS.asset_register_rows - 1   # row 70
 TOTALS_ROW = PERASSET_LAST_ROW + 1                     # row 71
 
+TRAP_LEGEND_ROW = TOTALS_ROW + 1                       # row 72 (v2.2.0)
 RECON_BAND_ROW = TOTALS_ROW + 2                        # row 73 (was 72)
 RECON_ORD_CGT_ROW = RECON_BAND_ROW + 1
 RECON_DIV296_ROW = RECON_BAND_ROW + 2
 RECON_LOSSES_ROW = RECON_BAND_ROW + 3
+RECON_LOSSES_CAPTION_ROW = RECON_LOSSES_ROW + 1        # row 77 (v2.2.0)
 
 # Inputs↔Analyser offset (Inputs row = Analyser row - OFFSET)
 ROW_OFFSET = PERASSET_FIRST_ROW - REGISTER_FIRST_DATA_ROW   # 21 - 20 = 1
@@ -162,18 +166,45 @@ def build(wb: Workbook) -> Worksheet:
     # --- State strip (NEW v2.0.0) ---
     # One-line summary of the active scenario, anchored above the lever mirror.
     # Pulls live from named ranges + the Analyser headline cell.
+    # v2.2.0: humanised — reads as a sentence rather than a log line.
     state_cell = ws.cell(row=STATE_STRIP_ROW, column=1)
     state_cell.value = (
-        '="Current scenario:  Reset ["&reset_on&"]  ·  '
-        'CGT discount ["&discount_on&"]  ·  '
-        '$10m / +25% tier ["&tier10_on&"]  ·  '
-        'Headline Div 296 tax: "&TEXT(B' + str(HEADLINE_ROW) + ',"$#,##0")'
+        '="Right now you are viewing: reset "&LOWER(reset_on)&'
+        '", CGT discount "&LOWER(discount_on)&'
+        '", $10m tier "&LOWER(tier10_on)&'
+        '".  Headline Div 296 tax in this view: "'
+        '&TEXT(B' + str(HEADLINE_ROW) + ',"$#,##0")&"."'
     )
     state_cell.font = BODY_FONT
     state_cell.fill = STATE_STRIP_FILL
     state_cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
     ws.merge_cells(f"A{STATE_STRIP_ROW}:L{STATE_STRIP_ROW}")
     ws.row_dimensions[STATE_STRIP_ROW].height = 22
+
+    # --- v2.2.0: Sample-data warning (row 3, between state strip and lever band) ---
+    sample_detect = (
+        f'AND({INPUTS_SHEET}!A{REGISTER_FIRST_DATA_ROW}="P1",'
+        f'{INPUTS_SHEET}!A{REGISTER_FIRST_DATA_ROW + 1}="S1",'
+        f'{INPUTS_SHEET}!A{REGISTER_FIRST_DATA_ROW + 2}="L1")'
+    )
+    badge = ws.cell(
+        row=3, column=1,
+        value=(
+            f'=IF({sample_detect},'
+            '"⚠  Sample data detected — figures below are illustrative only '
+            'until the asset register on Inputs is replaced with the actual '
+            'fund\'s holdings.","")'
+        ),
+    )
+    badge.font = Font(name="Arial", size=10, bold=True, italic=True, color="8A6D00")
+    badge.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+    ws.merge_cells("A3:L3")
+    ws.row_dimensions[3].height = 20
+    sample_amber_rule = FormulaRule(
+        formula=[sample_detect],
+        fill=PatternFill("solid", fgColor="FFF4CE"),
+    )
+    ws.conditional_formatting.add("A3:L3", sample_amber_rule)
 
     # --- Mirror-lever strip ---
     _band(ws, LEVER_BAND_ROW, "Current scenario (mirrored from Inputs — read-only)")
@@ -185,6 +216,29 @@ def build(wb: Workbook) -> Worksheet:
         mirror = ws.cell(row=row, column=2, value=f"={INPUTS_SHEET}!{coord}")
         mirror.font = BODY_FONT
 
+    # --- v2.3: Estimate disclaimer banner (single source of truth) ---
+    # Sits between the lever mirror strip and the fund summary so every figure
+    # below it is read with the caveat already in mind. Avoids having to sprinkle
+    # "estimated" through every row label downstream.
+    est = ws.cell(
+        row=ESTIMATE_BANNER_ROW, column=1,
+        value=("Important assumption: the figures shown in this analysis are "
+               "estimates only and are based on the information entered on the "
+               "Inputs tab. Actual Division 296 outcomes may differ depending "
+               "on final taxable income, asset values, member balances and "
+               "other relevant adjustments."),
+    )
+    est.font = Font(name="Arial", size=10, italic=True, color="8A6D00")
+    est.fill = PatternFill("solid", fgColor="FFF8E1")  # very pale amber
+    est.alignment = Alignment(horizontal="left", vertical="center",
+                              wrap_text=True, indent=1)
+    est.border = Border(
+        top=Side(style="thin", color="E0C77A"),
+        bottom=Side(style="thin", color="E0C77A"),
+    )
+    ws.merge_cells(f"A{ESTIMATE_BANNER_ROW}:L{ESTIMATE_BANNER_ROW}")
+    ws.row_dimensions[ESTIMATE_BANNER_ROW].height = 42
+
     # --- Fund summary block ---
     _band(ws, FUND_BAND_ROW, "Fund summary")
 
@@ -193,10 +247,20 @@ def build(wb: Workbook) -> Worksheet:
     g_first, g_last = f"H{PERASSET_FIRST_ROW}", f"H{PERASSET_LAST_ROW}"
     ws.cell(row=FUND_EARNINGS_ROW, column=1,
             value="Fund Div 296 earnings").font = BODY_FONT
-    ws.cell(
+    earnings_cell = ws.cell(
         row=FUND_EARNINGS_ROW, column=2,
         value=f'=SUMIF({g_first}:{g_last},">0")',
-    ).number_format = FMT_CURRENCY
+    )
+    earnings_cell.number_format = FMT_CURRENCY
+    # v2.3 A-5: explainer comment — Excel renders this as a red-triangle hover
+    # affordance in the cell corner (= the "info icon" the feedback requested).
+    earnings_cell.comment = Comment(
+        ("This amount represents the total estimated Division 296 adjusted "
+         "taxable capital gain across the assets included in the analysis. "
+         "It is the sum of the positive Div 296 adjusted gains in the "
+         "per-asset table below (col H), excluding losses."),
+        "v2.3",
+    )
 
     # Per-member attributed Div 296 tax.
     for i in range(ASSUMPTIONS.member_count):
@@ -213,6 +277,59 @@ def build(wb: Workbook) -> Worksheet:
         row=HEADLINE_ROW, column=2,
         value=f"=SUM(B{MEMBER_TAX_FIRST_ROW}:B{MEMBER_TAX_LAST_ROW})",
     ).number_format = FMT_CURRENCY
+
+    # --- v2.3 A-4: Compact reconciliation card (right of Fund Summary) ---
+    # Fund Summary uses cols A:B only; place a compact summary at C:F so the
+    # reader gets the total-tax-burden answer without scrolling to row 74+.
+    # The detailed reconciliation panel at rows 73-77 stays intact.
+    recon_fill = PatternFill("solid", fgColor="EFF5F3")
+    recon_border = Border(
+        left=Side(style="thin", color="A0B5AE"),
+        right=Side(style="thin", color="A0B5AE"),
+        top=Side(style="thin", color="A0B5AE"),
+        bottom=Side(style="thin", color="A0B5AE"),
+    )
+    # Header (row 12)
+    rh = ws.cell(row=FUND_EARNINGS_ROW, column=3, value="Reconciliation (summary)")
+    rh.font = Font(name="Arial", size=10, bold=True, color="1D3B34")
+    rh.fill = recon_fill
+    rh.alignment = Alignment(horizontal="left", indent=1)
+    ws.merge_cells(f"C{FUND_EARNINGS_ROW}:F{FUND_EARNINGS_ROW}")
+    # Three lines on rows 13, 14, 15 (well inside the Fund Summary block)
+    recon_lines = [
+        (FUND_EARNINGS_ROW + 1, "Ordinary CGT",
+         f"=B{RECON_ORD_CGT_ROW}"),
+        (FUND_EARNINGS_ROW + 2, "Div 296 tax",
+         f"=B{RECON_DIV296_ROW}"),
+        (FUND_EARNINGS_ROW + 3, "Total tax burden",
+         f"=B{RECON_ORD_CGT_ROW}+B{RECON_DIV296_ROW}"),
+    ]
+    for row, label, formula in recon_lines:
+        lbl = ws.cell(row=row, column=3, value=label)
+        lbl.font = BODY_FONT
+        lbl.fill = recon_fill
+        lbl.alignment = Alignment(horizontal="left", indent=1)
+        ws.merge_cells(f"C{row}:E{row}")
+        val = ws.cell(row=row, column=6, value=formula)
+        val.number_format = FMT_CURRENCY
+        val.fill = recon_fill
+        val.alignment = Alignment(horizontal="right", indent=1)
+        if label == "Total tax burden":
+            val.font = Font(name="Arial", size=11, bold=True, color="1D3B34")
+            lbl.font = Font(name="Arial", size=11, bold=True, color="1D3B34")
+        else:
+            val.font = BODY_FONT
+    # Apply card border around C12:F15
+    for col_letter in ("C", "D", "E", "F"):
+        for row in range(FUND_EARNINGS_ROW, FUND_EARNINGS_ROW + 4):
+            cell = ws[f"{col_letter}{row}"]
+            existing = cell.border
+            cell.border = Border(
+                left=recon_border.left if col_letter == "C" else existing.left,
+                right=recon_border.right if col_letter == "F" else existing.right,
+                top=recon_border.top if row == FUND_EARNINGS_ROW else existing.top,
+                bottom=recon_border.bottom if row == FUND_EARNINGS_ROW + 3 else existing.bottom,
+            )
 
     # --- Per-asset analysis ---
     _band(ws, PERASSET_BAND_ROW, "Per-asset analysis (50 rows)")
@@ -274,21 +391,26 @@ def build(wb: Workbook) -> Worksheet:
         a_row = PERASSET_FIRST_ROW + offset
         i_row = a_row - ROW_OFFSET
 
+        # v2.3 Inputs column layout (Quantity dropped):
+        # A code / B name / C orig CB / D MV today / E MV 30 Jun
+        # F val source / G proceeds / H projected G/L / I held>12m
         code = f"{INPUTS_SHEET}!A{i_row}"
         name = f"{INPUTS_SHEET}!B{i_row}"
-        orig = f"{INPUTS_SHEET}!D{i_row}"
-        mv = f"{INPUTS_SHEET}!F{i_row}"
-        proceeds = f"{INPUTS_SHEET}!H{i_row}"
-        held = f"{INPUTS_SHEET}!I{i_row}"
+        orig = f"{INPUTS_SHEET}!C{i_row}"        # was D
+        mv = f"{INPUTS_SHEET}!E{i_row}"          # was F
+        proceeds = f"{INPUTS_SHEET}!G{i_row}"    # was H
+        held = f"{INPUTS_SHEET}!I{i_row}"        # unchanged (still col I)
 
         # Col A — Row number (v2.0.0)
         rn = ws.cell(row=a_row, column=ROWNUM_COL, value=offset + 1)
         rn.fill = ROWNUM_FILL
         rn.font = ROWNUM_FONT
         rn.alignment = Alignment(horizontal="center", vertical="center")
-        # Col B — Asset
+        # Col B — Asset. v2.4 FB-2: display as "{code} - {name}" (was
+        # "{name} ({code})" which doubled the code when {name} already
+        # contained an exchange:code suffix like "Apple Inc (NASDAQ:AAPL)").
         ws.cell(row=a_row, column=ASSET_COL,
-                value=f'=IF({code}="","",{name}&" ("&{code}&")")')
+                value=f'=IF({code}="","",{code}&" - "&{name})')
         # Col C — Proceeds
         ws.cell(row=a_row, column=PROCEEDS_COL, value=f'=IF({proceeds}="","",{proceeds})')
         # Col D — Original cost base
@@ -338,19 +460,37 @@ def build(wb: Workbook) -> Worksheet:
             if col_idx in DATA_FILL:
                 cell.fill = DATA_FILL[col_idx]
 
+        # v2.3 A-2: thin borders on every visible per-asset cell (cols A..J).
+        # Excludes the helpers (K/L) which stay invisible. Plus heavier left
+        # border on Reset Impact col J to visually emphasise it as the headline.
+        thin = Side(style="thin", color="D5DEDA")
+        heavy = Side(style="medium", color="C29A3B")
+        for col_idx in range(1, RESET_IMPACT_COL + 1):
+            cell = ws.cell(row=a_row, column=col_idx)
+            cell.border = Border(
+                left=heavy if col_idx == RESET_IMPACT_COL else thin,
+                right=thin, top=thin, bottom=thin,
+            )
+        # Bold the Reset Impact value (per-row) — it IS the answer the reader
+        # is looking for on this row.
+        ws.cell(row=a_row, column=RESET_IMPACT_COL).font = Font(
+            name="Arial", size=10, bold=True, color="1D3B34",
+        )
+
     # --- Totals row ---
     # v2.0.0: distinct totals styling — medium teal fill, dark-teal bold text,
     # double top border to visually detach from the per-asset rows.
     DOUBLE_TOP = Border(top=Side(style="double", color="1D3B34"))
 
-    # Σ glyph in col A (row-num col); "TOTALS" label in col B.
-    sigma_cell = ws.cell(row=TOTALS_ROW, column=ROWNUM_COL, value="Σ")
+    # v2.2.0: "Total" word in col A (row-num col) instead of the Σ glyph;
+    # "TOTAL" label in col B.
+    sigma_cell = ws.cell(row=TOTALS_ROW, column=ROWNUM_COL, value="Total")
     sigma_cell.fill = TOTALS_FILL
     sigma_cell.font = TOTALS_FONT
     sigma_cell.alignment = Alignment(horizontal="center", vertical="center")
     sigma_cell.border = DOUBLE_TOP
 
-    totals_label = ws.cell(row=TOTALS_ROW, column=ASSET_COL, value="TOTALS")
+    totals_label = ws.cell(row=TOTALS_ROW, column=ASSET_COL, value="TOTAL")
     totals_label.font = TOTALS_FONT
     totals_label.fill = TOTALS_FILL
     totals_label.border = DOUBLE_TOP
@@ -376,6 +516,27 @@ def build(wb: Workbook) -> Worksheet:
         c.fill = TOTALS_FILL
         c.border = DOUBLE_TOP
 
+    # --- v2.3: Trap-row + reset-impact legend (plain-English per feedback) ---
+    legend = ws.cell(
+        row=TRAP_LEGEND_ROW, column=1,
+        value=("Reset impact (gold column) shows the estimated change in "
+               "Division 296 gain if the reset election is applied. A "
+               "negative amount (shown in green) generally indicates a "
+               "favourable impact, while a positive amount (shown in red) "
+               "may indicate additional Division 296 exposure. Particular "
+               "care should be taken with red-shaded rows, where a reset "
+               "creates taxable Division 296 gain on an asset currently in "
+               "an unrealised loss position (the 'reset trap')."),
+    )
+    legend.font = Font(name="Arial", size=9, italic=True, color="666666")
+    legend.alignment = Alignment(horizontal="left", vertical="center",
+                                 wrap_text=True, indent=1)
+    # Small red swatch in the row-number cell as visual cue.
+    swatch = ws.cell(row=TRAP_LEGEND_ROW, column=1)
+    swatch.fill = PatternFill("solid", fgColor="FBE9E9")
+    ws.merge_cells(f"A{TRAP_LEGEND_ROW}:L{TRAP_LEGEND_ROW}")
+    ws.row_dimensions[TRAP_LEGEND_ROW].height = 20
+
     # --- Reconciliation panel ---
     _band(ws, RECON_BAND_ROW, "Reconciliation")
     ws.cell(row=RECON_ORD_CGT_ROW, column=1,
@@ -396,13 +557,25 @@ def build(wb: Workbook) -> Worksheet:
     cf_terms = []
     for offset in range(ASSUMPTIONS.asset_register_rows):
         i_row = REGISTER_FIRST_DATA_ROW + offset
-        orig_i = f"{INPUTS_SHEET}!D{i_row}"
-        proc_i = f"{INPUTS_SHEET}!H{i_row}"
+        orig_i = f"{INPUTS_SHEET}!C{i_row}"   # v2.3: was D
+        proc_i = f"{INPUTS_SHEET}!G{i_row}"   # v2.3: was H
         cf_terms.append(f'IF({proc_i}="",0,MAX(0,{orig_i}-{proc_i}))')
     ws.cell(
         row=RECON_LOSSES_ROW, column=2,
         value="=" + "+".join(cf_terms),
     ).number_format = FMT_CURRENCY
+
+    # v2.2.0: Plain-English caption under the CF losses row.
+    caption = ws.cell(
+        row=RECON_LOSSES_CAPTION_ROW, column=1,
+        value=("These losses can be applied against future realised capital "
+               "gains within the fund — they have no effect on Div 296."),
+    )
+    caption.font = Font(name="Arial", size=9, italic=True, color="666666")
+    caption.alignment = Alignment(horizontal="left", vertical="center",
+                                  wrap_text=True, indent=1)
+    ws.merge_cells(f"A{RECON_LOSSES_CAPTION_ROW}:L{RECON_LOSSES_CAPTION_ROW}")
+    ws.row_dimensions[RECON_LOSSES_CAPTION_ROW].height = 20
 
     # --- Trap shading: row red when ord raw gain < 0 AND Div 296 adj gain > 0 ---
     rng = (
@@ -417,6 +590,21 @@ def build(wb: Workbook) -> Worksheet:
         fill=TRAP_FILL,
     )
     ws.conditional_formatting.add(rng, trap_rule)
+
+    # --- v2.3 A-3: Reset Impact (col J) — green for favourable (<0),
+    # red for unfavourable (>0). Layered on top of the gold column fill;
+    # changes the font colour only so the column band stays visible.
+    j_range = f"J{PERASSET_FIRST_ROW}:J{PERASSET_LAST_ROW}"
+    j_fav_rule = FormulaRule(
+        formula=[f"AND(ISNUMBER(J{PERASSET_FIRST_ROW}),J{PERASSET_FIRST_ROW}<0)"],
+        font=Font(name="Arial", size=10, bold=True, color="0B6E4F"),
+    )
+    j_unfav_rule = FormulaRule(
+        formula=[f"AND(ISNUMBER(J{PERASSET_FIRST_ROW}),J{PERASSET_FIRST_ROW}>0)"],
+        font=Font(name="Arial", size=10, bold=True, color="A61B1B"),
+    )
+    ws.conditional_formatting.add(j_range, j_fav_rule)
+    ws.conditional_formatting.add(j_range, j_unfav_rule)
 
     # --- Column widths (v2: row-num col A=5, then existing widths) ---
     widths = [5, 32, 14, 16, 16, 22, 14, 24, 14, 14, 14, 14]

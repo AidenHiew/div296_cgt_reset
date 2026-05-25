@@ -208,8 +208,9 @@ def build(wb: Workbook) -> Worksheet:
         i_row = REGISTER_FIRST_DATA_ROW + offset
         ws.cell(row=row, column=1, value=f"=IF({INPUTS_SHEET}!A{i_row}=\"\",\"\",{INPUTS_SHEET}!A{i_row})")
         ws.cell(row=row, column=2, value=f"=IF({INPUTS_SHEET}!B{i_row}=\"\",\"\",{INPUTS_SHEET}!B{i_row})")
-        ws.cell(row=row, column=3, value=f"=IF({INPUTS_SHEET}!G{i_row}=\"\",\"\",{INPUTS_SHEET}!G{i_row})")
-        ws.cell(row=row, column=4, value=f"=IF({INPUTS_SHEET}!F{i_row}=\"\",\"\",{INPUTS_SHEET}!F{i_row})")
+        # v2.3 Inputs col layout: F = Valuation source/date (was G), E = MV 30 Jun (was F)
+        ws.cell(row=row, column=3, value=f"=IF({INPUTS_SHEET}!F{i_row}=\"\",\"\",{INPUTS_SHEET}!F{i_row})")
+        ws.cell(row=row, column=4, value=f"=IF({INPUTS_SHEET}!E{i_row}=\"\",\"\",{INPUTS_SHEET}!E{i_row})")
         ws.cell(row=row, column=4).number_format = '$#,##0;($#,##0);"-"'
         row += 1
 
