@@ -69,6 +69,7 @@ LEVER_BAND_ROW = 4                                     # was 3
 LEVER_FIRST_ROW = 5                                    # was 4
 LEVER_LAST_ROW = LEVER_FIRST_ROW + len(CONTROL_ROWS) - 1
 
+ESTIMATE_BANNER_ROW = 9                                # v2.3 — single-source estimate disclaimer
 FUND_BAND_ROW = 11                                     # was 10
 FUND_EARNINGS_ROW = 12                                 # was 11
 MEMBER_TAX_FIRST_ROW = 13                              # was 12
@@ -214,6 +215,29 @@ def build(wb: Workbook) -> Worksheet:
         ws.cell(row=row, column=1, value=label).font = BODY_FONT
         mirror = ws.cell(row=row, column=2, value=f"={INPUTS_SHEET}!{coord}")
         mirror.font = BODY_FONT
+
+    # --- v2.3: Estimate disclaimer banner (single source of truth) ---
+    # Sits between the lever mirror strip and the fund summary so every figure
+    # below it is read with the caveat already in mind. Avoids having to sprinkle
+    # "estimated" through every row label downstream.
+    est = ws.cell(
+        row=ESTIMATE_BANNER_ROW, column=1,
+        value=("Important assumption: the figures shown in this analysis are "
+               "estimates only and are based on the information entered on the "
+               "Inputs tab. Actual Division 296 outcomes may differ depending "
+               "on final taxable income, asset values, member balances and "
+               "other relevant adjustments."),
+    )
+    est.font = Font(name="Arial", size=10, italic=True, color="8A6D00")
+    est.fill = PatternFill("solid", fgColor="FFF8E1")  # very pale amber
+    est.alignment = Alignment(horizontal="left", vertical="center",
+                              wrap_text=True, indent=1)
+    est.border = Border(
+        top=Side(style="thin", color="E0C77A"),
+        bottom=Side(style="thin", color="E0C77A"),
+    )
+    ws.merge_cells(f"A{ESTIMATE_BANNER_ROW}:L{ESTIMATE_BANNER_ROW}")
+    ws.row_dimensions[ESTIMATE_BANNER_ROW].height = 42
 
     # --- Fund summary block ---
     _band(ws, FUND_BAND_ROW, "Fund summary")

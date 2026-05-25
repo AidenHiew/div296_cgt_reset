@@ -60,7 +60,8 @@ MEMBER_HEADERS = [
     "Proportion above $3m (auto)",
     "Proportion override (optional)",
 ]
-SPLIT_CHECK_ROW = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count + 1   # row 18
+MEMBERS_TOTAL_ROW = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count    # row 15 (v2.3)
+SPLIT_CHECK_ROW = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count + 1   # row 16
 
 # --- Zone 3: Asset register (rows 18-69) ---
 REGISTER_HEADER_ROW = 19
@@ -222,6 +223,24 @@ def build(wb: Workbook) -> Worksheet:
         prop_cell = ws.cell(row=row, column=4, value=prop_formula)
         prop_cell.number_format = FMT_PERCENT
         _input_cell(ws, f"E{row}", value=None, number_format=FMT_PERCENT)
+
+    # v2.3: Member TSB total row — combined TSB across members for quick read.
+    last_member_data_row = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count - 1
+    total_label = ws.cell(row=MEMBERS_TOTAL_ROW, column=1, value="Total")
+    total_label.font = Font(name="Arial", size=10, bold=True, color="1D3B34")
+    total_label.alignment = Alignment(horizontal="left", indent=1)
+    total_tsb = ws.cell(
+        row=MEMBERS_TOTAL_ROW, column=2,
+        value=f"=SUM(B{MEMBERS_FIRST_DATA_ROW}:B{last_member_data_row})",
+    )
+    total_tsb.font = Font(name="Arial", size=10, bold=True, color="1D3B34")
+    total_tsb.number_format = FMT_CURRENCY
+    total_tsb.border = THIN_BOX
+    total_tsb.fill = PatternFill("solid", fgColor="EFF5F3")  # light teal band
+    # Apply the same light teal band to cols C-E for visual continuity.
+    for col_idx in range(3, 6):
+        c = ws.cell(row=MEMBERS_TOTAL_ROW, column=col_idx)
+        c.fill = PatternFill("solid", fgColor="EFF5F3")
 
     # Member-split sanity row + visual flag (spec §4 Zone 3).
     ws.cell(row=SPLIT_CHECK_ROW, column=1, value="Split % sum (must equal 100%)").font = BODY_FONT
