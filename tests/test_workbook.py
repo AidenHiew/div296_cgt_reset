@@ -81,9 +81,17 @@ def test_inputs_sample_data_preloaded(tmp_path: Path):
     pg_formula = ws["H20"].value
     assert pg_formula and "G20" in pg_formula and "C20" in pg_formula
 
-    # Sole member on row 11: TSB $12m, split 100%
+    # Sole member on row 11: TSB $12m.
+    # v2.4 FB-1: Split % is now an auto formula derived from TSB share,
+    # not a typed value. With only Member 1 having a TSB, the formula
+    # returns 1.0 at runtime, but openpyxl reads back the formula string
+    # (data_only=False). Verify the formula shape instead.
     assert ws["B11"].value == 12_000_000
-    assert ws["C11"].value == 1.0
+    c11 = ws["C11"].value
+    assert isinstance(c11, str) and c11.startswith("="), (
+        f"C11 should be a formula in v2.4+, got {c11!r}"
+    )
+    assert "SUM($B$11:$B$14)" in c11 and "B11/" in c11
 
 
 def test_control_panel_defaults(tmp_path: Path):
