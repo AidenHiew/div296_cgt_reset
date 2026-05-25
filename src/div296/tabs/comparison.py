@@ -81,33 +81,38 @@ CONTEXT_VALUE_ROW = 14   # first member row (kept name for back-compat)
 CONTEXT_MEMBER_LAST_ROW = CONTEXT_VALUE_ROW + ASSUMPTIONS.member_count - 1   # row 17
 CONTEXT_TOTAL_ROW = CONTEXT_MEMBER_LAST_ROW + 1                              # row 18
 
-BAND_HEADLINE_ROW = CONTEXT_TOTAL_ROW + 1    # row 19 (was 16)
-CARD_LABEL_ROW = BAND_HEADLINE_ROW + 1       # row 20 (was 17)
-CARD_VALUE_ROW = CARD_LABEL_ROW + 1          # row 21 (was 18)
-CARD_FOOTNOTE_ROW = CARD_VALUE_ROW + 1       # row 22 (was 19)
+# v2.5 step 13: Aiden inserted a blank spacer row before each section band
+# during his manual formatting pass; layout below mirrors his .xlsx.
+BAND_HEADLINE_ROW = CONTEXT_TOTAL_ROW + 2    # row 20 (spacer at 19)
+CARD_LABEL_ROW = BAND_HEADLINE_ROW + 1       # row 21
+CARD_VALUE_ROW = CARD_LABEL_ROW + 1          # row 22
+CARD_FOOTNOTE_ROW = CARD_VALUE_ROW + 1       # row 23
 
-BAND_SUBTOTALS_ROW = CARD_FOOTNOTE_ROW + 1   # row 23 (was 20)
-SUBTOTAL_HEADER_ROW = BAND_SUBTOTALS_ROW + 1 # row 24 (was 21)
-SUBTOTAL_EARNINGS_ROW = SUBTOTAL_HEADER_ROW + 1   # row 25
-SUBTOTAL_ORD_CGT_ROW = SUBTOTAL_EARNINGS_ROW + 1  # row 26
-SUBTOTAL_DIV296_ROW = SUBTOTAL_ORD_CGT_ROW + 1    # row 27
-SUBTOTAL_BURDEN_ROW = SUBTOTAL_DIV296_ROW + 1     # row 28
+BAND_SUBTOTALS_ROW = CARD_FOOTNOTE_ROW + 2   # row 25 (spacer at 24)
+SUBTOTAL_HEADER_ROW = BAND_SUBTOTALS_ROW + 1 # row 26
+SUBTOTAL_EARNINGS_ROW = SUBTOTAL_HEADER_ROW + 1   # row 27
+SUBTOTAL_ORD_CGT_ROW = SUBTOTAL_EARNINGS_ROW + 1  # row 28
+SUBTOTAL_DIV296_ROW = SUBTOTAL_ORD_CGT_ROW + 1    # row 29
+SUBTOTAL_BURDEN_ROW = SUBTOTAL_DIV296_ROW + 1     # row 30
 
 # v2.3: Per-member breakdown block between subtotals and per-asset detail.
-PER_MEMBER_BAND_ROW = SUBTOTAL_BURDEN_ROW + 2          # row 27
-PER_MEMBER_HEADER_ROW = PER_MEMBER_BAND_ROW + 1        # row 28
-PER_MEMBER_FIRST_ROW = PER_MEMBER_HEADER_ROW + 1       # row 29
-PER_MEMBER_LAST_ROW = PER_MEMBER_FIRST_ROW + ASSUMPTIONS.member_count - 1   # row 32
+# v2.5 step 13: spacer at row 32 between subtotal note (row 31) and band.
+PER_MEMBER_BAND_ROW = SUBTOTAL_BURDEN_ROW + 3          # row 33
+PER_MEMBER_HEADER_ROW = PER_MEMBER_BAND_ROW + 1        # row 34
+PER_MEMBER_FIRST_ROW = PER_MEMBER_HEADER_ROW + 1       # row 35
+PER_MEMBER_LAST_ROW = PER_MEMBER_FIRST_ROW + ASSUMPTIONS.member_count - 1   # row 38
+# v2.5 step 13: NEW — Total row at end of per-member breakdown.
+PER_MEMBER_TOTAL_ROW = PER_MEMBER_LAST_ROW + 1         # row 39
 
-BAND_DETAIL_ROW = PER_MEMBER_LAST_ROW + 2              # row 34 (was 27)
-PANEL_TITLE_ROW = BAND_DETAIL_ROW + 1                  # row 35 (was 28)
-PANEL_HEADER_ROW = BAND_DETAIL_ROW + 2                 # row 36 (was 29)
-DATA_FIRST_ROW = BAND_DETAIL_ROW + 3                   # row 37 (was 30)
-DATA_LAST_ROW = DATA_FIRST_ROW + DISPLAY_ROWS - 1      # row 46 (was 44)
-DATA_OVERFLOW_NOTE_ROW = DATA_LAST_ROW + 1             # row 47 (was 45)
+BAND_DETAIL_ROW = PER_MEMBER_TOTAL_ROW + 2             # row 41
+PANEL_TITLE_ROW = BAND_DETAIL_ROW + 1                  # row 42
+PANEL_HEADER_ROW = BAND_DETAIL_ROW + 2                 # row 43
+DATA_FIRST_ROW = BAND_DETAIL_ROW + 3                   # row 44
+DATA_LAST_ROW = DATA_FIRST_ROW + DISPLAY_ROWS - 1      # row 53
+DATA_OVERFLOW_NOTE_ROW = DATA_LAST_ROW + 1             # row 54
 
-REMINDER_ROW = DATA_OVERFLOW_NOTE_ROW + 1              # row 48 (was 46)
-SORT_NOTE_ROW = REMINDER_ROW + 1                       # row 49 (was 47)
+REMINDER_ROW = DATA_OVERFLOW_NOTE_ROW + 1              # row 55
+SORT_NOTE_ROW = REMINDER_ROW + 1                       # row 56
 
 # v2.5 FB-3: chart removed. Print area now ends with the sort note (SORT_NOTE_ROW).
 
@@ -281,17 +286,26 @@ def _build_context_strip(ws: Worksheet) -> None:
     """
     last_input_member_row = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count - 1
 
-    # --- Row 13 label — the only one left now that right-side tiles are gone.
-    # Acts as a sub-header inside the "Members & TSB" section band on row 12.
-    cell = ws[f"A{CONTEXT_LABEL_ROW}"]
-    cell.value = "Members & TSB"
-    cell.font = CONTEXT_LABEL_FONT
-    cell.alignment = Alignment(horizontal="left", indent=1)
-    ws.merge_cells(f"A{CONTEXT_LABEL_ROW}:C{CONTEXT_LABEL_ROW}")
+    # --- Row 13: column headers for the mini-table beneath ---
+    # v2.5 step 13 (Aiden polish): was a single merged sub-header echoing the
+    # band; now functions as two column headings — "Members" | "Total Super
+    # Balance" — so the table reads as a proper grid.
+    header_a = ws[f"A{CONTEXT_LABEL_ROW}"]
+    header_a.value = "Members"
+    header_a.font = Font(name="Arial", size=10, bold=True, color="1D3B34")
+    header_a.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+
+    header_b = ws[f"B{CONTEXT_LABEL_ROW}"]
+    header_b.value = "Total Super Balance"
+    header_b.font = Font(name="Arial", size=10, bold=True, color="1D3B34")
+    header_b.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+    ws.merge_cells(f"B{CONTEXT_LABEL_ROW}:C{CONTEXT_LABEL_ROW}")
 
     # --- Left tile (cols A:C) — per-member TSB mini-table ---
     # Col A always shows the placeholder label; col B-C merged for TSB value
     # (blank when the corresponding Inputs row has no TSB).
+    # v2.5 step 13 (Aiden polish): TSB values left-aligned (was right) so the
+    # column reads as a tighter list rather than a financial column.
     for i in range(ASSUMPTIONS.member_count):
         c_row = CONTEXT_VALUE_ROW + i
         inputs_row = MEMBERS_FIRST_DATA_ROW + i
@@ -305,7 +319,7 @@ def _build_context_strip(ws: Worksheet) -> None:
                              value=f'=IF({tsb_ref}>0,{tsb_ref},"")')
         value_cell.font = CONTEXT_VALUE_FONT
         value_cell.number_format = FMT_CURRENCY
-        value_cell.alignment = Alignment(horizontal="right", indent=1)
+        value_cell.alignment = Alignment(horizontal="left", indent=1)
         ws.merge_cells(f"B{c_row}:C{c_row}")
 
         ws.row_dimensions[c_row].height = 16
@@ -321,9 +335,22 @@ def _build_context_strip(ws: Worksheet) -> None:
     )
     total_value.font = Font(name="Arial", size=11, bold=True, color="1D3B34")
     total_value.number_format = FMT_CURRENCY
-    total_value.alignment = Alignment(horizontal="right", indent=1)
+    total_value.alignment = Alignment(horizontal="left", indent=1)
     ws.merge_cells(f"B{CONTEXT_TOTAL_ROW}:C{CONTEXT_TOTAL_ROW}")
     ws.row_dimensions[CONTEXT_TOTAL_ROW].height = 18
+
+    # v2.5 step 13 (Aiden polish): thin border box across the whole mini-table
+    # so it reads as a single grid (was borderless).
+    table_border = Border(
+        left=Side(style="thin", color="C5CECA"),
+        right=Side(style="thin", color="C5CECA"),
+        top=Side(style="thin", color="C5CECA"),
+        bottom=Side(style="thin", color="C5CECA"),
+    )
+    for r in range(CONTEXT_LABEL_ROW, CONTEXT_TOTAL_ROW + 1):
+        for col in ("A", "B", "C"):
+            ws[f"{col}{r}"].border = table_border
+
     # v2.5 polish: right-side tiles (proportion / discount / tier) removed.
     # The strip occupies cols A:C only now; cols D:K are deliberately blank.
 
@@ -422,13 +449,16 @@ def _build_metric_cards(ws: Worksheet, headline_a: str, headline_b: str) -> None
     """Three boxed cards — Scenario A / Scenario B / Net effect."""
     _band(ws, BAND_HEADLINE_ROW, "Headline — total Div 296 tax")
 
-    # v2.5 FB-4: labels standardised across all sections — "If no reset (default)",
-    # "If elected to reset", "Change". Change card formula is SIGNED (reset −
-    # default), so a reset that reduces tax shows a red-bracket negative.
+    # v2.5 step 13 (Aiden polish): headline cards use a VERBOSE variant of the
+    # standard labels to give the client full context on the big tile. Subtotal
+    # and per-member tables keep the short form ("If no reset (default)" / "If
+    # elected to reset" / "Difference") to stay scannable. CONTEXT.md notes the
+    # headline-only override. Card formula is SIGNED (reset − default), so a
+    # reset that reduces tax shows as a red-bracket negative.
     cards = [
-        ("A:D", "If no reset (default)",  f"={headline_a[1:]}",                       FMT_CURRENCY,       CARD_FILL_A),
-        ("E:H", "If elected to reset",    f"={headline_b[1:]}",                       FMT_CURRENCY,       CARD_FILL_B),
-        ("I:K", "Difference",             f"={headline_b[1:]}-{headline_a[1:]}",      FMT_CURRENCY_DELTA, CARD_FILL_DELTA),
+        ("A:D", "If no Div 296 CostBase Reset (default)",   f"={headline_a[1:]}",                       FMT_CURRENCY,       CARD_FILL_A),
+        ("E:H", "If elected to reset Div 296 CostBase Reset", f"={headline_b[1:]}",                     FMT_CURRENCY,       CARD_FILL_B),
+        ("I:K", "Difference (Net Div 296 Tax)",             f"={headline_b[1:]}-{headline_a[1:]}",      FMT_CURRENCY_DELTA, CARD_FILL_DELTA),
     ]
     for merge_range, label, value_formula, value_fmt, fill in cards:
         start = merge_range.split(":")[0]
@@ -666,6 +696,32 @@ def _build_per_member_breakdown(
         chg.alignment = Alignment(horizontal="right")
 
         ws.row_dimensions[row].height = 18
+
+    # v2.5 step 13 (Aiden polish): NEW Total row aggregating the four members
+    # so the per-member breakdown reconciles visibly to the headline.
+    total_font = Font(name="Arial", size=11, bold=True, color="1D3B34")
+    total_fill = PatternFill("solid", fgColor="EFF5F3")
+    total_label = ws.cell(row=PER_MEMBER_TOTAL_ROW, column=1, value="Total")
+    total_label.font = total_font
+    total_label.fill = total_fill
+    total_label.alignment = Alignment(horizontal="left", indent=1)
+
+    sum_first = PER_MEMBER_FIRST_ROW
+    sum_last = PER_MEMBER_LAST_ROW
+    # Use SUMIF so blank cells (empty members) don't propagate #VALUE! errors.
+    totals = [
+        (2, f'=SUMIF(B{sum_first}:B{sum_last},">0")',   FMT_CURRENCY),
+        (3, f'=SUMIF(C{sum_first}:C{sum_last},">0")',   FMT_CURRENCY),
+        (4, f'=SUMIF(D{sum_first}:D{sum_last},">0")',   FMT_CURRENCY),
+        (5, f"=D{PER_MEMBER_TOTAL_ROW}-C{PER_MEMBER_TOTAL_ROW}", FMT_CURRENCY_DELTA),
+    ]
+    for col_idx, formula, fmt in totals:
+        cell = ws.cell(row=PER_MEMBER_TOTAL_ROW, column=col_idx, value=formula)
+        cell.font = total_font
+        cell.fill = total_fill
+        cell.number_format = fmt
+        cell.alignment = Alignment(horizontal="right")
+    ws.row_dimensions[PER_MEMBER_TOTAL_ROW].height = 18
 
 
 def _build_per_asset_detail(
@@ -924,26 +980,26 @@ def build(wb: Workbook) -> Worksheet:
     #      and Tax for Panel A.
     # F-J  Panel B (asset, proceeds, cost base, gain, tax) — same shape as A.
     # K    Change column (signed tax delta) — rightmost; bracket-friendly width.
+    # v2.5 step 13 (Aiden polish): D and I narrowed from 20/16 → 13 so the
+    # subtotal and Panel B "cost base" cols match the eye-width of the Change
+    # column rather than dominating the table.
     widths = {
-        "A": 36, "B": 16, "C": 20, "D": 20, "E": 16,    # Panel A + subtotals
-        "F": 26, "G": 14, "H": 16, "I": 16, "J": 14,    # Panel B
+        "A": 36, "B": 16, "C": 20, "D": 13, "E": 16,    # Panel A + subtotals
+        "F": 26, "G": 14, "H": 16, "I": 13, "J": 14,    # Panel B
         "K": 16,                                         # Change
     }
     for col_letter, w in widths.items():
         ws.column_dimensions[col_letter].width = w
 
-    # Editable header-block cells stay editable. Marked unlocked here so that
-    # if/when sheet protection is re-enabled (see "v2.5 step 13" re-lock
-    # commit), these cells remain editable.
+    # Editable header-block cells stay editable when the sheet is protected.
     for row in (HEADER_FIRM_ROW, HEADER_PREPARED_FOR_ROW,
                 HEADER_PREPARED_BY_ROW, HEADER_DATE_ROW):
         ws[f"B{row}"].protection = Protection(locked=False)
 
-    # v2.5 step 12 (TEMPORARY): Comparison tab unlocked so Aiden can run a
-    # formatting pass directly in Excel. To be re-locked in step 13 once the
-    # formatting changes are observed and ported back to source. DO NOT ship
-    # this state to clients — it leaves formulas editable.
-    ws.protection.sheet = False
+    # v2.5 step 13: re-lock the Comparison tab now that Aiden's formatting pass
+    # has been ported into source. Match other tabs: sheet protected, but
+    # column/row resizing allowed so the user can still tweak layout.
+    ws.protection.sheet = True
     ws.protection.formatColumns = False
     ws.protection.formatRows = False
 

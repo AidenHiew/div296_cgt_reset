@@ -120,31 +120,25 @@ def test_sample_data_badge_present(tmp_path: Path):
 
 
 def test_all_tabs_protected(tmp_path: Path):
-    """v2.5 step 12: Comparison is TEMPORARILY unlocked for a formatting pass.
-    Tracked in TASKS.md / step 13 will re-lock. Other tabs remain protected."""
+    """v2.5 step 13: Comparison re-locked after Aiden's formatting pass was
+    ported back into source. All tabs now protected."""
     out = tmp_path / "out.xlsx"
     wb = build_workbook()
     wb.save(out)
     wb_re = load_workbook(out)
-    for tab in ("Inputs", "Analyser", "Notes"):
+    for tab in ("Inputs", "Analyser", "Notes", "Comparison"):
         assert wb_re[tab].protection.sheet is True, f"{tab} is not protected"
-    # Comparison: explicit unlocked assertion so this test fails if someone
-    # accidentally re-locks Comparison before step 13 ports Aiden's formatting.
-    assert wb_re["Comparison"].protection.sheet is False, (
-        "Comparison should be unlocked (v2.5 step 12); see TASKS.md"
-    )
 
 
 def test_all_tabs_allow_column_resize_under_protection(tmp_path: Path):
     """v2.0.0: protection.sheet stays True but formatColumns/formatRows
     are unlocked so users can drag column borders without unlocking cells.
-    v2.5 step 12: Comparison sheet protection is OFF, so this invariant
-    applies only to the still-protected tabs."""
+    v2.5 step 13: Comparison re-locked → invariant applies to it too."""
     out = tmp_path / "out.xlsx"
     wb = build_workbook()
     wb.save(out)
     wb_re = load_workbook(out)
-    for sheet in ("Inputs", "Analyser", "Notes"):
+    for sheet in ("Inputs", "Analyser", "Notes", "Comparison"):
         ws = wb_re[sheet]
         assert ws.protection.sheet is True, f"{sheet} should be protected"
         # openpyxl exposes these as bool-ish; allow either False or "0"
@@ -336,11 +330,10 @@ class TestComparison:
         ws = _comparison(tmp_path)
         # Row 12 section band — renamed to "Members & TSB" (no parenthetical).
         assert "Members & TSB" in str(ws["A12"].value)
-        # Row 13 sub-header (only one tile left).
-        labels_row_text = " ".join(
-            str(c.value) for c in ws[13] if c.value is not None
-        )
-        assert "Members & TSB" in labels_row_text
+        # Row 13 (v2.5 step 13 — Aiden polish): 2-column header row, not a
+        # merged sub-header anymore. A13 = "Members", B13 = "Total Super Balance".
+        assert ws["A13"].value == "Members"
+        assert ws["B13"].value == "Total Super Balance"
         # Per-member rows: A14..A17 carry placeholder labels regardless of TSB.
         assert ws["A14"].value == "Member 1"
         assert ws["A15"].value == "Member 2"
@@ -358,45 +351,50 @@ class TestComparison:
                 )
 
     def test_metric_cards_present(self, tmp_path: Path):
-        """v2.5 polish: card labels use 'Difference' (was 'Change')."""
+        """v2.5 step 13 (Aiden polish): headline cards use VERBOSE labels —
+        long form on the big tile, short form everywhere else. Rows shifted
+        +1 from spacer row inserted at r19."""
         ws = _comparison(tmp_path)
-        assert ws["A20"].value == "If no reset (default)"
-        assert ws["E20"].value == "If elected to reset"
-        assert ws["I20"].value == "Difference"
-        # Card values point at the headline cells L6/M6.
-        assert "L$6" in ws["A21"].value or "L6" in ws["A21"].value
-        assert "M$6" in ws["E21"].value or "M6" in ws["E21"].value
+        # Card labels at row 21 use the verbose variant (CONTEXT.md headline
+        # override). Short form lives on subtotal r26 + per-member r34.
+        assert ws["A21"].value == "If no Div 296 CostBase Reset (default)"
+        assert ws["E21"].value == "If elected to reset Div 296 CostBase Reset"
+        assert ws["I21"].value == "Difference (Net Div 296 Tax)"
+        # Card values at row 22 point at the headline cells L6/M6.
+        assert "L$6" in ws["A22"].value or "L6" in ws["A22"].value
+        assert "M$6" in ws["E22"].value or "M6" in ws["E22"].value
         # Difference card is SIGNED — reset − default (negative = saving).
-        net = ws["I21"].value
+        net = ws["I22"].value
         assert ("M" in net and "L" in net and "-" in net), f"unexpected difference formula {net!r}"
         assert net.index("M") < net.index("L"), (
             f"Difference card should be reset − default (M-L), got {net!r}"
         )
 
     def test_subtotals_table(self, tmp_path: Path):
-        """v2.5 polish: subtotal header D24 says 'Difference' (was 'Change')."""
+        """v2.5 step 13 (Aiden polish): subtotal rows shifted +2 from spacer
+        inserts. Header at r26, data r27-30. Short-form labels (glossary)."""
         ws = _comparison(tmp_path)
-        # Header row 24
-        assert ws["B24"].value == "If no reset (default)"
-        assert ws["C24"].value == "If elected to reset"
-        assert ws["D24"].value == "Difference"
+        # Header row 26
+        assert ws["B26"].value == "If no reset (default)"
+        assert ws["C26"].value == "If elected to reset"
+        assert ws["D26"].value == "Difference"
 
-        # Row labels (25-28)
-        assert ws["A25"].value == "Div 296 earnings"
-        assert "Ordinary CGT" in ws["A26"].value and "unchanged" in ws["A26"].value
-        assert ws["A27"].value == "Div 296 tax (headline)"
-        assert "TOTAL TAX BURDEN" in ws["A28"].value
+        # Row labels (27-30)
+        assert ws["A27"].value == "Div 296 earnings"
+        assert "Ordinary CGT" in ws["A28"].value and "unchanged" in ws["A28"].value
+        assert ws["A29"].value == "Div 296 tax (headline)"
+        assert "TOTAL TAX BURDEN" in ws["A30"].value
 
         # Ordinary CGT row pulls from Analyser (same value in both scenarios)
-        assert "Analyser" in ws["B26"].value
-        assert ws["B26"].value == ws["C26"].value
+        assert "Analyser" in ws["B28"].value
+        assert ws["B28"].value == ws["C28"].value
 
         # Total burden = ord CGT + Div 296 tax for each scenario
-        assert ws["B28"].value == "=B26+B27"
-        assert ws["C28"].value == "=C26+C27"
+        assert ws["B30"].value == "=B28+B29"
+        assert ws["C30"].value == "=C28+C29"
 
         # Change col is SIGNED (reset − default).
-        for row in (25, 26, 27, 28):
+        for row in (27, 28, 29, 30):
             assert ws[f"D{row}"].value == f"=C{row}-B{row}", (
                 f"D{row} should be =C{row}-B{row}, got {ws[f'D{row}'].value!r}"
             )
