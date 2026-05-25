@@ -72,6 +72,10 @@ THIN_BOX = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 
 # --- Number formats ---
 FMT_CURRENCY = '$#,##0;($#,##0);"-"'
+# v2.5 FB-4..7: signed-delta currency — negative shown in RED brackets so the
+# eye picks up "this is a reduction" immediately. Used on every Change column
+# (headline card, subtotals, per-member, per-asset).
+FMT_CURRENCY_DELTA = '$#,##0;[Red]($#,##0);"-"'
 FMT_PERCENT = "0.0%"
 FMT_PERCENT_3 = "0.000%"     # for the CGT discount rate (spec calls for 33.333%)
 FMT_INT = "#,##0"

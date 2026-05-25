@@ -41,8 +41,9 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from div296.assumptions import ASSUMPTIONS
 from div296.styles import (
-    BODY_FONT, CENTER, FMT_CURRENCY, FMT_PERCENT, INPUT_FILL, INPUT_FONT,
-    SECTION_BAND_FILL, SECTION_BAND_FONT, THIN_BOX, TITLE_FONT, TRAP_FILL,
+    BODY_FONT, CENTER, FMT_CURRENCY, FMT_CURRENCY_DELTA, FMT_PERCENT,
+    INPUT_FILL, INPUT_FONT, SECTION_BAND_FILL, SECTION_BAND_FONT,
+    THIN_BOX, TITLE_FONT, TRAP_FILL,
     PROC_DATA_FILL, ORD_DATA_FILL, DIV_DATA_FILL,
 )
 from div296.tabs.inputs import (
@@ -408,12 +409,15 @@ def _build_metric_cards(ws: Worksheet, headline_a: str, headline_b: str) -> None
     """Three boxed cards — Scenario A / Scenario B / Net effect."""
     _band(ws, BAND_HEADLINE_ROW, "Headline — total Div 296 tax")
 
+    # v2.5 FB-4: labels standardised across all sections — "If no reset (default)",
+    # "If elected to reset", "Change". Change card formula is SIGNED (reset −
+    # default), so a reset that reduces tax shows a red-bracket negative.
     cards = [
-        ("A:D", "Default outcome (no election lodged)", f"={headline_a[1:]}",                     CARD_FILL_A),
-        ("E:H", "If you elect the reset by 30 Jun 2026", f"={headline_b[1:]}",                    CARD_FILL_B),
-        ("I:K", "Change if you elect",                   f"={headline_a[1:]}-{headline_b[1:]}",   CARD_FILL_DELTA),
+        ("A:D", "If no reset (default)",  f"={headline_a[1:]}",                       FMT_CURRENCY,       CARD_FILL_A),
+        ("E:H", "If elected to reset",    f"={headline_b[1:]}",                       FMT_CURRENCY,       CARD_FILL_B),
+        ("I:K", "Change",                 f"={headline_b[1:]}-{headline_a[1:]}",      FMT_CURRENCY_DELTA, CARD_FILL_DELTA),
     ]
-    for merge_range, label, value_formula, fill in cards:
+    for merge_range, label, value_formula, value_fmt, fill in cards:
         start = merge_range.split(":")[0]
         end = merge_range.split(":")[1]
 
@@ -428,7 +432,7 @@ def _build_metric_cards(ws: Worksheet, headline_a: str, headline_b: str) -> None
         value_cell = ws[f"{start}{CARD_VALUE_ROW}"]
         value_cell.value = value_formula
         value_cell.font = CARD_VALUE_FONT
-        value_cell.number_format = FMT_CURRENCY
+        value_cell.number_format = value_fmt
         value_cell.alignment = Alignment(horizontal="center", vertical="center")
         ws.merge_cells(f"{start}{CARD_VALUE_ROW}:{end}{CARD_VALUE_ROW}")
 
