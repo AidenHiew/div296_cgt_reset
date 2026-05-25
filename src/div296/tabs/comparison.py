@@ -108,9 +108,9 @@ SORT_NOTE_ROW = REMINDER_ROW + 1                       # row 49 (was 47)
 
 # --- Layout columns ---
 PANEL_A_COLS = ("A", "B", "C", "D", "E")   # Asset, Proceeds, Cost base, Adj gain, Tax
-DELTA_COL = "F"                             # Per-asset Δ (panel B - panel A adj gain)
-PANEL_B_COLS = ("G", "H", "I", "J", "K")   # same shape as panel A
-LAST_VISIBLE_COL = PANEL_B_COLS[-1]         # "K"
+PANEL_B_COLS = ("F", "G", "H", "I", "J")   # v2.5 FB-7: moved left (was G-K)
+DELTA_COL = "K"                             # v2.5 FB-7: Change at the END now (was F)
+LAST_VISIBLE_COL = DELTA_COL                # "K"
 
 # Hidden helper columns (right of the visible panels)
 HELPER_COL_A = "L"   # Scenario A working column
@@ -337,12 +337,20 @@ def _build_per_register_helpers(ws: Worksheet) -> tuple[str, str, str]:
 
     N = Scenario A Div 296 adj gain (cost base = original)
     O = Scenario B Div 296 adj gain (cost base = MV)
-    P = |Δ| + row-based tiebreaker (so MATCH uniquely identifies the row);
-        empty register rows return -1 so LARGE pushes them to the bottom.
+    P = |tax_b − tax_a| + row tiebreaker, where tax_x = MAX(0,gain_x)/SUMIF(>0)
+        × headline_x (cells L6/M6). v2.5 FB-7: switched from gain-delta to
+        tax-delta so the "top 10 most affected" matches the visible Change col
+        (which now displays tax delta, not gain delta).
+        Empty register rows return -1 so LARGE pushes them to the bottom.
 
     Returns the absolute ranges (e.g. '$N$20:$N$69').
     """
     n_first, n_last = REGISTER_FIRST_DATA_ROW, REGISTER_LAST_DATA_ROW
+    # Range refs reused inside the per-row tax formula.
+    a_range = f"${PER_REG_GAIN_A_COL}${n_first}:${PER_REG_GAIN_A_COL}${n_last}"
+    b_range = f"${PER_REG_GAIN_B_COL}${n_first}:${PER_REG_GAIN_B_COL}${n_last}"
+    headline_a_abs = f"${HELPER_COL_A}${HELPER_HEADLINE_ROW}"   # $L$6
+    headline_b_abs = f"${HELPER_COL_B}${HELPER_HEADLINE_ROW}"   # $M$6
     for n in range(n_first, n_last + 1):
         # v2.3 Inputs column layout: A code / B name / C orig CB / D MV today
         # / E MV 30 Jun / F val source / G proceeds / H projected G/L / I held
@@ -352,16 +360,24 @@ def _build_per_register_helpers(ws: Worksheet) -> tuple[str, str, str]:
         held = f"{INPUTS_SHEET}!I{n}"        # unchanged
         ws[f"{PER_REG_GAIN_A_COL}{n}"] = _div296_adj_formula(proceeds, orig, held)
         ws[f"{PER_REG_GAIN_B_COL}{n}"] = _div296_adj_formula(proceeds, mv, held)
-        # Tiebreaker: a small positive amount that decreases with register row,
-        # so earlier-listed assets win ties without ever turning P negative.
+        # v2.5: per-row tax inlined into the sort metric so the helper grid
+        # itself measures tax impact, not raw gain impact.
+        tax_a = (
+            f'IF(SUMIF({a_range},">0")=0,0,'
+            f'MAX(0,{PER_REG_GAIN_A_COL}{n})/SUMIF({a_range},">0")*{headline_a_abs})'
+        )
+        tax_b = (
+            f'IF(SUMIF({b_range},">0")=0,0,'
+            f'MAX(0,{PER_REG_GAIN_B_COL}{n})/SUMIF({b_range},">0")*{headline_b_abs})'
+        )
+        # Tiebreaker: small positive amount decreasing with register row, so
+        # earlier-listed assets win ties without ever turning P negative.
         tiebreak = f"({n_last}-ROW())*0.001"
         ws[f"{PER_REG_DELTA_COL}{n}"] = (
-            f'=IF({proceeds}="",-1,'
-            f'ABS({PER_REG_GAIN_B_COL}{n}-{PER_REG_GAIN_A_COL}{n})+{tiebreak})'
+            f'=IF({proceeds}="",-1,ABS(({tax_b})-({tax_a}))+{tiebreak})'
         )
     return (
-        f"${PER_REG_GAIN_A_COL}${n_first}:${PER_REG_GAIN_A_COL}${n_last}",
-        f"${PER_REG_GAIN_B_COL}${n_first}:${PER_REG_GAIN_B_COL}${n_last}",
+        a_range, b_range,
         f"${PER_REG_DELTA_COL}${n_first}:${PER_REG_DELTA_COL}${n_last}",
     )
 
@@ -659,31 +675,33 @@ def _build_per_asset_detail(
     ws: Worksheet, gain_a_range: str, gain_b_range: str, delta_range: str,
     headline_a: str, headline_b: str,
 ) -> None:
+    # v2.5 FB-7: band header reworded — emphasises tax impact (the new sort
+    # metric, displayed in the Change column).
     _band(ws, BAND_DETAIL_ROW,
-          f"Per-asset detail — top {DISPLAY_ROWS} assets most affected by the election")
+          f"Top {DISPLAY_ROWS} assets — Div 296 tax impact if you elect to reset")
 
-    # Panel titles row (28)
+    # Panel titles row — v2.5 FB-7: layout is now Panel A | Panel B | Change.
     panel_a_first, panel_a_last = PANEL_A_COLS[0], PANEL_A_COLS[-1]
     panel_b_first, panel_b_last = PANEL_B_COLS[0], PANEL_B_COLS[-1]
     panel_a_title = ws[f"{panel_a_first}{PANEL_TITLE_ROW}"]
-    panel_a_title.value = "Default outcome (no election lodged)"
+    panel_a_title.value = "If no reset (default)"
     panel_a_title.font = SECTION_BAND_FONT
     panel_a_title.fill = SECTION_BAND_FILL
     panel_a_title.alignment = CENTER
     ws.merge_cells(f"{panel_a_first}{PANEL_TITLE_ROW}:{panel_a_last}{PANEL_TITLE_ROW}")
+
+    panel_b_title = ws[f"{panel_b_first}{PANEL_TITLE_ROW}"]
+    panel_b_title.value = "If elected to reset"
+    panel_b_title.font = SECTION_BAND_FONT
+    panel_b_title.fill = SECTION_BAND_FILL
+    panel_b_title.alignment = CENTER
+    ws.merge_cells(f"{panel_b_first}{PANEL_TITLE_ROW}:{panel_b_last}{PANEL_TITLE_ROW}")
 
     delta_title = ws[f"{DELTA_COL}{PANEL_TITLE_ROW}"]
     delta_title.value = "Change"
     delta_title.font = DELTA_FONT
     delta_title.fill = DELTA_HEADER_FILL
     delta_title.alignment = CENTER
-
-    panel_b_title = ws[f"{panel_b_first}{PANEL_TITLE_ROW}"]
-    panel_b_title.value = "If you elect the reset by 30 Jun 2026"
-    panel_b_title.font = SECTION_BAND_FONT
-    panel_b_title.fill = SECTION_BAND_FILL
-    panel_b_title.alignment = CENTER
-    ws.merge_cells(f"{panel_b_first}{PANEL_TITLE_ROW}:{panel_b_last}{PANEL_TITLE_ROW}")
 
     # Column sub-headers (29)
     sub_headers = ["Asset", "Proceeds", "Div 296 cost base",
@@ -694,17 +712,18 @@ def _build_per_asset_detail(
         c.font = SECTION_BAND_FONT
         c.fill = SECTION_BAND_FILL
         c.alignment = CENTER
-    delta_sub = ws[f"{DELTA_COL}{PANEL_HEADER_ROW}"]
-    delta_sub.value = "gain change"
-    delta_sub.font = DELTA_FONT
-    delta_sub.fill = DELTA_HEADER_FILL
-    delta_sub.alignment = CENTER
     for col, header in zip(PANEL_B_COLS, sub_headers):
         c = ws[f"{col}{PANEL_HEADER_ROW}"]
         c.value = header
         c.font = SECTION_BAND_FONT
         c.fill = SECTION_BAND_FILL
         c.alignment = CENTER
+    # v2.5 FB-7: sub-header reflects the new tax-delta metric (was "gain change").
+    delta_sub = ws[f"{DELTA_COL}{PANEL_HEADER_ROW}"]
+    delta_sub.value = "Div 296 tax"
+    delta_sub.font = DELTA_FONT
+    delta_sub.fill = DELTA_HEADER_FILL
+    delta_sub.alignment = CENTER
 
     # Per-row data formulas — sort by |Δ| descending via LARGE / MATCH / INDEX.
     # Empty register rows score -1 on the delta range; LARGE pushes them past
@@ -752,11 +771,6 @@ def _build_per_asset_detail(
             f'MAX(0,{gain_a}{c_row})/SUMIF({gain_a_range},">0")*{headline_a}))'
         )
 
-        # Δ column = (panel B adj gain) − (panel A adj gain)
-        ws[f"{DELTA_COL}{c_row}"] = (
-            f'=IF({matched}=0,"",{gain_b}{c_row}-{gain_a}{c_row})'
-        )
-
         # Panel B (reset elected → cost base = MV)
         # v2.4 FB-2: "{code} - {name}" (was "{name} ({code})")
         ws[f"{asset_b}{c_row}"] = f'=IF({matched}=0,"",{a_code}&" - "&{a_name})'
@@ -769,9 +783,17 @@ def _build_per_asset_detail(
             f'MAX(0,{gain_b}{c_row})/SUMIF({gain_b_range},">0")*{headline_b}))'
         )
 
+        # v2.5 FB-7: Change column at the FAR RIGHT, signed TAX delta
+        # (reset tax − default tax). Negative = reset reduces tax (red brackets).
+        ws[f"{DELTA_COL}{c_row}"] = (
+            f'=IF({matched}=0,"",{tax_b}{c_row}-{tax_a}{c_row})'
+        )
+
         # Currency formatting on all numeric cells.
-        for col in (proc_a, cb_a, gain_a, tax_a, DELTA_COL, proc_b, cb_b, gain_b, tax_b):
+        for col in (proc_a, cb_a, gain_a, tax_a, proc_b, cb_b, gain_b, tax_b):
             ws[f"{col}{c_row}"].number_format = FMT_CURRENCY
+        # Signed delta format for the Change col.
+        ws[f"{DELTA_COL}{c_row}"].number_format = FMT_CURRENCY_DELTA
 
         # v2.3 C-4: per-column fills mirroring Analyser's per-asset table
         # (sand for proceeds, slate for ordinary/cost, sage for Div 296).
@@ -797,48 +819,36 @@ def _build_per_asset_detail(
     )
     ws.conditional_formatting.add(cb_b_range, diff_rule)
 
-    # v2.3 C-4: trap red-row CF mirroring Analyser. Fires when the asset is in
-    # an unrealised loss position (cost base A < ordinary gain reference) AND
-    # Panel B (with reset) shows a positive Div 296 adjusted gain.
-    # Tracks asset name col A non-empty + proceeds < cost base (Panel A) +
-    # Panel B adj gain > 0.
+    # v2.3 C-4: trap red-row CF — fires when the asset is in an unrealised
+    # loss position (Panel A proceeds < cost base) AND the reset turns it
+    # into a positive Div 296 gain (Panel B gain > 0). v2.5 FB-7: column
+    # refs made symbolic (was hardcoded "$I" which referenced the wrong
+    # column under the old layout; new symbolic refs auto-track the layout).
+    panel_b_gain_col = PANEL_B_COLS[3]   # "I" under the v2.5 layout
     trap_range = (
         f"{PANEL_A_COLS[0]}{DATA_FIRST_ROW}:"
-        f"{PANEL_B_COLS[-1]}{DATA_LAST_ROW}"
+        f"{LAST_VISIBLE_COL}{DATA_LAST_ROW}"
     )
     trap_rule = FormulaRule(
         formula=[
             f"AND($A{DATA_FIRST_ROW}<>\"\","
             f"($B{DATA_FIRST_ROW}-$C{DATA_FIRST_ROW})<0,"
-            f"$I{DATA_FIRST_ROW}>0)"
+            f"${panel_b_gain_col}{DATA_FIRST_ROW}>0)"
         ],
         fill=TRAP_FILL,
     )
     ws.conditional_formatting.add(trap_range, trap_rule)
 
-    # v2.3 C-4: favourable/unfavourable CF on the gain-change col F.
-    # Convention: positive = elect ADDS Div 296 gain (unfavourable, red);
-    # negative = elect REDUCES Div 296 gain (favourable, green). This is the
-    # OPPOSITE sign convention from the subtotals Change col D, which uses
-    # Default − If-elect (positive = elect saves tax).
-    delta_range = f"{DELTA_COL}{DATA_FIRST_ROW}:{DELTA_COL}{DATA_LAST_ROW}"
-    delta_unfav_rule = FormulaRule(
-        formula=[f"AND(ISNUMBER({DELTA_COL}{DATA_FIRST_ROW}),{DELTA_COL}{DATA_FIRST_ROW}>0)"],
-        font=Font(name="Arial", size=10, bold=True, color="A61B1B"),
-    )
-    delta_fav_rule = FormulaRule(
-        formula=[f"AND(ISNUMBER({DELTA_COL}{DATA_FIRST_ROW}),{DELTA_COL}{DATA_FIRST_ROW}<0)"],
-        font=Font(name="Arial", size=10, bold=True, color="0B6E4F"),
-    )
-    ws.conditional_formatting.add(delta_range, delta_unfav_rule)
-    ws.conditional_formatting.add(delta_range, delta_fav_rule)
+    # v2.5 FB-7: dropped the green/red CF on the Change column. The
+    # FMT_CURRENCY_DELTA format renders negatives as red brackets, which is
+    # the consistent visual language across every Change cell on the tab.
 
-    # Overflow note
+    # Overflow note — v2.5 FB-7: mentions tax delta (the new sort metric).
     overflow = ws.cell(
         row=DATA_OVERFLOW_NOTE_ROW, column=1,
-        value=(f"Showing top {DISPLAY_ROWS} assets by how much the election changes "
-               f"their Div 296 gain — see the Analyser tab for the full register "
-               f"(up to {ASSUMPTIONS.asset_register_rows} rows)."),
+        value=(f"Showing top {DISPLAY_ROWS} assets by absolute Div 296 tax "
+               f"change when the reset is elected — see the Analyser tab for "
+               f"the full register (up to {ASSUMPTIONS.asset_register_rows} rows)."),
     )
     overflow.font = Font(name="Arial", size=9, italic=True, color="666666")
     ws.merge_cells(f"A{DATA_OVERFLOW_NOTE_ROW}:{LAST_VISIBLE_COL}{DATA_OVERFLOW_NOTE_ROW}")
@@ -859,7 +869,7 @@ def _build_footer_notes(ws: Worksheet) -> None:
     sort_note = ws.cell(
         row=SORT_NOTE_ROW, column=1,
         value=("Note: per-asset detail shows the top 10 assets where the reset "
-               "election moves the Div 296 gain the most (by absolute change, "
+               "election moves the Div 296 tax the most (by absolute change, "
                "either direction). See the Analyser tab for the full register."),
     )
     sort_note.font = Font(name="Arial", size=9, italic=True, color="666666")
@@ -910,15 +920,14 @@ def build(wb: Workbook) -> Worksheet:
     ws.page_margins.bottom = 0.4
     ws.print_area = f"A1:{LAST_VISIBLE_COL}{SORT_NOTE_ROW}"
 
-    # --- Column widths ---
-    # v2.4 FB-4: widened cols A and B-D for subtotals readability. Col A now
-    # holds long subtotal labels like "Ordinary CGT (unchanged by reset)"
-    # without an awkward 2-line wrap; cols B-D give currency values like
-    # $40,084.91 enough room.
+    # --- Column widths (v2.5 FB-7 layout) ---
+    # A-E  Panel A + subtotals: A holds long labels; B-D currency values.
+    # F-J  Panel B (asset, proceeds, cost base, gain, tax) — same shape as A.
+    # K    Change column (tax delta) — rightmost.
     widths = {
         "A": 36, "B": 16, "C": 16, "D": 16, "E": 14,    # Panel A + subtotals
-        "F": 13,                                         # Δ
-        "G": 26, "H": 14, "I": 16, "J": 16, "K": 14,    # Panel B
+        "F": 26, "G": 14, "H": 16, "I": 16, "J": 14,    # Panel B
+        "K": 14,                                         # Change
     }
     for col_letter, w in widths.items():
         ws.column_dimensions[col_letter].width = w

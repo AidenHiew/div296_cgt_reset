@@ -394,10 +394,9 @@ class TestComparison:
         assert "'Inputs'!$E:$E" not in cb_formula
 
     def test_panel_b_uses_market_value(self, tmp_path: Path):
-        """Panels use INDEX(Inputs!col, matched_row).
-        v2.3: MV at 30 Jun shifted from col F to col E."""
+        """v2.5 FB-7: Panel B moved to F-J. Cost base is now col H."""
         ws = _comparison(tmp_path)
-        cb_formula = ws[f"I{CMP_DATA_FIRST_ROW}"].value
+        cb_formula = ws[f"H{CMP_DATA_FIRST_ROW}"].value
         assert "'Inputs'!$E:$E" in cb_formula
         assert "'Inputs'!$C:$C" not in cb_formula
 
@@ -405,7 +404,8 @@ class TestComparison:
         """Neither panel formula may reference the reset_on named range."""
         ws = _comparison(tmp_path)
         for row in range(CMP_DATA_FIRST_ROW, CMP_DATA_LAST_ROW + 1):
-            for col_letter in ("B", "C", "D", "E", "H", "I", "J", "K"):
+            # v2.5 FB-7: Panel A B-E, Panel B G-J (col F = Panel B asset label).
+            for col_letter in ("B", "C", "D", "E", "G", "H", "I", "J"):
                 f = ws[f"{col_letter}{row}"].value
                 if f and isinstance(f, str):
                     assert "reset_on" not in f, (
@@ -413,11 +413,17 @@ class TestComparison:
                     )
 
     def test_delta_column_formula(self, tmp_path: Path):
-        """Δ column F = panel B adj gain (J) − panel A adj gain (D)."""
+        """v2.5 FB-7: Change col K = panel B tax (J) − panel A tax (E) — signed tax delta."""
         ws = _comparison(tmp_path)
-        delta = ws[f"F{CMP_DATA_FIRST_ROW}"].value
-        assert f"J{CMP_DATA_FIRST_ROW}" in delta and f"D{CMP_DATA_FIRST_ROW}" in delta
+        delta = ws[f"K{CMP_DATA_FIRST_ROW}"].value
+        assert f"J{CMP_DATA_FIRST_ROW}" in delta and f"E{CMP_DATA_FIRST_ROW}" in delta, (
+            f"Change formula must reference panel B tax (J) and panel A tax (E); got {delta!r}"
+        )
         assert "-" in delta
+        # Reset (J) − default (E): the J reference comes BEFORE the E reference.
+        assert delta.index(f"J{CMP_DATA_FIRST_ROW}") < delta.index(f"E{CMP_DATA_FIRST_ROW}"), (
+            f"Change must be reset − default (J before E), got {delta!r}"
+        )
 
     def test_helper_columns_hidden(self, tmp_path: Path):
         """v1.7: helpers in cols L/M plus per-register grid N/O/P + matched-row R."""
