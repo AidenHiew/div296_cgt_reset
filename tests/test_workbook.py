@@ -321,17 +321,17 @@ class TestComparison:
         assert "ILLUSTRATIVE" in ws.oddHeader.center.text
 
     def test_context_strip_present(self, tmp_path: Path):
-        """v2.5 FB-8: strip shows per-member TSB on the left (rows 14-17 = members,
-        row 18 = total) with the other three tiles vertically merged on the right."""
+        """v2.5 polish: strip is per-member TSB only (cols A:C, rows 14-18).
+        The earlier v2.5 right-side tiles (proportion / discount / tier) were
+        dropped — cols D:K of the strip are deliberately blank."""
         ws = _comparison(tmp_path)
-        # Row 13 labels
+        # Row 12 section band — renamed to "Members & TSB" (no parenthetical).
+        assert "Members & TSB" in str(ws["A12"].value)
+        # Row 13 sub-header (only one tile left).
         labels_row_text = " ".join(
             str(c.value) for c in ws[13] if c.value is not None
         )
         assert "Members & TSB" in labels_row_text
-        assert "Highest member proportion above $3m" in labels_row_text
-        assert "CGT discount" in labels_row_text
-        assert "tier" in labels_row_text.lower()
         # Per-member rows: A14..A17 carry placeholder labels regardless of TSB.
         assert ws["A14"].value == "Member 1"
         assert ws["A15"].value == "Member 2"
@@ -340,37 +340,37 @@ class TestComparison:
         # Total row 18 sums all member TSBs from Inputs.
         assert ws["A18"].value == "Total"
         assert "SUM('Inputs'!B11:B14)" in ws["B18"].value
-        # Right-side tiles — values live on the first member row (vertically merged).
-        right_tile_row_text = " ".join(
-            str(ws[f"{c}14"].value) for c in ("D", "G", "I") if ws[f"{c}14"].value is not None
-        )
-        assert "MAX('Inputs'!D11:D14)" in right_tile_row_text
-        assert "discount_on" in right_tile_row_text
-        assert "tier10_on" in right_tile_row_text
+        # Right-side tiles must be GONE — every cell D14..K18 should be None.
+        for col in ("D", "E", "F", "G", "H", "I", "J", "K"):
+            for row in range(14, 19):
+                val = ws[f"{col}{row}"].value
+                assert val is None, (
+                    f"{col}{row} should be empty (right-side tiles dropped); got {val!r}"
+                )
 
     def test_metric_cards_present(self, tmp_path: Path):
-        """v2.5 FB-4 + FB-8: cards shifted to rows 20/21 (strip expanded)."""
+        """v2.5 polish: card labels use 'Difference' (was 'Change')."""
         ws = _comparison(tmp_path)
         assert ws["A20"].value == "If no reset (default)"
         assert ws["E20"].value == "If elected to reset"
-        assert ws["I20"].value == "Change"
+        assert ws["I20"].value == "Difference"
         # Card values point at the headline cells L6/M6.
         assert "L$6" in ws["A21"].value or "L6" in ws["A21"].value
         assert "M$6" in ws["E21"].value or "M6" in ws["E21"].value
-        # Change card is SIGNED — reset − default (negative = saving).
+        # Difference card is SIGNED — reset − default (negative = saving).
         net = ws["I21"].value
-        assert ("M" in net and "L" in net and "-" in net), f"unexpected change formula {net!r}"
+        assert ("M" in net and "L" in net and "-" in net), f"unexpected difference formula {net!r}"
         assert net.index("M") < net.index("L"), (
-            f"Change card should be reset − default (M-L), got {net!r}"
+            f"Difference card should be reset − default (M-L), got {net!r}"
         )
 
     def test_subtotals_table(self, tmp_path: Path):
-        """v2.5 FB-5 + FB-8: subtotals shifted to rows 25-28 (strip expanded)."""
+        """v2.5 polish: subtotal header D24 says 'Difference' (was 'Change')."""
         ws = _comparison(tmp_path)
         # Header row 24
         assert ws["B24"].value == "If no reset (default)"
         assert ws["C24"].value == "If elected to reset"
-        assert ws["D24"].value == "Change"
+        assert ws["D24"].value == "Difference"
 
         # Row labels (25-28)
         assert ws["A25"].value == "Div 296 earnings"

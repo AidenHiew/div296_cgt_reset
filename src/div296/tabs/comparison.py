@@ -273,27 +273,21 @@ def _build_header_block(ws: Worksheet) -> None:
 
 
 def _build_context_strip(ws: Worksheet) -> None:
-    """Top context block. v2.5 FB-8: the left tile now shows a per-member
-    TSB mini-table (Member 1..4 + Total) instead of a single fund aggregate.
-    The other three tiles (proportion, discount, tier) sit on the right and
-    vertically merge across the same row range so the strip reads as one panel.
+    """Top context block. v2.5 polish: only the per-member TSB mini-table
+    remains. The v2.5-initial right-side tiles (proportion / discount / tier)
+    were dropped per Aiden's feedback — they were either echoes of Inputs
+    toggles (discount, tier) or derived metrics already visible per-member
+    (proportion). The strip is now a single panel on the left (cols A:C).
     """
     last_input_member_row = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count - 1
 
-    # --- Row 13 labels (four horizontal merges across cols A:K) ---
-    labels = [
-        ("A:C", "Members & TSB"),
-        ("D:F", "Highest member proportion above $3m"),
-        ("G:H", "CGT discount"),
-        ("I:K", "$10m / +25% tier"),
-    ]
-    for merge_range, label in labels:
-        start, end = merge_range.split(":")
-        cell = ws[f"{start}{CONTEXT_LABEL_ROW}"]
-        cell.value = label
-        cell.font = CONTEXT_LABEL_FONT
-        cell.alignment = Alignment(horizontal="left", indent=1)
-        ws.merge_cells(f"{start}{CONTEXT_LABEL_ROW}:{end}{CONTEXT_LABEL_ROW}")
+    # --- Row 13 label — the only one left now that right-side tiles are gone.
+    # Acts as a sub-header inside the "Members & TSB" section band on row 12.
+    cell = ws[f"A{CONTEXT_LABEL_ROW}"]
+    cell.value = "Members & TSB"
+    cell.font = CONTEXT_LABEL_FONT
+    cell.alignment = Alignment(horizontal="left", indent=1)
+    ws.merge_cells(f"A{CONTEXT_LABEL_ROW}:C{CONTEXT_LABEL_ROW}")
 
     # --- Left tile (cols A:C) — per-member TSB mini-table ---
     # Col A always shows the placeholder label; col B-C merged for TSB value
@@ -330,26 +324,8 @@ def _build_context_strip(ws: Worksheet) -> None:
     total_value.alignment = Alignment(horizontal="right", indent=1)
     ws.merge_cells(f"B{CONTEXT_TOTAL_ROW}:C{CONTEXT_TOTAL_ROW}")
     ws.row_dimensions[CONTEXT_TOTAL_ROW].height = 18
-
-    # --- Right tiles (D:F, G:H, I:K) — vertically merged across the
-    # member-rows + total-row range so each value reads as one panel.
-    strip_first_row = CONTEXT_VALUE_ROW
-    strip_last_row = CONTEXT_TOTAL_ROW
-    tile_values = [
-        ("D", "F",
-         f"=MAX({INPUTS_SHEET}!D{MEMBERS_FIRST_DATA_ROW}:D{last_input_member_row})",
-         FMT_PERCENT),
-        ("G", "H", "=discount_on", None),
-        ("I", "K", "=tier10_on",   None),
-    ]
-    for start, end, formula, fmt in tile_values:
-        cell = ws[f"{start}{strip_first_row}"]
-        cell.value = formula
-        cell.font = CONTEXT_VALUE_FONT
-        cell.alignment = Alignment(horizontal="center", vertical="center")
-        if fmt:
-            cell.number_format = fmt
-        ws.merge_cells(f"{start}{strip_first_row}:{end}{strip_last_row}")
+    # v2.5 polish: right-side tiles (proportion / discount / tier) removed.
+    # The strip occupies cols A:C only now; cols D:K are deliberately blank.
 
 
 def _build_per_register_helpers(ws: Worksheet) -> tuple[str, str, str]:
@@ -452,7 +428,7 @@ def _build_metric_cards(ws: Worksheet, headline_a: str, headline_b: str) -> None
     cards = [
         ("A:D", "If no reset (default)",  f"={headline_a[1:]}",                       FMT_CURRENCY,       CARD_FILL_A),
         ("E:H", "If elected to reset",    f"={headline_b[1:]}",                       FMT_CURRENCY,       CARD_FILL_B),
-        ("I:K", "Change",                 f"={headline_b[1:]}-{headline_a[1:]}",      FMT_CURRENCY_DELTA, CARD_FILL_DELTA),
+        ("I:K", "Difference",             f"={headline_b[1:]}-{headline_a[1:]}",      FMT_CURRENCY_DELTA, CARD_FILL_DELTA),
     ]
     for merge_range, label, value_formula, value_fmt, fill in cards:
         start = merge_range.split(":")[0]
@@ -516,7 +492,7 @@ def _build_subtotals(ws: Worksheet, headline_a: str, headline_b: str,
         ("A", "Subtotal"),
         ("B", "If no reset (default)"),
         ("C", "If elected to reset"),
-        ("D", "Change"),
+        ("D", "Difference"),
     ]
     for col, text in header_cells:
         c = ws[f"{col}{SUBTOTAL_HEADER_ROW}"]
@@ -609,9 +585,9 @@ def _build_subtotals(ws: Worksheet, headline_a: str, headline_b: str,
     note_row = SUBTOTAL_BURDEN_ROW + 1
     note = ws.cell(
         row=note_row, column=1,
-        value=("Change = If elected to reset − If no reset. A negative value "
-               "(shown in red brackets) means the reset reduces that line of "
-               "tax. Hover over each subtotal label for a plain-English "
+        value=("Difference = If elected to reset − If no reset. A negative "
+               "value (shown in green brackets) means the reset reduces that "
+               "line of tax. Hover over each subtotal label for a plain-English "
                "definition."),
     )
     note.font = Font(name="Arial", size=9, italic=True, color="666666")
@@ -639,7 +615,7 @@ def _build_per_member_breakdown(
         ("B", "TSB"),
         ("C", "If no reset (default)"),
         ("D", "If elected to reset"),
-        ("E", "Change"),
+        ("E", "Difference"),
     ]
     for col, text in headers:
         c = ws[f"{col}{PER_MEMBER_HEADER_ROW}"]
@@ -719,7 +695,7 @@ def _build_per_asset_detail(
     ws.merge_cells(f"{panel_b_first}{PANEL_TITLE_ROW}:{panel_b_last}{PANEL_TITLE_ROW}")
 
     delta_title = ws[f"{DELTA_COL}{PANEL_TITLE_ROW}"]
-    delta_title.value = "Change"
+    delta_title.value = "Difference"
     delta_title.font = DELTA_FONT
     delta_title.fill = DELTA_HEADER_FILL
     delta_title.alignment = CENTER
@@ -905,9 +881,9 @@ def build(wb: Workbook) -> Worksheet:
 
     _build_header_block(ws)
 
-    # Section band for the body
-    _band(ws, BAND_BODY_ROW,
-          "Side-by-side comparison (independent of the master reset toggle)")
+    # Section band for the body — v2.5 polish: renamed to match what's actually
+    # underneath (per-member TSB table) now that the right-side tiles are gone.
+    _band(ws, BAND_BODY_ROW, "Members & TSB")
 
     _build_context_strip(ws)
 
