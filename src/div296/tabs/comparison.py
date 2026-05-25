@@ -596,12 +596,12 @@ def _build_per_member_breakdown(
     """
     _band(ws, PER_MEMBER_BAND_ROW, "Per-member breakdown")
 
-    # Header row
+    # Header row — v2.5 FB-6: labels standardised across all sections.
     headers = [
         ("A", "Member"),
         ("B", "TSB"),
-        ("C", "Default Div 296 tax"),
-        ("D", "If you elect"),
+        ("C", "If no reset (default)"),
+        ("D", "If elected to reset"),
         ("E", "Change"),
     ]
     for col, text in headers:
@@ -611,7 +611,10 @@ def _build_per_member_breakdown(
         c.fill = SECTION_BAND_FILL
         c.alignment = CENTER
 
-    # Data rows — one per member; suppressed when TSB is empty/zero.
+    # Data rows — one per member. v2.5 FB-6: member labels always show as
+    # placeholders ("Member 1".."Member 4") regardless of TSB, so an empty
+    # Inputs page still presents the 4-member structure on Comparison.
+    # Numeric cells stay blank when TSB is empty/zero.
     for i in range(ASSUMPTIONS.member_count):
         row = PER_MEMBER_FIRST_ROW + i
         inputs_row = MEMBERS_FIRST_DATA_ROW + i
@@ -620,9 +623,8 @@ def _build_per_member_breakdown(
         tax_a_ref = f"{HELPER_COL_A}{helper_row}"
         tax_b_ref = f"{HELPER_COL_B}{helper_row}"
 
-        # Col A — Member label, blank when TSB is empty/zero
-        label = ws.cell(row=row, column=1,
-                        value=f'=IF({tsb_ref}>0,"Member {i+1}","")')
+        # Col A — Member label, ALWAYS shown (placeholder for empty members).
+        label = ws.cell(row=row, column=1, value=f"Member {i+1}")
         label.font = BODY_FONT
         label.alignment = Alignment(horizontal="left", indent=1)
 
@@ -632,22 +634,22 @@ def _build_per_member_breakdown(
         tsb.number_format = FMT_CURRENCY
         tsb.alignment = Alignment(horizontal="right")
 
-        # Col C — Default Div 296 tax (Scenario A)
+        # Col C — If no reset (default) Div 296 tax
         ca = ws.cell(row=row, column=3,
                      value=f'=IF({tsb_ref}>0,{tax_a_ref},"")')
         ca.number_format = FMT_CURRENCY
         ca.alignment = Alignment(horizontal="right")
 
-        # Col D — If-elect Div 296 tax (Scenario B)
+        # Col D — If elected to reset Div 296 tax
         cb = ws.cell(row=row, column=4,
                      value=f'=IF({tsb_ref}>0,{tax_b_ref},"")')
         cb.number_format = FMT_CURRENCY
         cb.alignment = Alignment(horizontal="right")
 
-        # Col E — Change = Default − If elect (positive = election saves tax)
+        # Col E — Change SIGNED (reset − default; negative = saving).
         chg = ws.cell(row=row, column=5,
-                      value=f'=IF({tsb_ref}>0,{tax_a_ref}-{tax_b_ref},"")')
-        chg.number_format = FMT_CURRENCY
+                      value=f'=IF({tsb_ref}>0,{tax_b_ref}-{tax_a_ref},"")')
+        chg.number_format = FMT_CURRENCY_DELTA
         chg.alignment = Alignment(horizontal="right")
 
         ws.row_dimensions[row].height = 18
