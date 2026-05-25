@@ -406,9 +406,11 @@ def build(wb: Workbook) -> Worksheet:
         rn.fill = ROWNUM_FILL
         rn.font = ROWNUM_FONT
         rn.alignment = Alignment(horizontal="center", vertical="center")
-        # Col B — Asset
+        # Col B — Asset. v2.4 FB-2: display as "{code} - {name}" (was
+        # "{name} ({code})" which doubled the code when {name} already
+        # contained an exchange:code suffix like "Apple Inc (NASDAQ:AAPL)").
         ws.cell(row=a_row, column=ASSET_COL,
-                value=f'=IF({code}="","",{name}&" ("&{code}&")")')
+                value=f'=IF({code}="","",{code}&" - "&{name})')
         # Col C — Proceeds
         ws.cell(row=a_row, column=PROCEEDS_COL, value=f'=IF({proceeds}="","",{proceeds})')
         # Col D — Original cost base

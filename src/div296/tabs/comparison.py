@@ -725,7 +725,8 @@ def _build_per_asset_detail(
         gain_b_lookup = f"INDEX(${PER_REG_GAIN_B_COL}:${PER_REG_GAIN_B_COL},{matched})"
 
         # Panel A (no reset → cost base = original)
-        ws[f"{asset_a}{c_row}"] = f'=IF({matched}=0,"",{a_name}&" ("&{a_code}&")")'
+        # v2.4 FB-2: "{code} - {name}" (was "{name} ({code})")
+        ws[f"{asset_a}{c_row}"] = f'=IF({matched}=0,"",{a_code}&" - "&{a_name})'
         ws[f"{proc_a}{c_row}"]  = f'=IF({matched}=0,"",{a_proc})'
         ws[f"{cb_a}{c_row}"]    = f'=IF({matched}=0,"",{a_orig})'
         ws[f"{gain_a}{c_row}"]  = f'=IF({matched}=0,"",{gain_a_lookup})'
@@ -741,7 +742,8 @@ def _build_per_asset_detail(
         )
 
         # Panel B (reset elected → cost base = MV)
-        ws[f"{asset_b}{c_row}"] = f'=IF({matched}=0,"",{a_name}&" ("&{a_code}&")")'
+        # v2.4 FB-2: "{code} - {name}" (was "{name} ({code})")
+        ws[f"{asset_b}{c_row}"] = f'=IF({matched}=0,"",{a_code}&" - "&{a_name})'
         ws[f"{proc_b}{c_row}"]  = f'=IF({matched}=0,"",{a_proc})'
         ws[f"{cb_b}{c_row}"]    = f'=IF({matched}=0,"",{a_mv})'
         ws[f"{gain_b}{c_row}"]  = f'=IF({matched}=0,"",{gain_b_lookup})'
