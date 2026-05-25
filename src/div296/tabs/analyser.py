@@ -328,12 +328,15 @@ def build(wb: Workbook) -> Worksheet:
         a_row = PERASSET_FIRST_ROW + offset
         i_row = a_row - ROW_OFFSET
 
+        # v2.3 Inputs column layout (Quantity dropped):
+        # A code / B name / C orig CB / D MV today / E MV 30 Jun
+        # F val source / G proceeds / H projected G/L / I held>12m
         code = f"{INPUTS_SHEET}!A{i_row}"
         name = f"{INPUTS_SHEET}!B{i_row}"
-        orig = f"{INPUTS_SHEET}!D{i_row}"
-        mv = f"{INPUTS_SHEET}!F{i_row}"
-        proceeds = f"{INPUTS_SHEET}!H{i_row}"
-        held = f"{INPUTS_SHEET}!I{i_row}"
+        orig = f"{INPUTS_SHEET}!C{i_row}"        # was D
+        mv = f"{INPUTS_SHEET}!E{i_row}"          # was F
+        proceeds = f"{INPUTS_SHEET}!G{i_row}"    # was H
+        held = f"{INPUTS_SHEET}!I{i_row}"        # unchanged (still col I)
 
         # Col A — Row number (v2.0.0)
         rn = ws.cell(row=a_row, column=ROWNUM_COL, value=offset + 1)
@@ -468,8 +471,8 @@ def build(wb: Workbook) -> Worksheet:
     cf_terms = []
     for offset in range(ASSUMPTIONS.asset_register_rows):
         i_row = REGISTER_FIRST_DATA_ROW + offset
-        orig_i = f"{INPUTS_SHEET}!D{i_row}"
-        proc_i = f"{INPUTS_SHEET}!H{i_row}"
+        orig_i = f"{INPUTS_SHEET}!C{i_row}"   # v2.3: was D
+        proc_i = f"{INPUTS_SHEET}!G{i_row}"   # v2.3: was H
         cf_terms.append(f'IF({proc_i}="",0,MAX(0,{orig_i}-{proc_i}))')
     ws.cell(
         row=RECON_LOSSES_ROW, column=2,
