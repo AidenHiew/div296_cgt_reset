@@ -56,10 +56,10 @@ MEMBERS_FIRST_DATA_ROW = 11
 MEMBER_HEADERS = [
     "Member",
     "TSB ($)",
-    "Split % of fund earnings",
+    "Split % of fund earnings (auto)",   # v2.4: now a TSB-derived formula, not user input
     "Proportion above $3m (auto)",
     "Proportion override (optional)",
-    "Suggested split (TSB-based, read-only)",   # v2.3 — non-authoritative reference
+    # v2.4: Suggested split column dropped — col C now IS the auto split.
 ]
 MEMBERS_TOTAL_ROW = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count    # row 15 (v2.3)
 SPLIT_CHECK_ROW = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count + 1   # row 16
@@ -238,31 +238,33 @@ def build(wb: Workbook) -> Worksheet:
         c.fill = SECTION_BAND_FILL
         c.alignment = CENTER
 
+    last_mr = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count - 1
+    tsb_sum = f"SUM($B${MEMBERS_FIRST_DATA_ROW}:$B${last_mr})"
     for i in range(ASSUMPTIONS.member_count):
         row = MEMBERS_FIRST_DATA_ROW + i
         ws.cell(row=row, column=1, value=f"Member {i+1}").font = BODY_FONT
         is_first = i == 0
-        # Defaults: row 1 populated with §12 sample (single member, TSB $12m, split 100%);
+        # Defaults: row 1 populated with §12 sample (single member, TSB $12m);
         # rows 2–4 left blank.
         _input_cell(ws, f"B{row}", value=12_000_000 if is_first else None, number_format=FMT_CURRENCY)
-        _input_cell(ws, f"C{row}", value=1.0 if is_first else None, number_format=FMT_PERCENT)
+
+        # v2.4 FB-1: Col C "Split %" is now an AUTO formula derived from
+        # the member's TSB share. Removed the _input_cell wrapper so the cell
+        # stays default-locked under sheet protection — manual entry is
+        # impossible, eliminating the v2.3 "user typed 50% + 60% = 110%"
+        # failure mode. Italic grey to visually read as derived.
+        split_formula = f"=IF({tsb_sum}>0,B{row}/{tsb_sum},0)"
+        split_cell = ws.cell(row=row, column=3, value=split_formula)
+        split_cell.number_format = FMT_PERCENT
+        split_cell.font = Font(name="Arial", size=10, italic=True, color="1D3B34")
+        split_cell.alignment = Alignment(horizontal="right", indent=1)
+
         # Auto proportion = MAX(0, (TSB - threshold_1) / TSB), guarded for blank TSB
         prop_formula = f"=IF(B{row}>0, MAX(0,(B{row}-threshold_1)/B{row}), 0)"
         prop_cell = ws.cell(row=row, column=4, value=prop_formula)
         prop_cell.number_format = FMT_PERCENT
         _input_cell(ws, f"E{row}", value=None, number_format=FMT_PERCENT)
-
-        # v2.3: Col F — TSB-derived suggested split, read-only reference for the
-        # user's manually-entered Split % in col C. Non-authoritative: preserves
-        # the user's ability to override for non-pro-rata family arrangements.
-        last_mr = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count - 1
-        tsb_sum = f"SUM($B${MEMBERS_FIRST_DATA_ROW}:$B${last_mr})"
-        sugg_formula = f"=IF({tsb_sum}>0,B{row}/{tsb_sum},0)"
-        sugg_cell = ws.cell(row=row, column=6, value=sugg_formula)
-        sugg_cell.number_format = FMT_PERCENT
-        sugg_cell.font = Font(name="Arial", size=10, italic=True, color="666666")
-        sugg_cell.fill = PatternFill("solid", fgColor="F0F0F0")
-        sugg_cell.alignment = Alignment(horizontal="right", indent=1)
+        # v2.4: Suggested split (col F) dropped — col C above now IS the auto split.
 
     # v2.3: Member TSB total row — combined TSB across members for quick read.
     last_member_data_row = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count - 1
