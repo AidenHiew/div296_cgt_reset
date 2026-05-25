@@ -474,11 +474,11 @@ def _build_subtotals(ws: Worksheet, headline_a: str, headline_b: str,
     """Four-row subtotal table: earnings, ord CGT, Div 296 tax, total burden."""
     _band(ws, BAND_SUBTOTALS_ROW, "Per-scenario subtotals")
 
-    # Header row
+    # Header row — v2.5 FB-5: labels standardised across all sections.
     header_cells = [
         ("A", "Subtotal"),
-        ("B", "Default outcome"),
-        ("C", "If you elect"),
+        ("B", "If no reset (default)"),
+        ("C", "If elected to reset"),
         ("D", "Change"),
     ]
     for col, text in header_cells:
@@ -528,12 +528,16 @@ def _build_subtotals(ws: Worksheet, headline_a: str, headline_b: str,
         ws[f"A{row}"] = label
         ws[f"B{row}"] = a_val
         ws[f"C{row}"] = b_val
-        ws[f"D{row}"] = f"=B{row}-C{row}"
+        # v2.5 FB-5: Change is SIGNED reset − default (negative = saving).
+        ws[f"D{row}"] = f"=C{row}-B{row}"
         ws[f"A{row}"].alignment = Alignment(wrap_text=True, vertical="center")
         ws[f"A{row}"].comment = Comment(definition, "v2.3")
-        for col in ("B", "C", "D"):
+        for col in ("B", "C"):
             ws[f"{col}{row}"].number_format = FMT_CURRENCY
             ws[f"{col}{row}"].alignment = Alignment(horizontal="right", vertical="center")
+        # Change col uses signed-delta format (red brackets for negatives).
+        ws[f"D{row}"].number_format = FMT_CURRENCY_DELTA
+        ws[f"D{row}"].alignment = Alignment(horizontal="right", vertical="center")
 
         # v2.3: light borders on all subtotal cells.
         for col in ("A", "B", "C", "D"):
@@ -559,30 +563,19 @@ def _build_subtotals(ws: Worksheet, headline_a: str, headline_b: str,
         else:
             ws[f"A{row}"].font = BODY_FONT
 
-    # v2.3 C-3: favourable/unfavourable CF on the Change column. Positive
-    # Change here = Default > If-elect = election SAVES tax (favourable,
-    # green). Negative = election adds tax (unfavourable, red). Note this is
-    # the OPPOSITE sign convention from the per-asset gain-change col F,
-    # which uses (B − A) so positive = elect adds Div 296 gain.
-    change_range = f"D{SUBTOTAL_EARNINGS_ROW}:D{SUBTOTAL_BURDEN_ROW}"
-    fav_rule = FormulaRule(
-        formula=[f"AND(ISNUMBER(D{SUBTOTAL_EARNINGS_ROW}),D{SUBTOTAL_EARNINGS_ROW}>0)"],
-        font=Font(name="Arial", size=10, bold=True, color="0B6E4F"),
-    )
-    unfav_rule = FormulaRule(
-        formula=[f"AND(ISNUMBER(D{SUBTOTAL_EARNINGS_ROW}),D{SUBTOTAL_EARNINGS_ROW}<0)"],
-        font=Font(name="Arial", size=10, bold=True, color="A61B1B"),
-    )
-    ws.conditional_formatting.add(change_range, fav_rule)
-    ws.conditional_formatting.add(change_range, unfav_rule)
+    # v2.5 FB-5: dropped the green-savings / red-cost conditional formatting.
+    # Sign convention is now consistent across the tab (Change = reset − default,
+    # negative = saving), and the [Red] brackets in FMT_CURRENCY_DELTA give the
+    # eye the same signal without per-cell CF.
 
     # v2.3 C-3: short italic explanation immediately under the subtotals block.
     note_row = SUBTOTAL_BURDEN_ROW + 1
     note = ws.cell(
         row=note_row, column=1,
-        value=("Positive values in the Change column reduce total tax; "
-               "negative values increase it. Hover over each subtotal label "
-               "for a plain-English definition."),
+        value=("Change = If elected to reset − If no reset. A negative value "
+               "(shown in red brackets) means the reset reduces that line of "
+               "tax. Hover over each subtotal label for a plain-English "
+               "definition."),
     )
     note.font = Font(name="Arial", size=9, italic=True, color="666666")
     note.alignment = Alignment(horizontal="left", vertical="center",

@@ -358,11 +358,12 @@ class TestComparison:
         )
 
     def test_subtotals_table(self, tmp_path: Path):
-        """v1.5: subtotals at rows 22-25 — earnings, ord CGT (unchanged), Div 296 tax, total burden."""
+        """v2.5 FB-5: rows 22-25; labels standardised; Change col is SIGNED."""
         ws = _comparison(tmp_path)
-        # Header row 21 — v2.2.0 plain-English column labels
-        assert ws["B21"].value == "Default outcome"
-        assert ws["C21"].value == "If you elect"
+        # Header row 21 — v2.5 standardised wording
+        assert ws["B21"].value == "If no reset (default)"
+        assert ws["C21"].value == "If elected to reset"
+        assert ws["D21"].value == "Change"
 
         # Row labels
         assert ws["A22"].value == "Div 296 earnings"
@@ -377,6 +378,12 @@ class TestComparison:
         # Total burden = ord CGT + Div 296 tax for each scenario
         assert ws["B25"].value == "=B23+B24"
         assert ws["C25"].value == "=C23+C24"
+
+        # v2.5: Change col is SIGNED (reset − default).
+        for row in (22, 23, 24, 25):
+            assert ws[f"D{row}"].value == f"=C{row}-B{row}", (
+                f"D{row} should be =C{row}-B{row}, got {ws[f'D{row}'].value!r}"
+            )
 
     def test_panel_a_uses_original_cost_base(self, tmp_path: Path):
         """Panels use INDEX(Inputs!col, matched_row).
