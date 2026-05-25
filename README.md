@@ -2,17 +2,19 @@
 
 A Microsoft Excel workbook (`.xlsx`) that illustrates Division 296 tax outcomes for SMSFs and makes the case for pre–30 June 2026 action on assets sitting in an unrealised-loss position (the "reset trap").
 
-**Status:** v2.3.0 — stable. Client-feedback pass over v2.2.0 (16 items from the SMSF preparer's review). Workbook, builder, tests, and PDF export all green.
+**Status:** v2.4.0 — stable. Client-feedback pass #2 over v2.3.0 (4 items surfaced by the user's real-data play-through). Workbook, builder, tests, and PDF export all green.
 
 **Previous releases:**
-- v2.2.0 (frozen as reference; artifact `dist/Division_296_Model_v2.3.0.xlsx`). Client-readability pass over v2.0.0.
+- v2.3.0 (frozen as reference; artifact `dist/Division_296_Model_v2.3.0.xlsx`). Client-feedback pass over v2.2.0 (16 items).
+- v2.2.0 (frozen as reference; artifact `dist/Division_296_Model_v2.2.0.xlsx`). Client-readability pass over v2.0.0.
 - v2.0.0 (frozen as reference; tag `v2.0.0`, artifact `dist/Division_296_Model_v2.0.0.xlsx`). UX pass over v1.0.0.
 - v1.0.0 (frozen as reference; tag `v1.0.0`, artifact `dist/Division_296_Model_v1.0.0.xlsx`).
 
-**What's new in v2.3.0:**
-- Inputs: TSB Total row, three-tier $3m/$10m TSB traffic-light with toggle nudge, TSB-suggested split column, Quantity col dropped, new Projected gain/loss column, header regrouping with zebra shading.
-- Analyser: single-source estimate disclaimer banner, compact Reconciliation card alongside the Fund Summary, Reset Impact column shown in green/red, info-comment on Fund Div 296 earnings, plain-English trap legend.
-- Comparison: per-member breakdown block (TSB + tax under each scenario), headline-data explanation merged with the Year-1 caveat, subtotals get borders + favourable/unfavourable CF + per-row cell-comment definitions, per-asset detail mirrors Analyser column shading + adds trap CF, chart retitled and resized for label clarity.
+**What's new in v2.4.0:**
+- Inputs: Split % of fund earnings (col C) is now AUTO-computed from each member's TSB share. Cell is locked under sheet protection — no more "user typed 50% + 60% = 110%" failure mode. Header label gains `(auto)` suffix. The v2.3 Suggested-split helper column is dropped (the live column does its job).
+- Analyser + Comparison: per-asset display format changed from `{name} ({code})` to `{code} - {name}` (was rendering "Apple Inc (NASDAQ:AAPL) (AAPL)" when names already contained an exchange:code suffix).
+- Comparison: top context strip becomes fund-aggregate — "Total fund TSB" (SUM) and "Highest member proportion above $3m" (MAX) instead of Member-1-only readings. Per-member detail still lives in the v2.3 Per-member breakdown block lower down; a small breadcrumb below the strip points there.
+- Comparison: Per-scenario subtotals — col A widened from 28 → 36 and cols B/C/D widened from 12/13/13 → 16/16/16 so long labels and currency values are no longer cramped.
 
 **Audience:** internal use by partners, managers and staff; also printed or shared with clients.
 
@@ -28,7 +30,7 @@ python -m pip install -e .[dev]
 
 # 2. Build the workbook (runs a live recalc check at the end)
 python -m div296.build
-# -> dist/Division_296_Model_v2.3.0.xlsx
+# -> dist/Division_296_Model_v2.4.0.xlsx
 # -> Recalc validation: OK (no Excel error cells).
 
 # 3. Run the test suite (fast dev loop — skips live-recalc)
@@ -45,14 +47,14 @@ Pass `--no-validate` to skip the post-build recalc check (faster, not recommende
 ### Exporting to PDF (client-shareable Comparison page)
 
 ```bash
-python scripts/export_pdf.py dist/Division_296_Model_v2.3.0.xlsx
+python scripts/export_pdf.py dist/Division_296_Model_v2.4.0.xlsx
 # -> dist/Division_296_Model_v2.0.0_Comparison.pdf
 
 # Other tabs / whole workbook:
-python scripts/export_pdf.py dist/Division_296_Model_v2.3.0.xlsx --tab Analyser
-python scripts/export_pdf.py dist/Division_296_Model_v2.3.0.xlsx --all-tabs
-# -> dist/Division_296_Model_v2.3.0_Comparison.pdf  (default tab)
-# -> dist/Division_296_Model_v2.3.0.pdf             (--all-tabs)
+python scripts/export_pdf.py dist/Division_296_Model_v2.4.0.xlsx --tab Analyser
+python scripts/export_pdf.py dist/Division_296_Model_v2.4.0.xlsx --all-tabs
+# -> dist/Division_296_Model_v2.4.0_Comparison.pdf  (default tab)
+# -> dist/Division_296_Model_v2.4.0.pdf             (--all-tabs)
 ```
 
 Requires [LibreOffice](https://www.libreoffice.org/) installed (`soffice` on PATH, or the default `C:\Program Files\LibreOffice\program\soffice.exe` on Windows).
