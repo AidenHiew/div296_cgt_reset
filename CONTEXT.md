@@ -73,6 +73,20 @@ subtotals, per-member breakdown, per-asset detail). Replaced the v2.4 label
 "Change" in v2.5 because "Difference" is unambiguous about being a
 two-scenario comparison; "Change" could be read as "year-on-year change".
 
+**v2.5 step 13 — headline-only verbose variant.** The big headline cards on
+Comparison use longer, fully-spelled labels to give the client maximum
+context on the tile they see first:
+
+| Position | Headline card (verbose)                              | Tables (short — glossary) |
+|----------|------------------------------------------------------|---------------------------|
+| Left     | "If no Div 296 CostBase Reset (default)"             | "If no reset (default)"   |
+| Middle   | "If elected to reset Div 296 CostBase Reset"         | "If elected to reset"     |
+| Right    | "Difference (Net Div 296 Tax)"                       | "Difference"              |
+
+Subtotal and per-member tables keep the short form so they stay scannable.
+The glossary terms in this file are the short form — they're the canonical
+names. The verbose variants are presentation-layer only.
+
 ## Headline / per-member / per-asset
 
 Three levels of granularity for the Div 296 tax calculation, all reconciling
