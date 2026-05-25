@@ -932,12 +932,18 @@ def build(wb: Workbook) -> Worksheet:
     for col_letter, w in widths.items():
         ws.column_dimensions[col_letter].width = w
 
-    # Editable header-block cells stay editable under sheet protection.
+    # Editable header-block cells stay editable. Marked unlocked here so that
+    # if/when sheet protection is re-enabled (see "v2.5 step 13" re-lock
+    # commit), these cells remain editable.
     for row in (HEADER_FIRM_ROW, HEADER_PREPARED_FOR_ROW,
                 HEADER_PREPARED_BY_ROW, HEADER_DATE_ROW):
         ws[f"B{row}"].protection = Protection(locked=False)
 
-    ws.protection.sheet = True
+    # v2.5 step 12 (TEMPORARY): Comparison tab unlocked so Aiden can run a
+    # formatting pass directly in Excel. To be re-locked in step 13 once the
+    # formatting changes are observed and ported back to source. DO NOT ship
+    # this state to clients — it leaves formulas editable.
+    ws.protection.sheet = False
     ws.protection.formatColumns = False
     ws.protection.formatRows = False
 
