@@ -44,7 +44,8 @@ from openpyxl.worksheet.worksheet import Worksheet
 from div296.assumptions import ASSUMPTIONS
 from div296.styles import (
     BODY_FONT, CENTER, FMT_CURRENCY, FMT_PERCENT, INPUT_FILL, INPUT_FONT,
-    SECTION_BAND_FILL, SECTION_BAND_FONT, THIN_BOX, TITLE_FONT,
+    SECTION_BAND_FILL, SECTION_BAND_FONT, THIN_BOX, TITLE_FONT, TRAP_FILL,
+    PROC_DATA_FILL, ORD_DATA_FILL, DIV_DATA_FILL,
 )
 from div296.tabs.inputs import (
     MEMBERS_FIRST_DATA_ROW, REGISTER_FIRST_DATA_ROW,
@@ -474,38 +475,99 @@ def _build_subtotals(ws: Worksheet, headline_a: str, headline_b: str,
     # wasn't updated; fixed in v2.2.0.
     ord_cgt_ref = f"={ANALYSER_SHEET}!B74"
 
+    # v2.3 C-3: per-row definitions surfaced as cell Comments on the col-A label
+    # so the reader can hover for a plain-English explanation of each subtotal.
     rows = [
         (SUBTOTAL_EARNINGS_ROW, "Div 296 earnings",
-         f"=SUMIF({gain_a_range},\">0\")", f"=SUMIF({gain_b_range},\">0\")"),
+         f"=SUMIF({gain_a_range},\">0\")", f"=SUMIF({gain_b_range},\">0\")",
+         "The total estimated Division 296 adjusted taxable capital gain "
+         "across all assets included in the analysis. Excludes losses."),
         (SUBTOTAL_ORD_CGT_ROW,  "Ordinary CGT (unchanged by reset)",
-         ord_cgt_ref, ord_cgt_ref),
+         ord_cgt_ref, ord_cgt_ref,
+         "Ordinary capital gains tax (fund CGT rate applied to the realised "
+         "gain after any 1/3 CGT discount). Same in both scenarios — the "
+         "reset election affects Div 296, not ordinary CGT."),
         (SUBTOTAL_DIV296_ROW,   "Div 296 tax (headline)",
-         f"={headline_a[1:]}", f"={headline_b[1:]}"),
+         f"={headline_a[1:]}", f"={headline_b[1:]}",
+         "Division 296 additional tax payable. Each member's share is "
+         "computed from their TSB proportion above the $3m threshold, with "
+         "the +25% tier band applied where the toggle is enabled."),
         (SUBTOTAL_BURDEN_ROW,   "TOTAL TAX BURDEN",
          f"=B{SUBTOTAL_ORD_CGT_ROW}+B{SUBTOTAL_DIV296_ROW}",
-         f"=C{SUBTOTAL_ORD_CGT_ROW}+C{SUBTOTAL_DIV296_ROW}"),
+         f"=C{SUBTOTAL_ORD_CGT_ROW}+C{SUBTOTAL_DIV296_ROW}",
+         "Ordinary CGT + Div 296 tax. Year 1 only — see the headline "
+         "footnote about projecting these figures forward."),
     ]
-    for row, label, a_val, b_val in rows:
+    subtotal_border = Border(
+        left=Side(style="thin", color="C5CECA"),
+        right=Side(style="thin", color="C5CECA"),
+        top=Side(style="thin", color="C5CECA"),
+        bottom=Side(style="thin", color="C5CECA"),
+    )
+    for row, label, a_val, b_val, definition in rows:
         ws[f"A{row}"] = label
         ws[f"B{row}"] = a_val
         ws[f"C{row}"] = b_val
         ws[f"D{row}"] = f"=B{row}-C{row}"
         ws[f"A{row}"].alignment = Alignment(wrap_text=True, vertical="center")
+        ws[f"A{row}"].comment = Comment(definition, "v2.3")
         for col in ("B", "C", "D"):
             ws[f"{col}{row}"].number_format = FMT_CURRENCY
             ws[f"{col}{row}"].alignment = Alignment(horizontal="right", vertical="center")
+
+        # v2.3: light borders on all subtotal cells.
+        for col in ("A", "B", "C", "D"):
+            ws[f"{col}{row}"].border = subtotal_border
 
         # Slightly taller rows so wrapped labels don't clip.
         ws.row_dimensions[row].height = 20
 
         # Emphasise the total-burden row
         if row == SUBTOTAL_BURDEN_ROW:
+            top_border = Border(
+                left=subtotal_border.left,
+                right=subtotal_border.right,
+                top=Side(style="medium", color="1D3B34"),
+                bottom=subtotal_border.bottom,
+            )
             for col in ("A", "B", "C", "D"):
                 cell = ws[f"{col}{row}"]
                 cell.font = TOTAL_BURDEN_FONT
                 cell.fill = TOTAL_BURDEN_FILL
+                cell.border = top_border
         else:
             ws[f"A{row}"].font = BODY_FONT
+
+    # v2.3 C-3: favourable/unfavourable CF on the Change column. Positive
+    # Change here = Default > If-elect = election SAVES tax (favourable,
+    # green). Negative = election adds tax (unfavourable, red). Note this is
+    # the OPPOSITE sign convention from the per-asset gain-change col F,
+    # which uses (B − A) so positive = elect adds Div 296 gain.
+    change_range = f"D{SUBTOTAL_EARNINGS_ROW}:D{SUBTOTAL_BURDEN_ROW}"
+    fav_rule = FormulaRule(
+        formula=[f"AND(ISNUMBER(D{SUBTOTAL_EARNINGS_ROW}),D{SUBTOTAL_EARNINGS_ROW}>0)"],
+        font=Font(name="Arial", size=10, bold=True, color="0B6E4F"),
+    )
+    unfav_rule = FormulaRule(
+        formula=[f"AND(ISNUMBER(D{SUBTOTAL_EARNINGS_ROW}),D{SUBTOTAL_EARNINGS_ROW}<0)"],
+        font=Font(name="Arial", size=10, bold=True, color="A61B1B"),
+    )
+    ws.conditional_formatting.add(change_range, fav_rule)
+    ws.conditional_formatting.add(change_range, unfav_rule)
+
+    # v2.3 C-3: short italic explanation immediately under the subtotals block.
+    note_row = SUBTOTAL_BURDEN_ROW + 1
+    note = ws.cell(
+        row=note_row, column=1,
+        value=("Positive values in the Change column reduce total tax; "
+               "negative values increase it. Hover over each subtotal label "
+               "for a plain-English definition."),
+    )
+    note.font = Font(name="Arial", size=9, italic=True, color="666666")
+    note.alignment = Alignment(horizontal="left", vertical="center",
+                               wrap_text=True, indent=1)
+    ws.merge_cells(f"A{note_row}:{LAST_VISIBLE_COL}{note_row}")
+    ws.row_dimensions[note_row].height = 16
 
 
 def _build_per_member_breakdown(
@@ -693,6 +755,19 @@ def _build_per_asset_detail(
         for col in (proc_a, cb_a, gain_a, tax_a, DELTA_COL, proc_b, cb_b, gain_b, tax_b):
             ws[f"{col}{c_row}"].number_format = FMT_CURRENCY
 
+        # v2.3 C-4: per-column fills mirroring Analyser's per-asset table
+        # (sand for proceeds, slate for ordinary/cost, sage for Div 296).
+        # Applied to both Panel A and Panel B so the eye sweeps left-to-right
+        # by data class, not by panel.
+        ws[f"{proc_a}{c_row}"].fill = PROC_DATA_FILL
+        ws[f"{cb_a}{c_row}"].fill = ORD_DATA_FILL
+        ws[f"{gain_a}{c_row}"].fill = DIV_DATA_FILL
+        ws[f"{tax_a}{c_row}"].fill = DIV_DATA_FILL
+        ws[f"{proc_b}{c_row}"].fill = PROC_DATA_FILL
+        ws[f"{cb_b}{c_row}"].fill = ORD_DATA_FILL
+        ws[f"{gain_b}{c_row}"].fill = DIV_DATA_FILL
+        ws[f"{tax_b}{c_row}"].fill = DIV_DATA_FILL
+
     # E3: highlight Div 296 cost base in panel B when it differs from panel A.
     # CF formula uses RELATIVE rows so it shifts per row in the range.
     cb_b_range = f"{PANEL_B_COLS[2]}{DATA_FIRST_ROW}:{PANEL_B_COLS[2]}{DATA_LAST_ROW}"
@@ -703,6 +778,42 @@ def _build_per_asset_detail(
         fill=COST_BASE_ACCENT_FILL,
     )
     ws.conditional_formatting.add(cb_b_range, diff_rule)
+
+    # v2.3 C-4: trap red-row CF mirroring Analyser. Fires when the asset is in
+    # an unrealised loss position (cost base A < ordinary gain reference) AND
+    # Panel B (with reset) shows a positive Div 296 adjusted gain.
+    # Tracks asset name col A non-empty + proceeds < cost base (Panel A) +
+    # Panel B adj gain > 0.
+    trap_range = (
+        f"{PANEL_A_COLS[0]}{DATA_FIRST_ROW}:"
+        f"{PANEL_B_COLS[-1]}{DATA_LAST_ROW}"
+    )
+    trap_rule = FormulaRule(
+        formula=[
+            f"AND($A{DATA_FIRST_ROW}<>\"\","
+            f"($B{DATA_FIRST_ROW}-$C{DATA_FIRST_ROW})<0,"
+            f"$I{DATA_FIRST_ROW}>0)"
+        ],
+        fill=TRAP_FILL,
+    )
+    ws.conditional_formatting.add(trap_range, trap_rule)
+
+    # v2.3 C-4: favourable/unfavourable CF on the gain-change col F.
+    # Convention: positive = elect ADDS Div 296 gain (unfavourable, red);
+    # negative = elect REDUCES Div 296 gain (favourable, green). This is the
+    # OPPOSITE sign convention from the subtotals Change col D, which uses
+    # Default − If-elect (positive = elect saves tax).
+    delta_range = f"{DELTA_COL}{DATA_FIRST_ROW}:{DELTA_COL}{DATA_LAST_ROW}"
+    delta_unfav_rule = FormulaRule(
+        formula=[f"AND(ISNUMBER({DELTA_COL}{DATA_FIRST_ROW}),{DELTA_COL}{DATA_FIRST_ROW}>0)"],
+        font=Font(name="Arial", size=10, bold=True, color="A61B1B"),
+    )
+    delta_fav_rule = FormulaRule(
+        formula=[f"AND(ISNUMBER({DELTA_COL}{DATA_FIRST_ROW}),{DELTA_COL}{DATA_FIRST_ROW}<0)"],
+        font=Font(name="Arial", size=10, bold=True, color="0B6E4F"),
+    )
+    ws.conditional_formatting.add(delta_range, delta_unfav_rule)
+    ws.conditional_formatting.add(delta_range, delta_fav_rule)
 
     # Overflow note
     overflow = ws.cell(
@@ -740,25 +851,22 @@ def _build_footer_notes(ws: Worksheet) -> None:
 
 
 def _build_chart(ws: Worksheet, *_unused) -> None:
-    """v2.0.0: horizontal bar chart of per-asset Δ values (col F of the
-    visible per-asset detail block, rows DATA_FIRST_ROW..DATA_LAST_ROW).
+    """v2.3 C-5: redesigned horizontal bar chart — clearer title, taller body
+    to fix the v2.2.0 label overflow, plain-English caption below.
 
+    Data = col F (DELTA_COL), rows DATA_FIRST_ROW..DATA_LAST_ROW.
     Each bar = one displayed asset; length = (Scenario B − Scenario A)
-    gain delta; sorted descending (table already sorts this way via
-    LARGE/MATCH). Anchored below the footer notes, full panel width."""
+    gain delta; sorted descending (table already sorts via LARGE/MATCH).
+    """
     chart = BarChart()
     chart.type = "bar"          # horizontal
     chart.style = 11
-    chart.title = "Per-asset change in Div 296 gain if you elect the reset — top 10"
+    chart.title = "Which assets drive the change if you elect the reset (top 10)"
     chart.y_axis.title = None
-    chart.x_axis.title = "Change in Div 296 gain ($)"
+    chart.x_axis.title = "Change in Div 296 gain ($) — bars right = unfavourable, left = favourable"
     chart.legend = None
-    # belt-and-braces; source is visible anyway. openpyxl exposes the
-    # plotVisOnly chartSpace flag as `display_blanks`/`visible_cells_only`.
     chart.visible_cells_only = False
 
-    # Data = col F (DELTA_COL), rows DATA_FIRST_ROW..DATA_LAST_ROW.
-    # Categories = col A (Asset name + code), same rows.
     data = Reference(
         ws,
         min_col=ord(DELTA_COL) - ord("A") + 1,
@@ -768,7 +876,7 @@ def _build_chart(ws: Worksheet, *_unused) -> None:
     )
     cats = Reference(
         ws,
-        min_col=1,                      # col A — Asset
+        min_col=1,
         max_col=1,
         min_row=DATA_FIRST_ROW,
         max_row=DATA_LAST_ROW,
@@ -778,13 +886,29 @@ def _build_chart(ws: Worksheet, *_unused) -> None:
     chart.dataLabels = DataLabelList(
         showVal=True, showCatName=False, showSerName=False, showLegendKey=False,
     )
-    # Sized to fit the full visible panel width (A:K).
-    chart.height = 9
+    # v2.3: taller chart (was 9, now 13) to give category labels breathing room
+    # and reduce the v2.2.0 label-overlap issue noted in the prior handoff.
+    chart.height = 13
     chart.width = 22
 
     # Anchor BELOW the existing footer notes block (CHART_BOTTOM_ROW + 2),
     # full panel width.
     ws.add_chart(chart, f"A{CHART_BOTTOM_ROW + 2}")
+
+    # v2.3: caption immediately below the chart anchor (Excel renders the
+    # chart as a floating object — this caption sits in cell A{anchor+1} at
+    # text level so it prints with the chart).
+    cap_row = CHART_BOTTOM_ROW + 2 + 26   # chart is ~26 print rows tall
+    cap = ws.cell(
+        row=cap_row, column=1,
+        value=("Bars show the per-asset change in Division 296 gain if you "
+               "elect the reset. Bars are sorted by absolute magnitude — the "
+               "largest movers (in either direction) appear at the top."),
+    )
+    cap.font = Font(name="Arial", size=9, italic=True, color="666666")
+    cap.alignment = Alignment(horizontal="left", vertical="center",
+                              wrap_text=True, indent=1)
+    ws.merge_cells(f"A{cap_row}:{LAST_VISIBLE_COL}{cap_row}")
 
 
 def build(wb: Workbook) -> Worksheet:
