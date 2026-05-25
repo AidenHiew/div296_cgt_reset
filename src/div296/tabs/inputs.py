@@ -59,6 +59,7 @@ MEMBER_HEADERS = [
     "Split % of fund earnings",
     "Proportion above $3m (auto)",
     "Proportion override (optional)",
+    "Suggested split (TSB-based, read-only)",   # v2.3 — non-authoritative reference
 ]
 MEMBERS_TOTAL_ROW = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count    # row 15 (v2.3)
 SPLIT_CHECK_ROW = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count + 1   # row 16
@@ -159,9 +160,10 @@ def build(wb: Workbook) -> Worksheet:
     ws.merge_cells("A2:I2")
     ws.row_dimensions[2].height = 22
 
-    # --- Row 3: TSB diagnostic (v2.2.0 — "does Div 296 even apply?") ---
-    # Auto-checks the highest member TSB against the $3m threshold and shows
-    # a green / amber line. Conditional formatting paints the row.
+    # --- Row 3: TSB diagnostic (v2.2.0 + v2.3 — three-tier traffic light) ---
+    # Auto-checks the highest member TSB against $3m / $10m thresholds and shows
+    # a green / amber / darker-amber line, with a nudge to flip the $10m tier
+    # toggle (B6) when applicable. CF paints the row.
     last_member_row = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count - 1
     max_tsb_expr = f"MAX(B{MEMBERS_FIRST_DATA_ROW}:B{last_member_row})"
     diag_formula = (
@@ -169,7 +171,9 @@ def build(wb: Workbook) -> Worksheet:
         f'"➤  Enter member TSBs below to see whether Div 296 applies to this fund.",'
         f'IF({max_tsb_expr}<=threshold_1,'
         f'"✓  All members are below the $3m TSB threshold — Div 296 does not currently apply to this fund.",'
-        f'"⚠  At least one member has a TSB above $3m — Div 296 applies. See the Comparison tab for the modelled impact."))'
+        f'IF({max_tsb_expr}<=threshold_2,'
+        f'"⚠  At least one member has a TSB above $3m — Div 296 applies. See the Comparison tab for the modelled impact.",'
+        f'"⚠⚠  At least one member has a TSB above $10m — consider enabling the $10m / +25% tier toggle in cell B6 to model the higher rate band.")))'
     )
     diag = ws.cell(row=3, column=1, value=diag_formula)
     diag.font = Font(name="Arial", size=10, bold=True, color="666666")
@@ -182,13 +186,29 @@ def build(wb: Workbook) -> Worksheet:
         formula=[f"AND({max_tsb_expr}>0,{max_tsb_expr}<=threshold_1)"],
         fill=PatternFill("solid", fgColor="E1F5EE"),
     )
-    # Amber when at least one member is above $3m.
+    # Light amber when at least one member is above $3m but below $10m.
     amber_rule = FormulaRule(
-        formula=[f"{max_tsb_expr}>threshold_1"],
+        formula=[f"AND({max_tsb_expr}>threshold_1,{max_tsb_expr}<=threshold_2)"],
         fill=PatternFill("solid", fgColor="FBE9E9"),
+    )
+    # v2.3: Darker amber when at least one member is above $10m. Sits on top
+    # of the light-amber rule so the strongest match wins.
+    deep_amber_rule = FormulaRule(
+        formula=[f"{max_tsb_expr}>threshold_2"],
+        fill=PatternFill("solid", fgColor="F4C28A"),
     )
     ws.conditional_formatting.add("A3:I3", green_rule)
     ws.conditional_formatting.add("A3:I3", amber_rule)
+    ws.conditional_formatting.add("A3:I3", deep_amber_rule)
+
+    # v2.3: Pulse the $10m tier toggle cell (B6) amber when MAX TSB > $10m
+    # AND the toggle is still OFF — visually links the banner above to the
+    # action needed below so the user can't miss the mismatch.
+    tier10_nudge = FormulaRule(
+        formula=[f'AND({max_tsb_expr}>threshold_2,B6="OFF")'],
+        fill=PatternFill("solid", fgColor="F4C28A"),
+    )
+    ws.conditional_formatting.add("B6", tier10_nudge)
 
     # --- Zone 1: Control panel ---
     _band(ws, 4, "1. Control panel (the demo levers)")
@@ -231,6 +251,18 @@ def build(wb: Workbook) -> Worksheet:
         prop_cell = ws.cell(row=row, column=4, value=prop_formula)
         prop_cell.number_format = FMT_PERCENT
         _input_cell(ws, f"E{row}", value=None, number_format=FMT_PERCENT)
+
+        # v2.3: Col F — TSB-derived suggested split, read-only reference for the
+        # user's manually-entered Split % in col C. Non-authoritative: preserves
+        # the user's ability to override for non-pro-rata family arrangements.
+        last_mr = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count - 1
+        tsb_sum = f"SUM($B${MEMBERS_FIRST_DATA_ROW}:$B${last_mr})"
+        sugg_formula = f"=IF({tsb_sum}>0,B{row}/{tsb_sum},0)"
+        sugg_cell = ws.cell(row=row, column=6, value=sugg_formula)
+        sugg_cell.number_format = FMT_PERCENT
+        sugg_cell.font = Font(name="Arial", size=10, italic=True, color="666666")
+        sugg_cell.fill = PatternFill("solid", fgColor="F0F0F0")
+        sugg_cell.alignment = Alignment(horizontal="right", indent=1)
 
     # v2.3: Member TSB total row — combined TSB across members for quick read.
     last_member_data_row = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count - 1
