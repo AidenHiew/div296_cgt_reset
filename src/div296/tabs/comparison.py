@@ -542,8 +542,9 @@ def _build_subtotals(ws: Worksheet, headline_a: str, headline_b: str,
         for col in ("A", "B", "C", "D"):
             ws[f"{col}{row}"].border = subtotal_border
 
-        # Slightly taller rows so wrapped labels don't clip.
-        ws.row_dimensions[row].height = 20
+        # v2.4 FB-4: taller rows (was 20) so wrapped labels don't clip
+        # and currency values breathe.
+        ws.row_dimensions[row].height = 22
 
         # Emphasise the total-burden row
         if row == SUBTOTAL_BURDEN_ROW:
@@ -982,13 +983,14 @@ def build(wb: Workbook) -> Worksheet:
     ws.print_area = f"A1:{LAST_VISIBLE_COL}{CHART_PRINT_BOTTOM}"
 
     # --- Column widths ---
-    # Panel A: Asset 24 / Proceeds 13 / Cost base 14 / Adj gain 14 / Tax 12
-    # Δ: 12
-    # Panel B: same as A
+    # v2.4 FB-4: widened cols A and B-D for subtotals readability. Col A now
+    # holds long subtotal labels like "Ordinary CGT (unchanged by reset)"
+    # without an awkward 2-line wrap; cols B-D give currency values like
+    # $40,084.91 enough room.
     widths = {
-        "A": 28, "B": 12, "C": 13, "D": 13, "E": 12,    # Panel A (col A wide enough for subtotal labels)
-        "F": 11,                                         # Δ
-        "G": 22, "H": 12, "I": 13, "J": 13, "K": 12,    # Panel B
+        "A": 36, "B": 16, "C": 16, "D": 16, "E": 14,    # Panel A + subtotals
+        "F": 13,                                         # Δ
+        "G": 26, "H": 14, "I": 16, "J": 16, "K": 14,    # Panel B
     }
     for col_letter, w in widths.items():
         ws.column_dimensions[col_letter].width = w
