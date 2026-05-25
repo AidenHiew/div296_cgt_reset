@@ -84,7 +84,7 @@ def _r(x: float) -> int:
 # --- package sanity -------------------------------------------------------
 
 def test_package_version():
-    assert __version__ == "2.4.0"
+    assert __version__ == "2.5.0"
 
 
 # --- §12 scenario: reset ON, discount ON, tier ON ------------------------

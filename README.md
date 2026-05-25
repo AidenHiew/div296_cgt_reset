@@ -2,19 +2,25 @@
 
 A Microsoft Excel workbook (`.xlsx`) that illustrates Division 296 tax outcomes for SMSFs and makes the case for pre–30 June 2026 action on assets sitting in an unrealised-loss position (the "reset trap").
 
-**Status:** v2.4.0 — stable. Client-feedback pass #2 over v2.3.0 (4 items surfaced by the user's real-data play-through). Workbook, builder, tests, and PDF export all green.
+**Status:** v2.5.0 — stable. Client-feedback pass #3 over v2.4.0 (8 items: calc-default flip, Inputs member 2, full Comparison rewrite). Workbook, builder, tests, and PDF export all green.
 
 **Previous releases:**
+- v2.4.0 (frozen as reference; artifact `dist/Division_296_Model_v2.5.0.xlsx`). Client-feedback pass over v2.3.0 (4 items).
 - v2.3.0 (frozen as reference; artifact `dist/Division_296_Model_v2.3.0.xlsx`). Client-feedback pass over v2.2.0 (16 items).
 - v2.2.0 (frozen as reference; artifact `dist/Division_296_Model_v2.2.0.xlsx`). Client-readability pass over v2.0.0.
 - v2.0.0 (frozen as reference; tag `v2.0.0`, artifact `dist/Division_296_Model_v2.0.0.xlsx`). UX pass over v1.0.0.
 - v1.0.0 (frozen as reference; tag `v1.0.0`, artifact `dist/Division_296_Model_v1.0.0.xlsx`).
 
-**What's new in v2.4.0:**
-- Inputs: Split % of fund earnings (col C) is now AUTO-computed from each member's TSB share. Cell is locked under sheet protection — no more "user typed 50% + 60% = 110%" failure mode. Header label gains `(auto)` suffix. The v2.3 Suggested-split helper column is dropped (the live column does its job).
-- Analyser + Comparison: per-asset display format changed from `{name} ({code})` to `{code} - {name}` (was rendering "Apple Inc (NASDAQ:AAPL) (AAPL)" when names already contained an exchange:code suffix).
-- Comparison: top context strip becomes fund-aggregate — "Total fund TSB" (SUM) and "Highest member proportion above $3m" (MAX) instead of Member-1-only readings. Per-member detail still lives in the v2.3 Per-member breakdown block lower down; a small breadcrumb below the strip points there.
-- Comparison: Per-scenario subtotals — col A widened from 28 → 36 and cols B/C/D widened from 12/13/13 → 16/16/16 so long labels and currency values are no longer cramped.
+**What's new in v2.5.0:**
+- **Calc default** — `$10m / +25% tier` toggle on Inputs B6 now defaults to ON (was OFF). When OFF the formula taxed all >$3m earnings at only 15%, ignoring the legislated $10m threshold; ON applies 15% to the $3m-$10m slice and 25% additional to the >$10m slice as per the Bill. The toggle remains in the UI for comparison. §12 acceptance numbers updated: Member 1 ($12m TSB) headline tax 28,500→32,722 (reset on) and 157,500→180,833 (reset off); net effect of electing reset 129,000→148,111.
+- **Inputs** — Member 2 seeded with TSB $3.5m alongside Member 1's $12m, so the workbook ships with two populated members and the split-balance behaviour is visible out of the box.
+- **Comparison — side-by-side strip** — top tile rewritten from a single "Total fund TSB" cell to a per-member mini-table (Member 1..4 + Total). Other three tiles (proportion, discount, tier) vertically merge across the same rows so the strip reads as one panel.
+- **Comparison — headline cards, subtotals, per-member, per-asset** — all Change columns flipped to a **signed** convention: Change = If elected − If no reset. A reset that reduces tax now shows as a NEGATIVE figure in red brackets (`($129,000)`). Old positive-savings convention was confusing because the sign meaning differed by section.
+- **Comparison — wording standardised** — every section now uses "If no reset (default)" and "If elected to reset" headers (was a mix of "Default outcome", "If you elect", "If you elect the reset by 30 Jun 2026").
+- **Comparison — per-member breakdown** — labels for Member 1..4 always shown as placeholders, even when Inputs has blank rows; numeric cells stay blank.
+- **Comparison — per-asset detail** — Change column moved from between the panels (old col F) to the far right (col K). Metric switched from gain-delta to **tax-delta** so the visible Change matches the sort metric ("top 10 most affected by tax" instead of "by gain"). Panel titles reworded.
+- **Comparison — chart removed** — the v2.3 horizontal bar chart didn't add narrative on top of the per-asset detail table; cut entirely.
+- **Layout re-tune** — col widths bumped for the new longer headers; single-page A4 landscape print fit.
 
 **Audience:** internal use by partners, managers and staff; also printed or shared with clients.
 
@@ -30,7 +36,7 @@ python -m pip install -e .[dev]
 
 # 2. Build the workbook (runs a live recalc check at the end)
 python -m div296.build
-# -> dist/Division_296_Model_v2.4.0.xlsx
+# -> dist/Division_296_Model_v2.5.0.xlsx
 # -> Recalc validation: OK (no Excel error cells).
 
 # 3. Run the test suite (fast dev loop — skips live-recalc)
@@ -47,14 +53,14 @@ Pass `--no-validate` to skip the post-build recalc check (faster, not recommende
 ### Exporting to PDF (client-shareable Comparison page)
 
 ```bash
-python scripts/export_pdf.py dist/Division_296_Model_v2.4.0.xlsx
+python scripts/export_pdf.py dist/Division_296_Model_v2.5.0.xlsx
 # -> dist/Division_296_Model_v2.0.0_Comparison.pdf
 
 # Other tabs / whole workbook:
-python scripts/export_pdf.py dist/Division_296_Model_v2.4.0.xlsx --tab Analyser
-python scripts/export_pdf.py dist/Division_296_Model_v2.4.0.xlsx --all-tabs
-# -> dist/Division_296_Model_v2.4.0_Comparison.pdf  (default tab)
-# -> dist/Division_296_Model_v2.4.0.pdf             (--all-tabs)
+python scripts/export_pdf.py dist/Division_296_Model_v2.5.0.xlsx --tab Analyser
+python scripts/export_pdf.py dist/Division_296_Model_v2.5.0.xlsx --all-tabs
+# -> dist/Division_296_Model_v2.5.0_Comparison.pdf  (default tab)
+# -> dist/Division_296_Model_v2.5.0.pdf             (--all-tabs)
 ```
 
 Requires [LibreOffice](https://www.libreoffice.org/) installed (`soffice` on PATH, or the default `C:\Program Files\LibreOffice\program\soffice.exe` on Windows).
