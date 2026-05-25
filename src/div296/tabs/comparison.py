@@ -88,15 +88,21 @@ SUBTOTAL_ORD_CGT_ROW = 23
 SUBTOTAL_DIV296_ROW = 24
 SUBTOTAL_BURDEN_ROW = 25
 
-BAND_DETAIL_ROW = 27
-PANEL_TITLE_ROW = 28
-PANEL_HEADER_ROW = 29
-DATA_FIRST_ROW = 30
-DATA_LAST_ROW = DATA_FIRST_ROW + DISPLAY_ROWS - 1   # row 44
-DATA_OVERFLOW_NOTE_ROW = DATA_LAST_ROW + 1          # row 45
+# v2.3: Per-member breakdown block between subtotals and per-asset detail.
+PER_MEMBER_BAND_ROW = SUBTOTAL_BURDEN_ROW + 2          # row 27
+PER_MEMBER_HEADER_ROW = PER_MEMBER_BAND_ROW + 1        # row 28
+PER_MEMBER_FIRST_ROW = PER_MEMBER_HEADER_ROW + 1       # row 29
+PER_MEMBER_LAST_ROW = PER_MEMBER_FIRST_ROW + ASSUMPTIONS.member_count - 1   # row 32
 
-REMINDER_ROW = DATA_OVERFLOW_NOTE_ROW + 1           # row 36
-SORT_NOTE_ROW = REMINDER_ROW + 1                  # row 37
+BAND_DETAIL_ROW = PER_MEMBER_LAST_ROW + 2              # row 34 (was 27)
+PANEL_TITLE_ROW = BAND_DETAIL_ROW + 1                  # row 35 (was 28)
+PANEL_HEADER_ROW = BAND_DETAIL_ROW + 2                 # row 36 (was 29)
+DATA_FIRST_ROW = BAND_DETAIL_ROW + 3                   # row 37 (was 30)
+DATA_LAST_ROW = DATA_FIRST_ROW + DISPLAY_ROWS - 1      # row 46 (was 44)
+DATA_OVERFLOW_NOTE_ROW = DATA_LAST_ROW + 1             # row 47 (was 45)
+
+REMINDER_ROW = DATA_OVERFLOW_NOTE_ROW + 1              # row 48 (was 46)
+SORT_NOTE_ROW = REMINDER_ROW + 1                       # row 49 (was 47)
 
 # v1.6: chart anchored inline next to the subtotals (cols F-K, rows 20-27)
 # rather than below the data block. Fills the empty right-side region that
@@ -417,18 +423,23 @@ def _build_metric_cards(ws: Worksheet, headline_a: str, headline_b: str) -> None
     ws.row_dimensions[CARD_LABEL_ROW].height = 18
     ws.row_dimensions[CARD_VALUE_ROW].height = 36
 
-    # v2.2.0: Year-1 footnote under the headline cards.
+    # v2.3: Combined headline explanation + Year-1 caveat.
+    # Replaces the v2.2.0 standalone Year-1 caveat — explanation comes first so
+    # the reader frames the headline figures before reading any subtotals.
     footnote = ws.cell(
         row=CARD_FOOTNOTE_ROW, column=1,
-        value=("Headline figures are Year 1 only. Div 296 is assessed annually; "
-               "the thresholds are indexed over time, but the same earnings hit "
-               "recurs each year that a member's TSB remains above $3m."),
+        value=("The headline figures summarise the estimated Division 296 "
+               "impact under each scenario. They help compare the relative "
+               "outcomes of each option rather than provide a final tax "
+               "calculation.\nHeadline figures are Year 1 only — Div 296 is "
+               "assessed annually, and the same earnings hit recurs each year "
+               "a member's TSB remains above $3m (thresholds index over time)."),
     )
     footnote.font = Font(name="Arial", size=9, italic=True, color="666666")
     footnote.alignment = Alignment(horizontal="left", vertical="center",
                                    wrap_text=True, indent=1)
     ws.merge_cells(f"A{CARD_FOOTNOTE_ROW}:{LAST_VISIBLE_COL}{CARD_FOOTNOTE_ROW}")
-    ws.row_dimensions[CARD_FOOTNOTE_ROW].height = 24
+    ws.row_dimensions[CARD_FOOTNOTE_ROW].height = 48
 
 
 def _expand_cols(start: str, end: str) -> list[str]:
@@ -493,6 +504,75 @@ def _build_subtotals(ws: Worksheet, headline_a: str, headline_b: str,
                 cell.fill = TOTAL_BURDEN_FILL
         else:
             ws[f"A{row}"].font = BODY_FONT
+
+
+def _build_per_member_breakdown(
+    ws: Worksheet, headline_a: str, headline_b: str,
+) -> None:
+    """v2.3: 4-row per-member breakdown showing each member's TSB and their
+    share of the Div 296 tax under both scenarios. Empty members render blank
+    so the block degrades gracefully for single-member or 2-member funds.
+
+    Data already exists in hidden cols L/M (per-member tax helpers); this block
+    just surfaces it visibly.
+    """
+    _band(ws, PER_MEMBER_BAND_ROW, "Per-member breakdown")
+
+    # Header row
+    headers = [
+        ("A", "Member"),
+        ("B", "TSB"),
+        ("C", "Default Div 296 tax"),
+        ("D", "If you elect"),
+        ("E", "Change"),
+    ]
+    for col, text in headers:
+        c = ws[f"{col}{PER_MEMBER_HEADER_ROW}"]
+        c.value = text
+        c.font = SECTION_BAND_FONT
+        c.fill = SECTION_BAND_FILL
+        c.alignment = CENTER
+
+    # Data rows — one per member; suppressed when TSB is empty/zero.
+    for i in range(ASSUMPTIONS.member_count):
+        row = PER_MEMBER_FIRST_ROW + i
+        inputs_row = MEMBERS_FIRST_DATA_ROW + i
+        helper_row = HELPER_MEMBER_TAX_FIRST_ROW + i
+        tsb_ref = f"{INPUTS_SHEET}!B{inputs_row}"
+        tax_a_ref = f"{HELPER_COL_A}{helper_row}"
+        tax_b_ref = f"{HELPER_COL_B}{helper_row}"
+
+        # Col A — Member label, blank when TSB is empty/zero
+        label = ws.cell(row=row, column=1,
+                        value=f'=IF({tsb_ref}>0,"Member {i+1}","")')
+        label.font = BODY_FONT
+        label.alignment = Alignment(horizontal="left", indent=1)
+
+        # Col B — TSB
+        tsb = ws.cell(row=row, column=2,
+                      value=f'=IF({tsb_ref}>0,{tsb_ref},"")')
+        tsb.number_format = FMT_CURRENCY
+        tsb.alignment = Alignment(horizontal="right")
+
+        # Col C — Default Div 296 tax (Scenario A)
+        ca = ws.cell(row=row, column=3,
+                     value=f'=IF({tsb_ref}>0,{tax_a_ref},"")')
+        ca.number_format = FMT_CURRENCY
+        ca.alignment = Alignment(horizontal="right")
+
+        # Col D — If-elect Div 296 tax (Scenario B)
+        cb = ws.cell(row=row, column=4,
+                     value=f'=IF({tsb_ref}>0,{tax_b_ref},"")')
+        cb.number_format = FMT_CURRENCY
+        cb.alignment = Alignment(horizontal="right")
+
+        # Col E — Change = Default − If elect (positive = election saves tax)
+        chg = ws.cell(row=row, column=5,
+                      value=f'=IF({tsb_ref}>0,{tax_a_ref}-{tax_b_ref},"")')
+        chg.number_format = FMT_CURRENCY
+        chg.alignment = Alignment(horizontal="right")
+
+        ws.row_dimensions[row].height = 18
 
 
 def _build_per_asset_detail(
@@ -721,6 +801,7 @@ def build(wb: Workbook) -> Worksheet:
 
     _build_metric_cards(ws, headline_a, headline_b)
     _build_subtotals(ws, headline_a, headline_b, gain_a_range, gain_b_range)
+    _build_per_member_breakdown(ws, headline_a, headline_b)
     _build_per_asset_detail(
         ws, gain_a_range, gain_b_range, delta_range, headline_a, headline_b,
     )

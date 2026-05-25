@@ -13,6 +13,11 @@ from openpyxl import load_workbook
 
 from div296 import named_ranges as nr
 from div296.build import build_workbook
+from div296.tabs.comparison import (
+    DATA_FIRST_ROW as CMP_DATA_FIRST_ROW,
+    DATA_LAST_ROW as CMP_DATA_LAST_ROW,
+    DATA_OVERFLOW_NOTE_ROW as CMP_OVERFLOW_ROW,
+)
 
 
 EXPECTED_TABS = ["Inputs", "Analyser", "Comparison", "Notes"]
@@ -357,25 +362,23 @@ class TestComparison:
         assert ws["C25"].value == "=C23+C24"
 
     def test_panel_a_uses_original_cost_base(self, tmp_path: Path):
-        """v1.7: panels use INDEX(Inputs!col, matched_row) — col D = original CB."""
+        """Panels use INDEX(Inputs!col, matched_row) — col D = original CB."""
         ws = _comparison(tmp_path)
-        # Panel A cost base for first visible row pulls Inputs col D via INDEX.
-        cb_formula = ws["C30"].value
+        cb_formula = ws[f"C{CMP_DATA_FIRST_ROW}"].value
         assert "'Inputs'!$D:$D" in cb_formula
         assert "'Inputs'!$F:$F" not in cb_formula
 
     def test_panel_b_uses_market_value(self, tmp_path: Path):
-        """v1.7: panels use INDEX(Inputs!col, matched_row) — col F = MV."""
+        """Panels use INDEX(Inputs!col, matched_row) — col F = MV."""
         ws = _comparison(tmp_path)
-        cb_formula = ws["I30"].value
+        cb_formula = ws[f"I{CMP_DATA_FIRST_ROW}"].value
         assert "'Inputs'!$F:$F" in cb_formula
         assert "'Inputs'!$D:$D" not in cb_formula
 
     def test_panels_independent_of_master_reset_toggle(self, tmp_path: Path):
         """Neither panel formula may reference the reset_on named range."""
         ws = _comparison(tmp_path)
-        # v1.7: 10 visible data rows (30..39).
-        for row in range(30, 40):
+        for row in range(CMP_DATA_FIRST_ROW, CMP_DATA_LAST_ROW + 1):
             for col_letter in ("B", "C", "D", "E", "H", "I", "J", "K"):
                 f = ws[f"{col_letter}{row}"].value
                 if f and isinstance(f, str):
@@ -386,8 +389,8 @@ class TestComparison:
     def test_delta_column_formula(self, tmp_path: Path):
         """Δ column F = panel B adj gain (J) − panel A adj gain (D)."""
         ws = _comparison(tmp_path)
-        delta = ws["F30"].value
-        assert "J30" in delta and "D30" in delta
+        delta = ws[f"F{CMP_DATA_FIRST_ROW}"].value
+        assert f"J{CMP_DATA_FIRST_ROW}" in delta and f"D{CMP_DATA_FIRST_ROW}" in delta
         assert "-" in delta
 
     def test_helper_columns_hidden(self, tmp_path: Path):
@@ -399,23 +402,26 @@ class TestComparison:
             assert not ws.column_dimensions[col_letter].hidden, f"col {col_letter} must be visible"
 
     def test_top_10_sorted_rendered(self, tmp_path: Path):
-        """v1.7: display top 10 assets by |Δ (B − A)| descending. Rows 30..39."""
+        """Display top 10 assets by |Δ (B − A)| descending."""
         ws = _comparison(tmp_path)
-        assert ws["A30"].value and ws["A30"].value.startswith("=")
-        assert ws["A39"].value and ws["A39"].value.startswith("=")  # last data row
-        overflow = ws["A40"].value
+        first = ws[f"A{CMP_DATA_FIRST_ROW}"].value
+        last = ws[f"A{CMP_DATA_LAST_ROW}"].value
+        assert first and first.startswith("=")
+        assert last and last.startswith("=")
+        overflow = ws[f"A{CMP_OVERFLOW_ROW}"].value
         assert overflow and "top 10" in overflow.lower()
         # v2.2.0: greek delta dropped — must read as plain English now.
         assert "Δ" not in overflow
 
     def test_per_asset_detail_uses_large_match_sort(self, tmp_path: Path):
-        """v1.7: each visible row's matched register row is computed via LARGE/MATCH
+        """Each visible row's matched register row is computed via LARGE/MATCH
         in the hidden col R, and panel cells INDEX into Inputs by that row."""
         ws = _comparison(tmp_path)
-        matched_formula = ws["R30"].value
+        matched_formula = ws[f"R{CMP_DATA_FIRST_ROW}"].value
         assert "LARGE" in matched_formula and "MATCH" in matched_formula
-        # Panel cells should reference R30 (the matched row).
-        assert "$R30" in ws["B30"].value or "R30" in ws["B30"].value
+        # Panel cells should reference the matched row.
+        assert (f"$R{CMP_DATA_FIRST_ROW}" in ws[f"B{CMP_DATA_FIRST_ROW}"].value
+                or f"R{CMP_DATA_FIRST_ROW}" in ws[f"B{CMP_DATA_FIRST_ROW}"].value)
 
     def test_no_recommendation_language(self, tmp_path: Path):
         """Comparison tab must use neutral net-effect language only."""
