@@ -46,7 +46,7 @@ SHEET = "Inputs"
 # --- Zone 1: Control panel (rows 5-7) ---
 CONTROL_ROWS = {
     nr.RESET_ON:        ("Reset election",                        5, "B5", ["ON", "OFF"], "ON"),
-    nr.TIER10_ON:       ("$10m / +25% tier",                      6, "B6", ["ON", "OFF"], "OFF"),
+    nr.TIER10_ON:       ("$10m / +25% tier",                      6, "B6", ["ON", "OFF"], "ON"),
     nr.DISCOUNT_ON:     ("CGT discount",                          7, "B7", ["ON", "OFF"], "ON"),
 }
 

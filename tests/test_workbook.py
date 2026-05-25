@@ -102,7 +102,7 @@ def test_control_panel_defaults(tmp_path: Path):
     ws = load_workbook(out)["Inputs"]
 
     assert ws["B5"].value == "ON"     # Reset election
-    assert ws["B6"].value == "OFF"    # $10m / +25% tier
+    assert ws["B6"].value == "ON"     # $10m / +25% tier (v2.5: flipped to ON — Bill-correct)
     assert ws["B7"].value == "ON"     # CGT discount
     # B8/B9 used to hold earnings source + manual override — removed in v1.7.
 
