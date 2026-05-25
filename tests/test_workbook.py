@@ -120,22 +120,31 @@ def test_sample_data_badge_present(tmp_path: Path):
 
 
 def test_all_tabs_protected(tmp_path: Path):
+    """v2.5 step 12: Comparison is TEMPORARILY unlocked for a formatting pass.
+    Tracked in TASKS.md / step 13 will re-lock. Other tabs remain protected."""
     out = tmp_path / "out.xlsx"
     wb = build_workbook()
     wb.save(out)
     wb_re = load_workbook(out)
-    for tab in ("Inputs", "Analyser", "Comparison", "Notes"):
+    for tab in ("Inputs", "Analyser", "Notes"):
         assert wb_re[tab].protection.sheet is True, f"{tab} is not protected"
+    # Comparison: explicit unlocked assertion so this test fails if someone
+    # accidentally re-locks Comparison before step 13 ports Aiden's formatting.
+    assert wb_re["Comparison"].protection.sheet is False, (
+        "Comparison should be unlocked (v2.5 step 12); see TASKS.md"
+    )
 
 
 def test_all_tabs_allow_column_resize_under_protection(tmp_path: Path):
     """v2.0.0: protection.sheet stays True but formatColumns/formatRows
-    are unlocked so users can drag column borders without unlocking cells."""
+    are unlocked so users can drag column borders without unlocking cells.
+    v2.5 step 12: Comparison sheet protection is OFF, so this invariant
+    applies only to the still-protected tabs."""
     out = tmp_path / "out.xlsx"
     wb = build_workbook()
     wb.save(out)
     wb_re = load_workbook(out)
-    for sheet in ("Inputs", "Analyser", "Comparison", "Notes"):
+    for sheet in ("Inputs", "Analyser", "Notes"):
         ws = wb_re[sheet]
         assert ws.protection.sheet is True, f"{sheet} should be protected"
         # openpyxl exposes these as bool-ish; allow either False or "0"
