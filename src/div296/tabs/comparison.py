@@ -33,8 +33,6 @@ neutral ("Net effect = A − B") — no recommendation language.
 
 from __future__ import annotations
 
-from openpyxl.chart import BarChart, Reference
-from openpyxl.chart.label import DataLabelList
 from openpyxl.comments import Comment
 from openpyxl.formatting.rule import FormulaRule
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Protection, Side
@@ -105,12 +103,7 @@ DATA_OVERFLOW_NOTE_ROW = DATA_LAST_ROW + 1             # row 47 (was 45)
 REMINDER_ROW = DATA_OVERFLOW_NOTE_ROW + 1              # row 48 (was 46)
 SORT_NOTE_ROW = REMINDER_ROW + 1                       # row 49 (was 47)
 
-# v1.6: chart anchored inline next to the subtotals (cols F-K, rows 20-27)
-# rather than below the data block. Fills the empty right-side region that
-# the subtotals table (cols A-D) doesn't use, and gets the chart on page 1.
-CHART_ANCHOR_ROW = BAND_SUBTOTALS_ROW                 # row 20
-CHART_ANCHOR_COL = "F"
-CHART_BOTTOM_ROW = SORT_NOTE_ROW                  # print area ends with the notes
+# v2.5 FB-3: chart removed. Print area now ends with the sort note (SORT_NOTE_ROW).
 
 # --- Layout columns ---
 PANEL_A_COLS = ("A", "B", "C", "D", "E")   # Asset, Proceeds, Cost base, Adj gain, Tax
@@ -876,67 +869,6 @@ def _build_footer_notes(ws: Worksheet) -> None:
     ws.row_dimensions[SORT_NOTE_ROW].height = 30
 
 
-def _build_chart(ws: Worksheet, *_unused) -> None:
-    """v2.3 C-5: redesigned horizontal bar chart — clearer title, taller body
-    to fix the v2.2.0 label overflow, plain-English caption below.
-
-    Data = col F (DELTA_COL), rows DATA_FIRST_ROW..DATA_LAST_ROW.
-    Each bar = one displayed asset; length = (Scenario B − Scenario A)
-    gain delta; sorted descending (table already sorts via LARGE/MATCH).
-    """
-    chart = BarChart()
-    chart.type = "bar"          # horizontal
-    chart.style = 11
-    chart.title = "Which assets drive the change if you elect the reset (top 10)"
-    chart.y_axis.title = None
-    chart.x_axis.title = "Change in Div 296 gain ($) — bars right = unfavourable, left = favourable"
-    chart.legend = None
-    chart.visible_cells_only = False
-
-    data = Reference(
-        ws,
-        min_col=ord(DELTA_COL) - ord("A") + 1,
-        max_col=ord(DELTA_COL) - ord("A") + 1,
-        min_row=DATA_FIRST_ROW,
-        max_row=DATA_LAST_ROW,
-    )
-    cats = Reference(
-        ws,
-        min_col=1,
-        max_col=1,
-        min_row=DATA_FIRST_ROW,
-        max_row=DATA_LAST_ROW,
-    )
-    chart.add_data(data, titles_from_data=False)
-    chart.set_categories(cats)
-    chart.dataLabels = DataLabelList(
-        showVal=True, showCatName=False, showSerName=False, showLegendKey=False,
-    )
-    # v2.3: taller chart (was 9, now 13) to give category labels breathing room
-    # and reduce the v2.2.0 label-overlap issue noted in the prior handoff.
-    chart.height = 13
-    chart.width = 22
-
-    # Anchor BELOW the existing footer notes block (CHART_BOTTOM_ROW + 2),
-    # full panel width.
-    ws.add_chart(chart, f"A{CHART_BOTTOM_ROW + 2}")
-
-    # v2.3: caption immediately below the chart anchor (Excel renders the
-    # chart as a floating object — this caption sits in cell A{anchor+1} at
-    # text level so it prints with the chart).
-    cap_row = CHART_BOTTOM_ROW + 2 + 26   # chart is ~26 print rows tall
-    cap = ws.cell(
-        row=cap_row, column=1,
-        value=("Bars show the per-asset change in Division 296 gain if you "
-               "elect the reset. Bars are sorted by absolute magnitude — the "
-               "largest movers (in either direction) appear at the top."),
-    )
-    cap.font = Font(name="Arial", size=9, italic=True, color="666666")
-    cap.alignment = Alignment(horizontal="left", vertical="center",
-                              wrap_text=True, indent=1)
-    ws.merge_cells(f"A{cap_row}:{LAST_VISIBLE_COL}{cap_row}")
-
-
 def build(wb: Workbook) -> Worksheet:
     ws = wb.create_sheet(SHEET)
     ws.sheet_view.showGridLines = False
@@ -959,7 +891,6 @@ def build(wb: Workbook) -> Worksheet:
         ws, gain_a_range, gain_b_range, delta_range, headline_a, headline_b,
     )
     _build_footer_notes(ws)
-    _build_chart(ws)
 
     # --- Print header watermark (large grey text on every printed page) ---
     ws.oddHeader.center.text = "ILLUSTRATIVE — NOT ADVICE"
@@ -970,17 +901,15 @@ def build(wb: Workbook) -> Worksheet:
     ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
     ws.page_setup.paperSize = ws.PAPERSIZE_A4
     ws.page_setup.fitToWidth = 1
-    # v2.0.0: allow second page for chart (per-asset detail + chart together
-    # can exceed one landscape A4).
-    ws.page_setup.fitToHeight = 2
+    # v2.5 FB-3: chart removed — single landscape A4 page is now enough.
+    ws.page_setup.fitToHeight = 1
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.print_options.horizontalCentered = True
     ws.page_margins.left = 0.25
     ws.page_margins.right = 0.25
     ws.page_margins.top = 0.5
     ws.page_margins.bottom = 0.4
-    CHART_PRINT_BOTTOM = CHART_BOTTOM_ROW + 22       # 2-row gap + ~20-row chart
-    ws.print_area = f"A1:{LAST_VISIBLE_COL}{CHART_PRINT_BOTTOM}"
+    ws.print_area = f"A1:{LAST_VISIBLE_COL}{SORT_NOTE_ROW}"
 
     # --- Column widths ---
     # v2.4 FB-4: widened cols A and B-D for subtotals readability. Col A now

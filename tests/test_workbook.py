@@ -462,17 +462,10 @@ class TestComparison:
         # Print area now spans through col K (widened from G in v1.5).
         assert ws.print_area is not None and "K" in ws.print_area
 
-    def test_per_asset_delta_chart(self, tmp_path: Path):
-        """v2.0.0: chart is a horizontal bar of col F per-asset Δ values."""
+    def test_no_chart_v25(self, tmp_path: Path):
+        """v2.5 FB-3: chart removed — Aiden's feedback was it didn't tell a story."""
         ws = _comparison(tmp_path)
-        assert len(ws._charts) == 1, "Comparison should have exactly one chart"
-        chart = ws._charts[0]
-        assert chart.type == "bar"
-        # Series data range covers DELTA_COL across the 10 display rows
-        series = chart.ser[0]
-        assert "F" in series.val.numRef.f      # delta col
-        # Plot visible-only is OFF so the chart renders even if source is filtered
-        assert chart.visible_cells_only is False
+        assert len(ws._charts) == 0, "Comparison should have no chart (removed v2.5)"
 
 
 # --- Notes tab ------------------------------------------------------------
