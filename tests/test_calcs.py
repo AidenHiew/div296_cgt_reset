@@ -1,7 +1,8 @@
 """Spec §12 acceptance-number tests.
 
 Locked scenario: single member, TSB $12,000,000, all assets held > 12mo,
-discount ON, $10m tier OFF. Three assets per §12 table.
+discount ON, $10m tier ON (v2.5 default — Bill-correct for TSB > $10m).
+Three assets per §12 table.
 
 All expected numbers are whole-dollar rounded as per §12 (the dollar
 amounts in the spec are rounded; we round our floats the same way).
@@ -86,12 +87,12 @@ def test_package_version():
     assert __version__ == "2.4.0"
 
 
-# --- §12 scenario: reset ON, discount ON, tier OFF -----------------------
+# --- §12 scenario: reset ON, discount ON, tier ON ------------------------
 
 class TestResetOn:
     reset_on = True
     discount_on = True
-    tier10_on = False
+    tier10_on = True
 
     def test_member_proportion(self):
         # (12m - 3m) / 12m = 0.75
@@ -157,13 +158,16 @@ class TestResetOn:
 
     # Headline Div 296 tax (member-attributed)
     def test_div296_headline_tax(self):
+        # earnings = $253,333.33; tier ON splits by TSB bands for $12m member:
+        # band1 = ($10m-$3m)/$12m = 7/12;  band2 = ($12m-$10m)/$12m = 2/12.
+        # tax = $253,333.33 × (7/12×15% + 2/12×25%) = $32,722.22
         v = div296_headline_tax(
             REGISTER, MEMBERS,
             self.reset_on, self.discount_on, A.discount_rate,
             self.tier10_on, A.threshold_1, A.threshold_2,
             A.rate_tier1, A.rate_tier2,
         )
-        assert _r(v) == 28_500
+        assert _r(v) == 32_722
 
     # Per-asset Div 296 tax — pro-rata of headline
     def test_per_asset_div296_pro_rata_property(self):
@@ -177,7 +181,8 @@ class TestResetOn:
             PROPERTY, REGISTER, headline,
             self.reset_on, self.discount_on, A.discount_rate,
         )
-        assert _r(v) == 15_000
+        # 133,333/253,333 × 32,722 = 17,222
+        assert _r(v) == 17_222
 
     def test_per_asset_div296_pro_rata_shares(self):
         headline = div296_headline_tax(
@@ -190,7 +195,8 @@ class TestResetOn:
             SHARES, REGISTER, headline,
             self.reset_on, self.discount_on, A.discount_rate,
         )
-        assert _r(v) == 6_000
+        # 53,333/253,333 × 32,722 = 6,889
+        assert _r(v) == 6_889
 
     def test_per_asset_div296_pro_rata_loss(self):
         headline = div296_headline_tax(
@@ -203,7 +209,8 @@ class TestResetOn:
             LOSS, REGISTER, headline,
             self.reset_on, self.discount_on, A.discount_rate,
         )
-        assert _r(v) == 7_500
+        # 66,667/253,333 × 32,722 = 8,611  (reset turns the loss asset into a Div 296 gain)
+        assert _r(v) == 8_611
 
     def test_per_asset_div296_sum_ties_to_headline(self):
         """Locked decision: pro-rata sum always reconciles to headline."""
@@ -228,12 +235,12 @@ class TestResetOn:
         assert _r(total) == 300_000
 
 
-# --- §12 scenario: reset OFF, discount ON, tier OFF ----------------------
+# --- §12 scenario: reset OFF, discount ON, tier ON -----------------------
 
 class TestResetOff:
     reset_on = False
     discount_on = True
-    tier10_on = False
+    tier10_on = True
 
     def test_property_div296_adjusted_gain(self):
         # (2,600,000 - 800,000) × 2/3 = 1,200,000
@@ -256,24 +263,24 @@ class TestResetOff:
         assert _r(v) == 1_400_000
 
     def test_div296_headline_tax(self):
-        # 1,400,000 × 75% × 15% = 157,500
+        # 1,400,000 × (7/12 × 15% + 2/12 × 25%) = 180,833
         v = div296_headline_tax(
             REGISTER, MEMBERS,
             self.reset_on, self.discount_on, A.discount_rate,
             self.tier10_on, A.threshold_1, A.threshold_2,
             A.rate_tier1, A.rate_tier2,
         )
-        assert _r(v) == 157_500
+        assert _r(v) == 180_833
 
 
 # --- Comparison footer self-check ----------------------------------------
 
 def test_net_effect_of_electing_reset():
-    """Spec §12 footer: 157,500 − 28,500 = 129,000."""
+    """v2.5 default (tier ON): 180,833 − 32,722 = 148,111 saved by electing reset."""
     common = dict(
         discount_on=True,
         discount_rate=A.discount_rate,
-        tier10_on=False,
+        tier10_on=True,
         threshold_1=A.threshold_1,
         threshold_2=A.threshold_2,
         rate_tier1=A.rate_tier1,
@@ -281,9 +288,9 @@ def test_net_effect_of_electing_reset():
     )
     off = div296_headline_tax(REGISTER, MEMBERS, reset_on=False, **common)
     on = div296_headline_tax(REGISTER, MEMBERS, reset_on=True, **common)
-    assert _r(off) == 157_500
-    assert _r(on) == 28_500
-    assert _r(off - on) == 129_000
+    assert _r(off) == 180_833
+    assert _r(on) == 32_722
+    assert _r(off - on) == 148_111
 
 
 # --- Tier 2 ON scenario (spec §7) ----------------------------------------
