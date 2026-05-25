@@ -34,7 +34,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 from div296 import named_ranges as nr
 from div296.assumptions import ASSUMPTIONS
 from div296.styles import (
-    BODY_FONT, CENTER, FMT_CURRENCY, FMT_INT, FMT_PERCENT, FMT_PERCENT_3,
+    BODY_FONT, CENTER, FMT_CURRENCY, FMT_PERCENT, FMT_PERCENT_3,
     FMT_TEXT, INPUT_FILL, INPUT_FONT, SECTION_BAND_FILL,
     SECTION_BAND_FONT, THIN_BOX, TITLE_FONT,
 )
@@ -398,7 +398,7 @@ def build(wb: Workbook) -> Worksheet:
     # v2.3: Alternating row shading (zebra) for readability — odd offsets only,
     # subtle so it doesn't fight the loss-position pink CF when both apply.
     zebra_rule = FormulaRule(
-        formula=[f'MOD(ROW(),2)=0'],
+        formula=['MOD(ROW(),2)=0'],
         fill=PatternFill("solid", fgColor="F7F9F8"),
     )
     ws.conditional_formatting.add(f"A{reg_first}:I{reg_last}", zebra_rule)
