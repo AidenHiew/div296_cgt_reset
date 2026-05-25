@@ -941,14 +941,17 @@ def build(wb: Workbook) -> Worksheet:
     ws.page_margins.bottom = 0.4
     ws.print_area = f"A1:{LAST_VISIBLE_COL}{SORT_NOTE_ROW}"
 
-    # --- Column widths (v2.5 FB-7 layout) ---
-    # A-E  Panel A + subtotals: A holds long labels; B-D currency values.
+    # --- Column widths (v2.5 FB-7 + FB-9 layout) ---
+    # A-E  Panel A + subtotals: A holds long labels; B-D wider for the new
+    #      "If no reset (default)" / "If elected to reset" headers (used by
+    #      subtotals + per-member breakdown); E carries Change for subtotals
+    #      and Tax for Panel A.
     # F-J  Panel B (asset, proceeds, cost base, gain, tax) — same shape as A.
-    # K    Change column (tax delta) — rightmost.
+    # K    Change column (signed tax delta) — rightmost; bracket-friendly width.
     widths = {
-        "A": 36, "B": 16, "C": 16, "D": 16, "E": 14,    # Panel A + subtotals
+        "A": 36, "B": 16, "C": 20, "D": 20, "E": 16,    # Panel A + subtotals
         "F": 26, "G": 14, "H": 16, "I": 16, "J": 14,    # Panel B
-        "K": 14,                                         # Change
+        "K": 16,                                         # Change
     }
     for col_letter, w in widths.items():
         ws.column_dimensions[col_letter].width = w
