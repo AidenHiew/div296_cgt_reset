@@ -18,3 +18,11 @@ Thumbs.db
 # Excel lock files
 ~$*.xlsx
 .claude/
+
+# Local session handoff notes
+docs/handoffs/
+
+# Loose feedback notes in repo root (raw client feedback before triage).
+# If they should be tracked, move into docs/feedback/ and commit there.
+/FEEDBACK FROM AIDEN*
+/div296_tool_improvement_list_*.md

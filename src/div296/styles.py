@@ -72,6 +72,11 @@ THIN_BOX = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 
 # --- Number formats ---
 FMT_CURRENCY = '$#,##0;($#,##0);"-"'
+# v2.5 polish: signed-delta currency. Negatives = a tax reduction = a SAVING
+# for the client. Shown in dark accountant-green ([Color10] = #008000) so the
+# eye picks up "this is a saving" immediately. Used on every Difference
+# column (headline card, subtotals, per-member, per-asset).
+FMT_CURRENCY_DELTA = '$#,##0;[Color10]($#,##0);"-"'
 FMT_PERCENT = "0.0%"
 FMT_PERCENT_3 = "0.000%"     # for the CGT discount rate (spec calls for 33.333%)
 FMT_INT = "#,##0"

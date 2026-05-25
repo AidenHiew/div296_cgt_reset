@@ -24,7 +24,7 @@ class Asset:
     name: str
     quantity: float
     original_cost_base: float
-    total_value: float
+    current_market_value: float
     market_value_30jun2026: float
     valuation_source: str
     projected_sale_proceeds: float
