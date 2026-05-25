@@ -326,10 +326,12 @@ def _build_per_register_helpers(ws: Worksheet) -> tuple[str, str, str]:
     """
     n_first, n_last = REGISTER_FIRST_DATA_ROW, REGISTER_LAST_DATA_ROW
     for n in range(n_first, n_last + 1):
-        proceeds = f"{INPUTS_SHEET}!H{n}"
-        orig = f"{INPUTS_SHEET}!D{n}"
-        mv = f"{INPUTS_SHEET}!F{n}"
-        held = f"{INPUTS_SHEET}!I{n}"
+        # v2.3 Inputs column layout: A code / B name / C orig CB / D MV today
+        # / E MV 30 Jun / F val source / G proceeds / H projected G/L / I held
+        proceeds = f"{INPUTS_SHEET}!G{n}"   # was H
+        orig = f"{INPUTS_SHEET}!C{n}"        # was D
+        mv = f"{INPUTS_SHEET}!E{n}"          # was F
+        held = f"{INPUTS_SHEET}!I{n}"        # unchanged
         ws[f"{PER_REG_GAIN_A_COL}{n}"] = _div296_adj_formula(proceeds, orig, held)
         ws[f"{PER_REG_GAIN_B_COL}{n}"] = _div296_adj_formula(proceeds, mv, held)
         # Tiebreaker: a small positive amount that decreases with register row,
@@ -649,11 +651,12 @@ def _build_per_asset_detail(
         def _input(col: str) -> str:
             return f"INDEX({INPUTS_SHEET}!${col}:${col},{matched})"
 
+        # v2.3: Inputs col letters shifted — D→C (orig), F→E (MV), H→G (proceeds)
         a_code  = _input("A")
         a_name  = _input("B")
-        a_orig  = _input("D")
-        a_mv    = _input("F")
-        a_proc  = _input("H")
+        a_orig  = _input("C")   # was D
+        a_mv    = _input("E")   # was F
+        a_proc  = _input("G")   # was H
 
         # Pre-computed gains from the per-register grid (cols N/O).
         gain_a_lookup = f"INDEX(${PER_REG_GAIN_A_COL}:${PER_REG_GAIN_A_COL},{matched})"

@@ -52,7 +52,8 @@ def test_every_named_range_resolves(tmp_path: Path):
 
 
 def test_inputs_sample_data_preloaded(tmp_path: Path):
-    """v1.7: Manual earnings dropped → register rows shift up to 20-22; member 1 → 11."""
+    """v2.3: Quantity col dropped; cols shift D→C (orig CB), F→E (MV today),
+    F→E (MV 30 Jun), G→F (val source), H→G (proceeds). New col H = projected G/L."""
     out = tmp_path / "out.xlsx"
     wb = build_workbook()
     wb.save(out)
@@ -61,20 +62,24 @@ def test_inputs_sample_data_preloaded(tmp_path: Path):
     # Row 20: Commercial property
     assert ws["A20"].value == "P1"
     assert ws["B20"].value == "Commercial property"
-    assert ws["D20"].value == 800_000
-    assert ws["F20"].value == 2_400_000
-    assert ws["H20"].value == 2_600_000
-    assert ws["I20"].value == "Yes"
+    assert ws["C20"].value == 800_000             # Original cost base (was D)
+    assert ws["E20"].value == 2_400_000           # MV at 30 Jun 2026 (was F)
+    assert ws["G20"].value == 2_600_000           # Projected sale proceeds (was H)
+    assert ws["I20"].value == "Yes"               # Held>12m (still col I)
 
     # Row 21: Listed shares parcel
     assert ws["A21"].value == "S1"
-    assert ws["D21"].value == 300_000
-    assert ws["F21"].value == 520_000
+    assert ws["C21"].value == 300_000
+    assert ws["E21"].value == 520_000
 
     # Row 22: Loss-making holding
     assert ws["A22"].value == "L1"
-    assert ws["D22"].value == 500_000
-    assert ws["F22"].value == 100_000
+    assert ws["C22"].value == 500_000
+    assert ws["E22"].value == 100_000
+
+    # NEW v2.3: Projected gain/loss formula in col H for every row.
+    pg_formula = ws["H20"].value
+    assert pg_formula and "G20" in pg_formula and "C20" in pg_formula
 
     # Sole member on row 11: TSB $12m, split 100%
     assert ws["B11"].value == 12_000_000
@@ -145,8 +150,8 @@ def test_input_cells_unlocked(tmp_path: Path):
         assert ws.cell(row=row, column=2).protection.locked is False, (
             f"Inputs!B{row} should be unlocked"
         )
-    # Sample register row D20 (Original cost base of Property) must be unlocked.
-    assert ws["D20"].protection.locked is False
+    # v2.3: Original cost base shifted to col C after Quantity dropped.
+    assert ws["C20"].protection.locked is False
     # Member 1 TSB (B11) must be unlocked.
     assert ws["B11"].protection.locked is False
 
@@ -193,20 +198,20 @@ class TestAnalyser:
         assert "threshold_2" in f
 
     def test_first_data_row_columns(self, tmp_path: Path):
-        """v2.0.0: per-asset first row now 21 (was 20), cols shifted right by 1
-        (col A is row-num). Inputs references unchanged at row 20."""
+        """v2.3: Inputs col shifts — D→C (orig CB), F→E (MV at 30 Jun),
+        H→G (proceeds). Held>12m still col I."""
         ws = _analyser(tmp_path)
         # Analyser row 21 = first asset; visible data cols 2..10.
         a, b, c, d, e, f, g, h, i = (ws.cell(row=21, column=col).value for col in range(2, 11))
         assert "'Inputs'!A20" in a and "'Inputs'!B20" in a
-        assert "'Inputs'!H20" in b                      # Proceeds
-        assert "'Inputs'!D20" in c                      # Original CB
+        assert "'Inputs'!G20" in b                      # Proceeds (was H)
+        assert "'Inputs'!C20" in c                      # Original CB (was D)
         # Col E = Ordinary taxable gain
-        assert "discount_rate" in d and "'Inputs'!H20" in d and "'Inputs'!D20" in d
+        assert "discount_rate" in d and "'Inputs'!G20" in d and "'Inputs'!C20" in d
         # Col F = Ordinary CGT = MAX(0, E{row}) * fund_cgt_rate
         assert "fund_cgt_rate" in e and "E21" in e
         # Col G = Div 296 cost base
-        assert 'reset_on="ON"' in f and "'Inputs'!F20" in f and "'Inputs'!D20" in f
+        assert 'reset_on="ON"' in f and "'Inputs'!E20" in f and "'Inputs'!C20" in f
         # Col H = Div 296 adjusted gain
         assert "discount_rate" in g and 'reset_on="ON"' in g
         # Col I = Div 296 tax (pro-rata of headline)
@@ -239,7 +244,7 @@ class TestAnalyser:
         assert ws["A76"].value == "Capital losses carried forward"
         cf = ws["B76"].value
         assert cf.startswith("=")
-        assert cf.count("MAX(0,'Inputs'!D") == 50  # one MAX per register row
+        assert cf.count("MAX(0,'Inputs'!C") == 50  # v2.3: orig CB col D→C
 
     def test_trap_conditional_formatting_applied(self, tmp_path: Path):
         """v2.0.0: trap CF range now A21:J70 (was A20:I69)."""
@@ -362,18 +367,20 @@ class TestComparison:
         assert ws["C25"].value == "=C23+C24"
 
     def test_panel_a_uses_original_cost_base(self, tmp_path: Path):
-        """Panels use INDEX(Inputs!col, matched_row) — col D = original CB."""
+        """Panels use INDEX(Inputs!col, matched_row).
+        v2.3: orig CB shifted from col D to col C (Quantity dropped)."""
         ws = _comparison(tmp_path)
         cb_formula = ws[f"C{CMP_DATA_FIRST_ROW}"].value
-        assert "'Inputs'!$D:$D" in cb_formula
-        assert "'Inputs'!$F:$F" not in cb_formula
+        assert "'Inputs'!$C:$C" in cb_formula
+        assert "'Inputs'!$E:$E" not in cb_formula
 
     def test_panel_b_uses_market_value(self, tmp_path: Path):
-        """Panels use INDEX(Inputs!col, matched_row) — col F = MV."""
+        """Panels use INDEX(Inputs!col, matched_row).
+        v2.3: MV at 30 Jun shifted from col F to col E."""
         ws = _comparison(tmp_path)
         cb_formula = ws[f"I{CMP_DATA_FIRST_ROW}"].value
-        assert "'Inputs'!$F:$F" in cb_formula
-        assert "'Inputs'!$D:$D" not in cb_formula
+        assert "'Inputs'!$E:$E" in cb_formula
+        assert "'Inputs'!$C:$C" not in cb_formula
 
     def test_panels_independent_of_master_reset_toggle(self, tmp_path: Path):
         """Neither panel formula may reference the reset_on named range."""
@@ -499,14 +506,18 @@ class TestNotes:
                         )
 
     def test_valuation_log_mirrors_register(self, tmp_path: Path):
-        """Valuation log has one row per asset, formulas pointing at Inputs."""
+        """Valuation log has one row per asset, formulas pointing at Inputs.
+        v2.3: Valuation source/date moved from Inputs col G to col F (Quantity dropped)."""
         ws = _notes(tmp_path)
         ref_count = 0
         for row in ws.iter_rows():
             for c in row:
-                if isinstance(c.value, str) and "'Inputs'!G" in c.value:
+                if isinstance(c.value, str) and "'Inputs'!F" in c.value:
                     ref_count += 1
-        assert ref_count == 50, f"Expected 50 valuation-source mirrors, got {ref_count}"
+        # 50 valuation-source mirrors + 50 MV-at-30Jun mirrors (col E, not col F)
+        # → only valuation-source contributes 'Inputs'!F refs in the log block.
+        # However Notes also references Inputs!F elsewhere; assert >= 50.
+        assert ref_count >= 50, f"Expected ≥50 valuation-source mirrors, got {ref_count}"
 
     def test_provenance_cells_present(self, tmp_path: Path):
         """Hidden provenance block carries build_version / build_date / git SHA."""

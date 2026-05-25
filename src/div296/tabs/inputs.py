@@ -71,21 +71,29 @@ REGISTER_LAST_DATA_ROW = REGISTER_FIRST_DATA_ROW + ASSUMPTIONS.asset_register_ro
 REGISTER_HEADERS = [
     ("Asset code", FMT_TEXT),
     ("Asset name", FMT_TEXT),
-    ("Quantity", FMT_INT),
-    ("Original cost base", FMT_CURRENCY),
-    ("Current market value (as at today)", FMT_CURRENCY),
-    ("Market value at 30 Jun 2026", FMT_CURRENCY),
-    ("Valuation source / date", FMT_TEXT),
-    ("Projected sale proceeds", FMT_CURRENCY),
-    ("Held > 12 months?", FMT_TEXT),
+    # v2.3: Quantity column dropped — unused by every downstream tab.
+    ("Original cost base", FMT_CURRENCY),                # was col D
+    ("Current market value (as at today)", FMT_CURRENCY),# was col E
+    ("Market value at 30 Jun 2026", FMT_CURRENCY),       # was col F
+    ("Valuation source / date", FMT_TEXT),               # was col G (kept — Notes audit log mirrors this)
+    ("Projected sale proceeds", FMT_CURRENCY),           # was col H
+    ("Projected gain/loss", FMT_CURRENCY),               # NEW col H v2.3 (= proceeds − original CB)
+    ("Held > 12 months?", FMT_TEXT),                     # was col I, still col I
 ]
 
+# Indices (1-based) for special-case col handling in the register loop.
+REGISTER_COL_ORIG_CB = 3            # was 4
+REGISTER_COL_PROCEEDS = 7           # was 8
+REGISTER_COL_PROJ_GL = 8            # NEW
+REGISTER_COL_HELD = 9               # was 9 (col letter unchanged)
+
 SAMPLE_REGISTER_ROWS = [
-    ("P1", "Commercial property",   1,     800_000, 2_400_000, 2_400_000,
+    # Order matches REGISTER_HEADERS minus the Projected gain/loss col (formula-driven).
+    ("P1", "Commercial property",   800_000, 2_400_000, 2_400_000,
      "Independent val, 30/06/26",   2_600_000, "Yes"),
-    ("S1", "Listed shares parcel",  5_000, 300_000, 520_000,   520_000,
+    ("S1", "Listed shares parcel",  300_000, 520_000,   520_000,
      "ASX close 30/06/26",          600_000,   "Yes"),
-    ("L1", "Loss-making holding",   2_000, 500_000, 100_000,   100_000,
+    ("L1", "Loss-making holding",   500_000, 100_000,   100_000,
      "Independent val, 30/06/26",   200_000,   "Yes"),
 ]
 
@@ -266,10 +274,27 @@ def build(wb: Workbook) -> Worksheet:
         f"3. Asset register (50 rows; sample data pre-loaded in rows "
         f"{REGISTER_FIRST_DATA_ROW}–{REGISTER_FIRST_DATA_ROW + len(SAMPLE_REGISTER_ROWS) - 1})",
     )
+
+    # v2.3: Header row coloured by column group for visual grouping
+    # (Identity / Cost & value / Sale & CGT outcome) without inserting a
+    # sub-header row — keeps REGISTER_FIRST_DATA_ROW stable so downstream
+    # tabs do not need cascading row updates.
+    REG_HEADER_GROUPS = {
+        # col_idx (1-based): group_fill
+        1: SECTION_BAND_FILL,           # Identity
+        2: SECTION_BAND_FILL,           # Identity
+        3: PatternFill("solid", fgColor="3F4F4A"),  # Cost & value (slate)
+        4: PatternFill("solid", fgColor="3F4F4A"),
+        5: PatternFill("solid", fgColor="3F4F4A"),
+        6: PatternFill("solid", fgColor="3F4F4A"),
+        7: PatternFill("solid", fgColor="4A6B5E"),  # Sale & CGT outcome (sage-teal)
+        8: PatternFill("solid", fgColor="4A6B5E"),
+        9: PatternFill("solid", fgColor="4A6B5E"),
+    }
     for col_idx, (header, _fmt) in enumerate(REGISTER_HEADERS, start=1):
         c = ws.cell(row=REGISTER_HEADER_ROW, column=col_idx, value=header)
         c.font = SECTION_BAND_FONT
-        c.fill = SECTION_BAND_FILL
+        c.fill = REG_HEADER_GROUPS.get(col_idx, SECTION_BAND_FILL)
         c.alignment = CENTER
 
     # Held>12mo dropdown shared across all 50 rows.
@@ -279,22 +304,68 @@ def build(wb: Workbook) -> Worksheet:
     for offset in range(ASSUMPTIONS.asset_register_rows):
         row = REGISTER_FIRST_DATA_ROW + offset
         sample = SAMPLE_REGISTER_ROWS[offset] if offset < len(SAMPLE_REGISTER_ROWS) else None
+        # Sample data covers cols 1..7 + 9 (skip the formula-driven Projected G/L).
+        # When walking REGISTER_HEADERS, the sample tuple index trails by 1 once
+        # we pass col 8 (Projected G/L).
         for col_idx, (_header, fmt) in enumerate(REGISTER_HEADERS, start=1):
             coord = ws.cell(row=row, column=col_idx).coordinate
-            value = sample[col_idx - 1] if sample else None
-            _input_cell(ws, coord, value=value, number_format=fmt)
+            if col_idx == REGISTER_COL_PROJ_GL:
+                # Formula: proceeds (col G) − original cost base (col C).
+                # Blank if either source cell is empty.
+                value = (
+                    f'=IF(AND(C{row}<>"",G{row}<>""),G{row}-C{row},"")'
+                )
+                _input_cell(ws, coord, value=value, number_format=fmt)
+            else:
+                # Sample data indexing: cols < PROJ_GL use col_idx-1 directly;
+                # cols > PROJ_GL shift back by one to skip the formula col.
+                if sample is None:
+                    value = None
+                elif col_idx < REGISTER_COL_PROJ_GL:
+                    value = sample[col_idx - 1]
+                else:
+                    value = sample[col_idx - 2]
+                _input_cell(ws, coord, value=value, number_format=fmt)
         held_dv.add(f"I{row}")
 
-    # v2.2.0: Loss-position highlight — tint any register row whose current
-    # market value (col E) is below its original cost base (col D). Cosmetic
-    # only; nothing in the calc engine reads from this.
+    # v2.3: CF for Projected gain/loss column — green text for gain (>0),
+    # red text for loss (<0). Subtle so the column doesn't shout.
+    pl_first = REGISTER_FIRST_DATA_ROW
+    pl_last = REGISTER_LAST_DATA_ROW
+    gl_range = f"H{pl_first}:H{pl_last}"
+    ws.conditional_formatting.add(
+        gl_range,
+        FormulaRule(
+            formula=[f'AND(ISNUMBER(H{pl_first}),H{pl_first}>0)'],
+            font=Font(name="Arial", size=10, color="0B6E4F"),
+        ),
+    )
+    ws.conditional_formatting.add(
+        gl_range,
+        FormulaRule(
+            formula=[f'AND(ISNUMBER(H{pl_first}),H{pl_first}<0)'],
+            font=Font(name="Arial", size=10, color="A61B1B"),
+        ),
+    )
+
+    # v2.2.0/v2.3: Loss-position highlight — tint any register row whose current
+    # market value (col D, was E) is below its original cost base (col C, was D).
+    # Cosmetic only; nothing in the calc engine reads from this.
     reg_first = REGISTER_FIRST_DATA_ROW
     reg_last = REGISTER_LAST_DATA_ROW
     loss_rule = FormulaRule(
-        formula=[f'AND($D{reg_first}<>"",$E{reg_first}<>"",$E{reg_first}<$D{reg_first})'],
+        formula=[f'AND($C{reg_first}<>"",$D{reg_first}<>"",$D{reg_first}<$C{reg_first})'],
         fill=PatternFill("solid", fgColor="FBE9E9"),
     )
     ws.conditional_formatting.add(f"A{reg_first}:I{reg_last}", loss_rule)
+
+    # v2.3: Alternating row shading (zebra) for readability — odd offsets only,
+    # subtle so it doesn't fight the loss-position pink CF when both apply.
+    zebra_rule = FormulaRule(
+        formula=[f'MOD(ROW(),2)=0'],
+        fill=PatternFill("solid", fgColor="F7F9F8"),
+    )
+    ws.conditional_formatting.add(f"A{reg_first}:I{reg_last}", zebra_rule)
 
     # --- Zone 4: Advanced assumptions (set-once constants — bottom) ---
     _band(ws, ADV_BAND_ROW, "4. Advanced assumptions (set once)")
@@ -306,7 +377,10 @@ def build(wb: Workbook) -> Worksheet:
         _define_name(wb, name, coord)
 
     # --- Column widths + freeze ---
-    widths = [32, 26, 10, 18, 18, 26, 26, 20, 18]
+    # v2.3 layout (9 cols):
+    # A Code 32 / B Name 26 / C Orig CB 18 / D MV today 18 / E MV 30Jun 22
+    # F Val source 24 / G Proceeds 18 / H Projected G/L 18 / I Held>12m 16
+    widths = [32, 26, 18, 18, 22, 24, 18, 18, 16]
     for col_idx, w in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(col_idx)].width = w
     # Freeze below the title + sample badge + TSB diagnostic so they remain sticky.
