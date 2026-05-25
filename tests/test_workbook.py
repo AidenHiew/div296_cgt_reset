@@ -341,20 +341,21 @@ class TestComparison:
         assert "tier10_on" in values_row_text
 
     def test_metric_cards_present(self, tmp_path: Path):
-        """v2.2.0: card labels rewritten in client-readable English."""
+        """v2.5 FB-4: card labels standardised across all sections; Change card is SIGNED."""
         ws = _comparison(tmp_path)
-        # Card labels — plain-English framing
-        assert "Default outcome" in ws["A17"].value
-        assert "no election" in ws["A17"].value
-        assert "elect the reset" in ws["E17"].value
-        assert "30 Jun 2026" in ws["E17"].value
-        assert "Change if you elect" in ws["I17"].value
+        assert ws["A17"].value == "If no reset (default)"
+        assert ws["E17"].value == "If elected to reset"
+        assert ws["I17"].value == "Change"
         # Card values point at the headline cells L6/M6.
         assert "L$6" in ws["A18"].value or "L6" in ws["A18"].value
         assert "M$6" in ws["E18"].value or "M6" in ws["E18"].value
-        # Net-effect card is A − B = L6 − M6
+        # v2.5: Change card is now SIGNED — reset − default (negative = saving).
         net = ws["I18"].value
-        assert ("L" in net and "M" in net and "-" in net), f"unexpected net-effect formula {net!r}"
+        assert ("M" in net and "L" in net and "-" in net), f"unexpected change formula {net!r}"
+        # M must appear before L (i.e. M-L, not L-M).
+        assert net.index("M") < net.index("L"), (
+            f"Change card should be reset − default (M-L), got {net!r}"
+        )
 
     def test_subtotals_table(self, tmp_path: Path):
         """v1.5: subtotals at rows 22-25 — earnings, ord CGT (unchanged), Div 296 tax, total burden."""
