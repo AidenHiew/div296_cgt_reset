@@ -321,19 +321,22 @@ class TestComparison:
         assert "ILLUSTRATIVE" in ws.oddHeader.center.text
 
     def test_context_strip_present(self, tmp_path: Path):
-        """v1.7: context strip values reference Inputs!B11 (member 1 TSB after Manual removal)."""
+        """v2.4 FB-3: context strip is now fund-aggregate, not Member-1-only.
+        TSB cell = SUM across all members; Proportion cell = MAX across members."""
         ws = _comparison(tmp_path)
         labels_row_text = " ".join(
             str(c.value) for c in ws[13] if c.value is not None
         )
-        assert "TSB" in labels_row_text
-        assert "Proportion above $3m" in labels_row_text
+        assert "Total fund TSB" in labels_row_text
+        assert "Highest member proportion above $3m" in labels_row_text
         assert "CGT discount" in labels_row_text
         assert "tier" in labels_row_text.lower()
         values_row_text = " ".join(
             str(c.value) for c in ws[14] if c.value is not None
         )
-        assert "'Inputs'!B11" in values_row_text   # member 1 TSB
+        # Fund-aggregate references: SUM of TSB col, MAX of auto-proportion col
+        assert "SUM('Inputs'!B11:B14)" in values_row_text
+        assert "MAX('Inputs'!D11:D14)" in values_row_text
         assert "discount_on" in values_row_text
         assert "tier10_on" in values_row_text
 

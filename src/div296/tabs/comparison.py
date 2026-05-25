@@ -275,11 +275,19 @@ def _build_header_block(ws: Worksheet) -> None:
 
 def _build_context_strip(ws: Worksheet) -> None:
     """A small block showing the assumptions driving the headline numbers.
-    Computed live from Inputs."""
+    Computed live from Inputs.
+
+    v2.4 FB-3: TSB + proportion cells are now FUND-LEVEL aggregates rather
+    than Member-1-only. Per-member detail lives in the Per-member breakdown
+    block lower down (added v2.3). The user's complaint was that with 4
+    members entered, the top strip still read "Member 1 TSB" — fixed here.
+    """
+    last_member_row = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count - 1
+
     # Labels (row 13)
     labels = [
-        ("A:C", "Member 1 TSB"),
-        ("D:F", "Proportion above $3m"),
+        ("A:C", "Total fund TSB"),
+        ("D:F", "Highest member proportion above $3m"),
         ("G:H", "CGT discount"),
         ("I:K", "$10m / +25% tier"),
     ]
@@ -291,12 +299,13 @@ def _build_context_strip(ws: Worksheet) -> None:
         ws.merge_cells(f"{merge_range.split(':')[0]}{CONTEXT_LABEL_ROW}:"
                        f"{merge_range.split(':')[1]}{CONTEXT_LABEL_ROW}")
 
-    # Values (row 14) — live references to Inputs
+    # Values (row 14) — fund-aggregate references to Inputs.
+    # MAX of col D (auto-proportion) gives the threshold-trigger reading
+    # the user actually needs at a glance: when MAX > 0, Div 296 applies
+    # to at least one member.
     values = [
-        ("A:C", f"={INPUTS_SHEET}!B{MEMBERS_FIRST_DATA_ROW}",                 FMT_CURRENCY),
-        ("D:F", (f'=IF({INPUTS_SHEET}!E{MEMBERS_FIRST_DATA_ROW}="",'
-                 f'{INPUTS_SHEET}!D{MEMBERS_FIRST_DATA_ROW},'
-                 f'{INPUTS_SHEET}!E{MEMBERS_FIRST_DATA_ROW})'),               FMT_PERCENT),
+        ("A:C", f"=SUM({INPUTS_SHEET}!B{MEMBERS_FIRST_DATA_ROW}:B{last_member_row})", FMT_CURRENCY),
+        ("D:F", f"=MAX({INPUTS_SHEET}!D{MEMBERS_FIRST_DATA_ROW}:D{last_member_row})", FMT_PERCENT),
         ("G:H", "=discount_on",                                               None),
         ("I:K", "=tier10_on",                                                 None),
     ]
@@ -312,6 +321,20 @@ def _build_context_strip(ws: Worksheet) -> None:
         ws.merge_cells(f"{start}{CONTEXT_VALUE_ROW}:{end}{CONTEXT_VALUE_ROW}")
 
     ws.row_dimensions[CONTEXT_VALUE_ROW].height = 22
+
+    # v2.4 FB-3: breadcrumb pointing at the Per-member breakdown block,
+    # so a reader who wants individual-member detail knows where to look.
+    # Fills the empty row that sits between the strip and the headline cards
+    # (row 15 — no row shift).
+    breadcrumb_row = CONTEXT_VALUE_ROW + 1
+    bc = ws.cell(
+        row=breadcrumb_row, column=1,
+        value="See the Per-member breakdown block below for individual member figures.",
+    )
+    bc.font = Font(name="Arial", size=9, italic=True, color="666666")
+    bc.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+    ws.merge_cells(f"A{breadcrumb_row}:{LAST_VISIBLE_COL}{breadcrumb_row}")
+    ws.row_dimensions[breadcrumb_row].height = 14
 
 
 def _build_per_register_helpers(ws: Worksheet) -> tuple[str, str, str]:
