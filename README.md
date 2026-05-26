@@ -1,15 +1,28 @@
 # Division 296 CGT Cost Base Reset Model
 
+**Author & maintainer:** Aiden Hiew · **License:** Proprietary — see [LICENSE](LICENSE)
+
 A Microsoft Excel workbook (`.xlsx`) that illustrates Division 296 tax outcomes for SMSFs and makes the case for pre–30 June 2026 action on assets sitting in an unrealised-loss position (the "reset trap").
 
-**Status:** v2.5.0 — stable. Client-feedback pass #3 over v2.4.0 (8 items: calc-default flip, Inputs member 2, full Comparison rewrite). Workbook, builder, tests, and PDF export all green.
+**Status:** v2.6.0 — stable. Authorship & provenance pass over v2.5.0 (workbook author metadata, visible attribution, print footers, LICENSE, source-package author fields).
 
 **Previous releases:**
-- v2.4.0 (frozen as reference; artifact `dist/Division_296_Model_v2.5.0.xlsx`). Client-feedback pass over v2.3.0 (4 items).
+- v2.5.0 (frozen as reference; artifact `dist/Division_296_Model_v2.5.0.xlsx`). Client-feedback pass #3 over v2.4.0 (8 items: calc-default flip, Inputs member 2, full Comparison rewrite).
+- v2.4.0 (frozen as reference; artifact `dist/Division_296_Model_v2.4.0.xlsx`). Client-feedback pass over v2.3.0 (4 items).
 - v2.3.0 (frozen as reference; artifact `dist/Division_296_Model_v2.3.0.xlsx`). Client-feedback pass over v2.2.0 (16 items).
 - v2.2.0 (frozen as reference; artifact `dist/Division_296_Model_v2.2.0.xlsx`). Client-readability pass over v2.0.0.
 - v2.0.0 (frozen as reference; tag `v2.0.0`, artifact `dist/Division_296_Model_v2.0.0.xlsx`). UX pass over v1.0.0.
 - v1.0.0 (frozen as reference; tag `v1.0.0`, artifact `dist/Division_296_Model_v1.0.0.xlsx`).
+
+**What's new in v2.6.0:**
+- **Workbook authorship** — Core Properties now stamp `creator = Aiden Hiew`, `lastModifiedBy = Aiden Hiew`, plus title/subject/description/keywords. Visible in Excel under File → Info.
+- **Visible attribution on Notes tab** — small italic line directly under the title: `Prepared by: Aiden Hiew · Model version v2.6.0 · Built YYYY-MM-DD`. Survives screenshots and PDF export.
+- **Print footer on every tab** — `Prepared by Aiden Hiew` (left) / `v2.6.0 | Page X of N` (right) in soft grey 8pt. Carries attribution onto every printed page and exported PDF.
+- **LICENSE** — added a proprietary "all rights reserved" LICENSE at repo root with copyright line, permitted-use scope, no-warranty and not-advice disclaimers.
+- **README author line** — `Author & maintainer: Aiden Hiew · License: Proprietary` directly under the title.
+- **Source-package metadata** — `pyproject.toml` authors/maintainers set to `Aiden Hiew` with GitHub noreply email; `src/div296/__init__.py` exposes `__author__ = "Aiden Hiew"`.
+- **pyproject version sync** — bumped `pyproject.toml` `version` to `2.6.0` (was stale at `1.0.0`).
+- No calc changes, no UI changes to existing cells, no acceptance-number changes — v2.6.0 is byte-identical to v2.5.0 for every model output; only metadata and chrome differ.
 
 **What's new in v2.5.0:**
 - **Calc default** — `$10m / +25% tier` toggle on Inputs B6 now defaults to ON (was OFF). When OFF the formula taxed all >$3m earnings at only 15%, ignoring the legislated $10m threshold; ON applies 15% to the $3m-$10m slice and 25% additional to the >$10m slice as per the Bill. The toggle remains in the UI for comparison. §12 acceptance numbers updated: Member 1 ($12m TSB) headline tax 28,500→32,722 (reset on) and 157,500→180,833 (reset off); net effect of electing reset 129,000→148,111.
@@ -36,7 +49,7 @@ python -m pip install -e .[dev]
 
 # 2. Build the workbook (runs a live recalc check at the end)
 python -m div296.build
-# -> dist/Division_296_Model_v2.5.0.xlsx
+# -> dist/Division_296_Model_v2.6.0.xlsx
 # -> Recalc validation: OK (no Excel error cells).
 
 # 3. Run the test suite (fast dev loop — skips live-recalc)
@@ -53,14 +66,14 @@ Pass `--no-validate` to skip the post-build recalc check (faster, not recommende
 ### Exporting to PDF (client-shareable Comparison page)
 
 ```bash
-python scripts/export_pdf.py dist/Division_296_Model_v2.5.0.xlsx
+python scripts/export_pdf.py dist/Division_296_Model_v2.6.0.xlsx
 # -> dist/Division_296_Model_v2.0.0_Comparison.pdf
 
 # Other tabs / whole workbook:
-python scripts/export_pdf.py dist/Division_296_Model_v2.5.0.xlsx --tab Analyser
-python scripts/export_pdf.py dist/Division_296_Model_v2.5.0.xlsx --all-tabs
-# -> dist/Division_296_Model_v2.5.0_Comparison.pdf  (default tab)
-# -> dist/Division_296_Model_v2.5.0.pdf             (--all-tabs)
+python scripts/export_pdf.py dist/Division_296_Model_v2.6.0.xlsx --tab Analyser
+python scripts/export_pdf.py dist/Division_296_Model_v2.6.0.xlsx --all-tabs
+# -> dist/Division_296_Model_v2.6.0_Comparison.pdf  (default tab)
+# -> dist/Division_296_Model_v2.6.0.pdf             (--all-tabs)
 ```
 
 Requires [LibreOffice](https://www.libreoffice.org/) installed (`soffice` on PATH, or the default `C:\Program Files\LibreOffice\program\soffice.exe` on Windows).
