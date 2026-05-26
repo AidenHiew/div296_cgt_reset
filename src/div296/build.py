@@ -32,6 +32,20 @@ def _dist_dir() -> Path:
     return Path(__file__).resolve().parents[2] / "dist"
 
 
+AUTHOR = "Aiden Hiew"
+WORKBOOK_TITLE = "Division 296 CGT Reset Model"
+
+
+def _stamp_properties(wb: Workbook) -> None:
+    props = wb.properties
+    props.creator = AUTHOR
+    props.lastModifiedBy = AUTHOR
+    props.title = WORKBOOK_TITLE
+    props.subject = WORKBOOK_TITLE
+    props.description = f"v{__version__} — see CONTEXT.md"
+    props.keywords = "Division 296; superannuation; CGT; cost base reset"
+
+
 def build_workbook() -> Workbook:
     wb = Workbook()
     # openpyxl creates a default "Sheet" — remove it so tab order is exact.
@@ -42,7 +56,20 @@ def build_workbook() -> Workbook:
     analyser.build(wb)
     comparison.build(wb)
     notes.build(wb)
+    _stamp_properties(wb)
+    _stamp_print_footer(wb)
     return wb
+
+
+def _stamp_print_footer(wb: Workbook) -> None:
+    """Add 'Prepared by Aiden Hiew · v<ver> · Page X of N' to every tab's print footer."""
+    for ws in wb.worksheets:
+        ws.oddFooter.left.text = f"Prepared by {AUTHOR}"
+        ws.oddFooter.left.size = 8
+        ws.oddFooter.left.color = "808080"
+        ws.oddFooter.right.text = f"v{__version__}  |  Page &P of &N"
+        ws.oddFooter.right.size = 8
+        ws.oddFooter.right.color = "808080"
 
 
 def validate_recalc(xlsx_path: Path) -> list[str]:

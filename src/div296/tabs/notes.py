@@ -156,6 +156,11 @@ def build(wb: Workbook) -> Worksheet:
     ws["A1"].font = TITLE_FONT
     ws.merge_cells("A1:D1")
 
+    # --- Preparer attribution (visible, mirrors workbook Author metadata) ---
+    ws["A2"] = f"Prepared by: Aiden Hiew  ·  Model version v{_ver}  ·  Built {_dt.date.today().isoformat()}"
+    ws["A2"].font = Font(name="Arial", size=9, italic=True, color="555555")
+    ws.merge_cells("A2:D2")
+
     # --- Enactment status (editable) ---
     _band(ws, 3, "Enactment status (editable)")
     ws.cell(row=4, column=1, value="Royal Assent / enactment date:").font = BODY_FONT
