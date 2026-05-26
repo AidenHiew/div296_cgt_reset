@@ -14,6 +14,7 @@ Row numbers shifted:
 
 from pathlib import Path
 
+import pytest
 from openpyxl import load_workbook
 
 from div296 import named_ranges as nr
@@ -205,6 +206,148 @@ def test_input_cells_unlocked(tmp_path: Path):
     assert ws["C16"].protection.locked is False
 
 
+# --- Held>12m paste-in normalisation (v3.1.2) ---------------------------
+#
+# The Inputs!I dropdown only validates direct typing; pastes from another
+# sheet or CSV import bypass it entirely. v3.1.2 added a hidden Inputs!J
+# helper column that runs TRIM+UPPER on I and emits a clean "Yes"/"No",
+# and redirected every downstream formula to read J instead of I.
+# These tests pin both the wiring (formulas reference J) and the
+# behaviour (paste-in "Yes " / "yes" still produce the discounted gain).
+
+
+def test_inputs_j_column_is_hidden_normaliser(tmp_path: Path):
+    """Inputs!J16:J65 = =IF(I=...,..,IF(TRIM(UPPER(I))="YES","Yes","No"));
+    column is hidden so the user never sees the helper."""
+    out = tmp_path / "out.xlsx"
+    wb = build_workbook()
+    wb.save(out)
+    ws = load_workbook(out)["Inputs"]
+
+    assert ws.column_dimensions["J"].hidden, "Inputs!J must be hidden"
+
+    for row in (16, 40, 65):
+        f = ws[f"J{row}"].value
+        assert isinstance(f, str) and f.startswith("="), (
+            f"Inputs!J{row} should be a formula, got {f!r}"
+        )
+        assert "TRIM" in f and "UPPER" in f, (
+            f"Inputs!J{row} should normalise via TRIM+UPPER, got {f!r}"
+        )
+        assert f'I{row}' in f, (
+            f"Inputs!J{row} should reference its own I{row} source, got {f!r}"
+        )
+
+
+def test_downstream_formulas_read_held_from_j_not_i(tmp_path: Path):
+    """Every formula that classifies a gain as discountable must read the
+    NORMALISED held flag (Inputs!J), not the raw user input (Inputs!I)."""
+    out = tmp_path / "out.xlsx"
+    wb = build_workbook()
+    wb.save(out)
+    wb_re = load_workbook(out)
+
+    analyser = wb_re["Analyser"]
+    # Per-asset Ord taxable gain (E17, first register row).
+    e17 = analyser["E17"].value
+    assert "'Inputs'!J16" in e17, (
+        f"Analyser E17 must read held from Inputs!J16, got {e17!r}"
+    )
+    assert "'Inputs'!I16" not in e17, (
+        f"Analyser E17 must not read raw Inputs!I16, got {e17!r}"
+    )
+    # Per-asset Div 296 adjusted gain (H17).
+    h17 = analyser["H17"].value
+    assert "'Inputs'!J16" in h17 and "'Inputs'!I16" not in h17, h17
+    # Reconciliation helper M70 — SUMIFS over the held range.
+    m70 = analyser["M70"].value
+    assert "'Inputs'!J16:J65" in m70, (
+        f"Recon helper M70 must aggregate over Inputs!J16:J65, got {m70!r}"
+    )
+    assert "'Inputs'!I16:I65" not in m70, m70
+
+    # Comparison per-register helper grid (cols N/O — div296 adj gains).
+    comparison = wb_re["Comparison"]
+    # Find the per-register grid row aligned to Inputs row 16; the grid uses
+    # the same row numbers as Inputs (n_first = REGISTER_FIRST_DATA_ROW).
+    n16 = comparison["N16"].value
+    assert "'Inputs'!J16" in n16 and "'Inputs'!I16" not in n16, n16
+
+
+@pytest.mark.slow
+def test_paste_in_dirty_held_values_are_normalised(tmp_path: Path):
+    """Behavioural test: write paste-style dirty values ('Yes ', 'yes',
+    ' YES ') into Inputs!I, recalc, and check that Analyser per-asset
+    E (Ord taxable gain) and H (Div 296 adj gain) both apply the 1/3
+    CGT discount as if the cell had said "Yes" exactly."""
+    formulas = pytest.importorskip(  # noqa: F811
+        "formulas",
+        reason="`formulas` package required for paste-in normalisation test",
+    )
+    import numpy as np
+
+    out = tmp_path / "out.xlsx"
+    wb = build_workbook()
+
+    # Simulate paste-in: trailing space (row 16), lowercase (row 17),
+    # surrounding whitespace + uppercase (row 18). All three sample rows.
+    ws_in = wb["Inputs"]
+    ws_in["I16"] = "Yes "
+    ws_in["I17"] = "yes"
+    ws_in["I18"] = " YES "
+    wb.save(out)
+
+    try:
+        sol = formulas.ExcelModel().loads(str(out)).finish().calculate()
+    except MemoryError:
+        pytest.skip("`formulas` OOM'd on v3.1.2 workbook recalc")
+
+    file_token = f"[{out.name}]"
+
+    def at(sheet: str, cell: str):
+        key = f"'{file_token}{sheet.upper()}'!{cell}"
+        v = sol[key].value
+        if isinstance(v, np.ndarray):
+            v = v.flat[0]
+        return v
+
+    # Inputs!J should normalise every variant to "Yes".
+    for r in (16, 17, 18):
+        j = at("Inputs", f"J{r}")
+        assert j == "Yes", (
+            f"Inputs!J{r} must normalise paste-in to 'Yes', got {j!r}"
+        )
+
+    # Analyser E17 — P1 (orig 800k, proceeds 2.6m) → raw gain 1.8m → with
+    # discount applied: 1.8m * (1 - 1/3) = 1,200,000. If normalisation
+    # didn't happen, the formula would skip the discount branch and return
+    # the raw 1.8m.
+    e17 = float(at("Analyser", "E17"))
+    assert abs(e17 - 1_200_000) < 1, (
+        f"E17 should be discounted long-held gain 1.2m, got {e17}"
+    )
+
+    # Analyser H17 — Div 296 adj gain, cost base = MV 2.4m, proceeds 2.6m
+    # → raw 200k → discounted ≈ 133,333.33.
+    h17 = float(at("Analyser", "H17"))
+    assert abs(h17 - 133_333.33) < 1, (
+        f"H17 should be discounted Div 296 adj gain ≈ 133,333, got {h17}"
+    )
+
+    # Analyser B71 (Fund Ord CGT) routes through the recon helpers
+    # M70/N70/O70 which read Inputs!J via SUMIFS. M70 = discount-eligible
+    # gains > 0. With all three sample rows held>12m (paste-dirty), the
+    # discount-eligible gains are P1 (1.8m) + S1 (0.3m) = 2,100,000.
+    # L1 has a projected loss (-300k) → in O70, not M70.
+    # If normalisation didn't happen, "Yes ", "yes", " YES " would all fail
+    # the SUMIFS exact-match against "Yes" and M70 would collapse to 0.
+    m70 = float(at("Analyser", "M70"))
+    assert abs(m70 - 2_100_000) < 1, (
+        f"Recon helper M70 should aggregate paste-normalised long-held "
+        f"gains to 2,100,000, got {m70}"
+    )
+
+
 # --- Analyser tab ---------------------------------------------------------
 
 def _analyser(tmp_path: Path):
@@ -252,16 +395,18 @@ class TestAnalyser:
         assert "difference" in str(ws["E7"].value).lower()
 
     def test_fund_earnings_two_scenarios(self, tmp_path: Path):
-        """v3.0: Fund Div 296 earnings has two SUMIFs side-by-side at C8/D8.
-        - C8 (no reset) sums helper col L (per-asset no-reset gain).
-        - D8 (elected) sums col H (per-asset adjusted gain, elected scenario).
+        """v3.1: Fund Div 296 earnings nets gains and losses intra-year,
+        floored at zero — formula is MAX(0, SUM(...)). v3.0 used
+        SUMIF(...,">0") which floored per-asset before summing.
+        - C8 (no reset) nets helper col L (per-asset no-reset gain).
+        - D8 (elected) nets col H (per-asset adjusted gain, elected scenario).
         - E8 (difference) = D8 - C8."""
         ws = _analyser(tmp_path)
         c8 = ws["C8"].value
         d8 = ws["D8"].value
         e8 = ws["E8"].value
-        assert c8 == '=SUMIF(L17:L66,">0")', f"C8 wrong: {c8!r}"
-        assert d8 == '=SUMIF(H17:H66,">0")', f"D8 wrong: {d8!r}"
+        assert c8 == '=MAX(0, SUM(L17:L66))', f"C8 wrong: {c8!r}"
+        assert d8 == '=MAX(0, SUM(H17:H66))', f"D8 wrong: {d8!r}"
         assert e8 == "=D8-C8", f"E8 (diff) should be D8-C8, got {e8!r}"
 
     def test_headline_row_sums_member_taxes_per_scenario(self, tmp_path: Path):
@@ -331,25 +476,93 @@ class TestAnalyser:
         assert ws.column_dimensions["L"].hidden
 
     def test_totals_row_v3(self, tmp_path: Path):
-        """v3.0: totals row now 67 (was 71); per-asset range 17-66 (was 21-70)."""
+        """v3.1.1: totals row at 67. The three info-only cols (E, F, H) all
+        show "(see fund total)" placeholder text — none of them sum, because
+        per-asset post-discount values don't aggregate meaningfully once
+        fund-level loss netting is in play (s102-5). Authoritative fund
+        figures live in the Reconciliation panel."""
         ws = _analyser(tmp_path)
         assert ws["C67"].value == "=SUM(C17:C66)"
-        assert ws["F67"].value == "=SUM(F17:F66)"
-        assert ws["H67"].value == "=SUM(H17:H66)"
+        # v3.1.1: info-only columns are not summed.
+        assert ws["E67"].value == "(see fund total)"
+        assert ws["F67"].value == "(see fund total)"
+        assert ws["H67"].value == "(see fund total)"
         assert ws["I67"].value == "=SUM(I17:I66)"
 
-    def test_reconciliation_panel_v3(self, tmp_path: Path):
-        """v3.0: recon band at row 69 (was 73). Div 296 tax payable pulls from
-        D13 (elected-reset headline) instead of v2.x B17."""
+    def test_f_info_footnote_present(self, tmp_path: Path):
+        """v3.1: row 68 carries a footnote explaining col F is info only."""
         ws = _analyser(tmp_path)
-        assert ws["A70"].value == "Ordinary CGT payable"
-        assert ws["B70"].value == "=SUM(F17:F66)"
-        assert ws["A71"].value == "Div 296 tax payable (elected-reset headline)"
-        assert ws["B71"].value == f"=D13"
-        assert ws["A72"].value == "Capital losses carried forward"
-        cf = ws["B72"].value
-        assert cf.startswith("=")
-        assert cf.count("MAX(0,'Inputs'!C") == 50
+        footnote = ws["A68"].value
+        assert footnote is not None
+        assert "info only" in footnote
+        assert "fund" in footnote.lower()
+
+    def test_per_asset_ord_cgt_col_header_grey_label(self, tmp_path: Path):
+        """v3.1: col F header renamed to 'Per-asset Ord CGT (info only)'."""
+        ws = _analyser(tmp_path)
+        f16 = ws["F16"].value
+        assert "info only" in f16
+
+    def test_per_asset_ord_cgt_formula_shows_dash_for_losses(self, tmp_path: Path):
+        """v3.1: col F formula returns '—' for loss rows (E<=0)."""
+        ws = _analyser(tmp_path)
+        f17 = ws["F17"].value
+        assert "—" in f17 and "IF(E17<=0" in f17
+
+    def test_reconciliation_panel_v31(self, tmp_path: Path):
+        """v3.1: recon band at row 70. Fund Ordinary CGT uses the s102-5
+        netted formula (not =SUM(F:F)). Carry-forward losses are net unused
+        gross losses at the fund level (not a per-asset sum)."""
+        ws = _analyser(tmp_path)
+        # Band shifted down by 1 row due to new F-info footnote at row 68.
+        assert ws["A70"].value == "Reconciliation"
+        assert ws["A71"].value == "Fund Ordinary CGT (after intra-year netting)"
+        b71 = ws["B71"].value
+        # New formula references hidden helpers at M70/N70/O70 and the
+        # discount_rate / fund_cgt_rate named ranges.
+        assert b71.startswith("=")
+        assert "M70" in b71 and "N70" in b71 and "O70" in b71
+        assert "discount_rate" in b71 and "fund_cgt_rate" in b71
+
+        assert ws["A72"].value == "Div 296 tax payable (elected-reset headline)"
+        assert ws["B72"].value == "=D13"
+
+        assert ws["A73"].value == "Capital losses carried forward"
+        # v3.1: net unused gross loss, computed from the same 3 helpers.
+        b73 = ws["B73"].value
+        assert b73 == "=MAX(0, O70 - (M70 + N70))"
+
+    def test_recon_helpers_hidden(self, tmp_path: Path):
+        """v3.1: helper cells (M70, N70, O70) live in hidden cols M/N/O."""
+        ws = _analyser(tmp_path)
+        for col in ("M", "N", "O"):
+            assert ws.column_dimensions[col].hidden, f"col {col} not hidden"
+        # Helpers must be formulas (not blank).
+        for cell in ("M70", "N70", "O70"):
+            v = ws[cell].value
+            assert v and v.startswith("="), f"{cell} empty/non-formula: {v!r}"
+
+    def test_recon_helpers_use_sumifs_not_sumproduct(self, tmp_path: Path):
+        """v3.1.1: M70/N70/O70 use SUMIFS/SUMIF, NOT SUMPRODUCT.
+
+        The briefly-shipped SUMPRODUCT pattern `SUMPRODUCT(ISNUMBER(H)*(H>0)*...*H)`
+        errored with #VALUE! because the trailing `*H` multiplied empty-row text
+        values ("" from the Inputs!H IF formula) and the ISNUMBER guard doesn't
+        short-circuit. SUMIFS handles mixed-type sum_range natively.
+        """
+        ws = _analyser(tmp_path)
+        m70 = ws["M70"].value
+        n70 = ws["N70"].value
+        o70 = ws["O70"].value
+        # Must use SUMIFS (or SUMIF for the loss helper) — not SUMPRODUCT.
+        assert m70.startswith("=SUMIFS("), f"M70 must use SUMIFS: {m70!r}"
+        assert n70.startswith("=SUMIFS("), f"N70 must use SUMIFS: {n70!r}"
+        assert o70.startswith("=-SUMIF("), f"O70 must use -SUMIF: {o70!r}"
+        for cell, v in (("M70", m70), ("N70", n70), ("O70", o70)):
+            assert "SUMPRODUCT" not in v, (
+                f"{cell} should NOT use SUMPRODUCT (it errors on empty-row "
+                f"text values): {v!r}"
+            )
 
     def test_trap_conditional_formatting_applied(self, tmp_path: Path):
         """v3.0: trap CF range now A17:J66 (was A21:J70)."""
@@ -563,7 +776,11 @@ class TestNotes:
         for required in (
             "Illustrative only",
             "Pension phase is NOT modelled",
-            "Loss-offset divergence",
+            # v3.1.1: "Loss-offset divergence" replaced by
+            # "Prior-year capital losses are NOT modelled" — v3.1 now
+            # implements intra-year netting per s102-5, so the previous
+            # divergence caveat is no longer factually correct.
+            "Prior-year capital losses are NOT modelled",
             "Reset OFF scenario is realised-only",
             "Wash sale / Part IVA",
             "Transaction costs",

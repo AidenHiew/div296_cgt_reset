@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "div296"
-version = "3.0.0"
+version = "3.1.0"
 description = "Division 296 CGT Cost Base Reset Model — Excel workbook builder"
 requires-python = ">=3.11"
 authors = [{ name = "Aiden Hiew", email = "281902732+AidenHiew@users.noreply.github.com" }]
