@@ -1,8 +1,18 @@
 """Spec §12 acceptance-number tests.
 
-Locked scenario: single member, TSB $12,000,000, all assets held > 12mo,
-discount ON, $10m tier ON (v2.5 default — Bill-correct for TSB > $10m).
+Locked scenario: single member, TSB $12,000,000, all assets held > 12mo.
 Three assets per §12 table.
+
+v3.0 API simplification (breaking vs v2.x):
+- `discount_on` and `tier10_on` parameters removed throughout — the calc engine
+  always applies the 1/3 discount when `held_over_12_months=True` and always
+  uses the two-band tax formula.
+- `Member.proportion_override` field and `member_proportion_above_3m` function
+  removed.
+
+These tests verify the v2.6 §12 acceptance numbers continue to hold under
+the simplified v3.0 API. That's the load-bearing byte-equivalence check for
+the v3.0 cut-over.
 
 All expected numbers are whole-dollar rounded as per §12 (the dollar
 amounts in the spec are rounded; we round our floats the same way).
@@ -21,6 +31,7 @@ from div296.calcs import (
     div296_adjusted_gain,
     div296_fund_earnings,
     div296_headline_tax,
+    div296_tax_for_member,
     ordinary_cgt,
     ordinary_taxable_gain,
     per_asset_div296_tax,
@@ -84,87 +95,85 @@ def _r(x: float) -> int:
 # --- package sanity -------------------------------------------------------
 
 def test_package_version():
-    assert __version__ == "2.6.0"
+    assert __version__ == "3.0.0"
 
 
-# --- §12 scenario: reset ON, discount ON, tier ON ------------------------
+# --- §12 scenario: reset ON (elected) ------------------------------------
 
 class TestResetOn:
-    reset_on = True
-    discount_on = True
-    tier10_on = True
+    """Reset elected: Div 296 cost base = MV at 30 Jun 2026.
 
-    def test_member_proportion(self):
-        # (12m - 3m) / 12m = 0.75
-        from div296.calcs import member_proportion_above_3m
-        assert member_proportion_above_3m(SOLE_MEMBER, A.threshold_1) == pytest.approx(0.75)
+    v3.0: tier_on is always True (toggle removed). Discount applies iff held>12mo
+    (toggle removed). These tests verify the v2.6 acceptance numbers under the
+    simplified API."""
+
+    reset_on = True
 
     # Ordinary taxable gain (col 5)
     def test_property_ordinary_taxable_gain(self):
         # (2,600,000 - 800,000) × 2/3 = 1,200,000
-        v = ordinary_taxable_gain(PROPERTY, self.discount_on, A.discount_rate)
+        v = ordinary_taxable_gain(PROPERTY, A.discount_rate)
         assert _r(v) == 1_200_000
 
     def test_shares_ordinary_taxable_gain(self):
         # (600,000 - 300,000) × 2/3 = 200,000
-        v = ordinary_taxable_gain(SHARES, self.discount_on, A.discount_rate)
+        v = ordinary_taxable_gain(SHARES, A.discount_rate)
         assert _r(v) == 200_000
 
     def test_loss_ordinary_taxable_gain_is_full_loss(self):
         # (200,000 - 500,000) = -300,000, losses not discounted
-        v = ordinary_taxable_gain(LOSS, self.discount_on, A.discount_rate)
+        v = ordinary_taxable_gain(LOSS, A.discount_rate)
         assert _r(v) == -300_000
 
     # Ordinary CGT (col 6) — per-asset silo
     def test_property_ordinary_cgt(self):
-        v = ordinary_cgt(PROPERTY, self.discount_on, A.discount_rate, A.fund_cgt_rate)
+        v = ordinary_cgt(PROPERTY, A.discount_rate, A.fund_cgt_rate)
         assert _r(v) == 180_000
 
     def test_shares_ordinary_cgt(self):
-        v = ordinary_cgt(SHARES, self.discount_on, A.discount_rate, A.fund_cgt_rate)
+        v = ordinary_cgt(SHARES, A.discount_rate, A.fund_cgt_rate)
         assert _r(v) == 30_000
 
     def test_loss_ordinary_cgt_is_zero(self):
-        v = ordinary_cgt(LOSS, self.discount_on, A.discount_rate, A.fund_cgt_rate)
+        v = ordinary_cgt(LOSS, A.discount_rate, A.fund_cgt_rate)
         assert _r(v) == 0
 
     def test_total_ordinary_cgt_payable(self):
         total = sum(
-            ordinary_cgt(a, self.discount_on, A.discount_rate, A.fund_cgt_rate)
-            for a in REGISTER
+            ordinary_cgt(a, A.discount_rate, A.fund_cgt_rate) for a in REGISTER
         )
         assert _r(total) == 210_000
 
     # Div 296 adjusted gain (col 7) — reset ON, cost base = MV 30 Jun 2026
     def test_property_div296_adjusted_gain(self):
         # (2,600,000 - 2,400,000) × 2/3 = 133,333.33...
-        v = div296_adjusted_gain(PROPERTY, self.reset_on, self.discount_on, A.discount_rate)
+        v = div296_adjusted_gain(PROPERTY, self.reset_on, A.discount_rate)
         assert _r(v) == 133_333
 
     def test_shares_div296_adjusted_gain(self):
         # (600,000 - 520,000) × 2/3 = 53,333.33...
-        v = div296_adjusted_gain(SHARES, self.reset_on, self.discount_on, A.discount_rate)
+        v = div296_adjusted_gain(SHARES, self.reset_on, A.discount_rate)
         assert _r(v) == 53_333
 
     def test_loss_div296_adjusted_gain_is_the_trap(self):
         # (200,000 - 100,000) × 2/3 = 66,666.67  ← reset creates a Div 296 gain
-        v = div296_adjusted_gain(LOSS, self.reset_on, self.discount_on, A.discount_rate)
+        v = div296_adjusted_gain(LOSS, self.reset_on, A.discount_rate)
         assert _r(v) == 66_667
 
     # Div 296 fund earnings
     def test_div296_fund_earnings_total(self):
-        v = div296_fund_earnings(REGISTER, self.reset_on, self.discount_on, A.discount_rate)
+        v = div296_fund_earnings(REGISTER, self.reset_on, A.discount_rate)
         assert _r(v) == 253_333
 
     # Headline Div 296 tax (member-attributed)
     def test_div296_headline_tax(self):
-        # earnings = $253,333.33; tier ON splits by TSB bands for $12m member:
+        # earnings = $253,333.33; two-band for $12m member:
         # band1 = ($10m-$3m)/$12m = 7/12;  band2 = ($12m-$10m)/$12m = 2/12.
         # tax = $253,333.33 × (7/12×15% + 2/12×25%) = $32,722.22
         v = div296_headline_tax(
             REGISTER, MEMBERS,
-            self.reset_on, self.discount_on, A.discount_rate,
-            self.tier10_on, A.threshold_1, A.threshold_2,
+            self.reset_on, A.discount_rate,
+            A.threshold_1, A.threshold_2,
             A.rate_tier1, A.rate_tier2,
         )
         assert _r(v) == 32_722
@@ -173,13 +182,13 @@ class TestResetOn:
     def test_per_asset_div296_pro_rata_property(self):
         headline = div296_headline_tax(
             REGISTER, MEMBERS,
-            self.reset_on, self.discount_on, A.discount_rate,
-            self.tier10_on, A.threshold_1, A.threshold_2,
+            self.reset_on, A.discount_rate,
+            A.threshold_1, A.threshold_2,
             A.rate_tier1, A.rate_tier2,
         )
         v = per_asset_div296_tax(
             PROPERTY, REGISTER, headline,
-            self.reset_on, self.discount_on, A.discount_rate,
+            self.reset_on, A.discount_rate,
         )
         # 133,333/253,333 × 32,722 = 17,222
         assert _r(v) == 17_222
@@ -187,13 +196,13 @@ class TestResetOn:
     def test_per_asset_div296_pro_rata_shares(self):
         headline = div296_headline_tax(
             REGISTER, MEMBERS,
-            self.reset_on, self.discount_on, A.discount_rate,
-            self.tier10_on, A.threshold_1, A.threshold_2,
+            self.reset_on, A.discount_rate,
+            A.threshold_1, A.threshold_2,
             A.rate_tier1, A.rate_tier2,
         )
         v = per_asset_div296_tax(
             SHARES, REGISTER, headline,
-            self.reset_on, self.discount_on, A.discount_rate,
+            self.reset_on, A.discount_rate,
         )
         # 53,333/253,333 × 32,722 = 6,889
         assert _r(v) == 6_889
@@ -201,13 +210,13 @@ class TestResetOn:
     def test_per_asset_div296_pro_rata_loss(self):
         headline = div296_headline_tax(
             REGISTER, MEMBERS,
-            self.reset_on, self.discount_on, A.discount_rate,
-            self.tier10_on, A.threshold_1, A.threshold_2,
+            self.reset_on, A.discount_rate,
+            A.threshold_1, A.threshold_2,
             A.rate_tier1, A.rate_tier2,
         )
         v = per_asset_div296_tax(
             LOSS, REGISTER, headline,
-            self.reset_on, self.discount_on, A.discount_rate,
+            self.reset_on, A.discount_rate,
         )
         # 66,667/253,333 × 32,722 = 8,611  (reset turns the loss asset into a Div 296 gain)
         assert _r(v) == 8_611
@@ -216,14 +225,14 @@ class TestResetOn:
         """Locked decision: pro-rata sum always reconciles to headline."""
         headline = div296_headline_tax(
             REGISTER, MEMBERS,
-            self.reset_on, self.discount_on, A.discount_rate,
-            self.tier10_on, A.threshold_1, A.threshold_2,
+            self.reset_on, A.discount_rate,
+            A.threshold_1, A.threshold_2,
             A.rate_tier1, A.rate_tier2,
         )
         per_asset_sum = sum(
             per_asset_div296_tax(
                 a, REGISTER, headline,
-                self.reset_on, self.discount_on, A.discount_rate,
+                self.reset_on, A.discount_rate,
             )
             for a in REGISTER
         )
@@ -235,39 +244,41 @@ class TestResetOn:
         assert _r(total) == 300_000
 
 
-# --- §12 scenario: reset OFF, discount ON, tier ON -----------------------
+# --- §12 scenario: reset OFF (no election) -------------------------------
 
 class TestResetOff:
+    """No election: Div 296 cost base = original cost base.
+
+    v3.0: same API as the elected scenario — only the reset_on bool flips."""
+
     reset_on = False
-    discount_on = True
-    tier10_on = True
 
     def test_property_div296_adjusted_gain(self):
         # (2,600,000 - 800,000) × 2/3 = 1,200,000
-        v = div296_adjusted_gain(PROPERTY, self.reset_on, self.discount_on, A.discount_rate)
+        v = div296_adjusted_gain(PROPERTY, self.reset_on, A.discount_rate)
         assert _r(v) == 1_200_000
 
     def test_shares_div296_adjusted_gain(self):
         # (600,000 - 300,000) × 2/3 = 200,000
-        v = div296_adjusted_gain(SHARES, self.reset_on, self.discount_on, A.discount_rate)
+        v = div296_adjusted_gain(SHARES, self.reset_on, A.discount_rate)
         assert _r(v) == 200_000
 
     def test_loss_div296_adjusted_gain_is_loss(self):
         # (200,000 - 500,000) = -300,000 raw, losses not discounted
-        v = div296_adjusted_gain(LOSS, self.reset_on, self.discount_on, A.discount_rate)
+        v = div296_adjusted_gain(LOSS, self.reset_on, A.discount_rate)
         assert _r(v) == -300_000
 
     def test_div296_fund_earnings_floors_loss_asset(self):
         # 1,200,000 + 200,000 + max(0, -300,000) = 1,400,000
-        v = div296_fund_earnings(REGISTER, self.reset_on, self.discount_on, A.discount_rate)
+        v = div296_fund_earnings(REGISTER, self.reset_on, A.discount_rate)
         assert _r(v) == 1_400_000
 
     def test_div296_headline_tax(self):
         # 1,400,000 × (7/12 × 15% + 2/12 × 25%) = 180,833
         v = div296_headline_tax(
             REGISTER, MEMBERS,
-            self.reset_on, self.discount_on, A.discount_rate,
-            self.tier10_on, A.threshold_1, A.threshold_2,
+            self.reset_on, A.discount_rate,
+            A.threshold_1, A.threshold_2,
             A.rate_tier1, A.rate_tier2,
         )
         assert _r(v) == 180_833
@@ -276,11 +287,13 @@ class TestResetOff:
 # --- Comparison footer self-check ----------------------------------------
 
 def test_net_effect_of_electing_reset():
-    """v2.5 default (tier ON): 180,833 − 32,722 = 148,111 saved by electing reset."""
+    """v3.0 (always two-band): 180,833 − 32,722 = 148,111 saved by electing reset.
+
+    Locks the byte-equivalence claim: v2.6 default-config numbers persist
+    under the simplified v3.0 calc-engine API.
+    """
     common = dict(
-        discount_on=True,
         discount_rate=A.discount_rate,
-        tier10_on=True,
         threshold_1=A.threshold_1,
         threshold_2=A.threshold_2,
         rate_tier1=A.rate_tier1,
@@ -293,64 +306,57 @@ def test_net_effect_of_electing_reset():
     assert _r(off - on) == 148_111
 
 
-# --- Tier 2 ON scenario (spec §7) ----------------------------------------
+# --- Two-band edge cases (spec §7) ---------------------------------------
 
-class TestTierOn:
-    """Member with TSB > $10m, tier ON: tax splits across the two bands."""
+class TestTwoBand:
+    """Two-band tax behaviour. v3.0: always two-band (no toggle)."""
 
-    def test_tier_on_collapses_to_tier_off_when_tsb_under_10m(self):
-        """TSB $5m → band2 = 0; tier ON tax equals tier OFF tax."""
+    def test_tsb_under_10m_only_band1(self):
+        """TSB $5m → band2 = 0; tax uses band1 only = (5-3)/5 × earnings × 15%."""
         m = Member(tsb=5_000_000, split_pct=1.0)
         earnings = 100_000
-        from div296.calcs import div296_tax_for_member
-        off = div296_tax_for_member(
+        v = div296_tax_for_member(
             earnings, m,
-            tier10_on=False, threshold_1=A.threshold_1, threshold_2=A.threshold_2,
-            rate_tier1=A.rate_tier1, rate_tier2=A.rate_tier2,
+            A.threshold_1, A.threshold_2, A.rate_tier1, A.rate_tier2,
         )
-        on = div296_tax_for_member(
-            earnings, m,
-            tier10_on=True, threshold_1=A.threshold_1, threshold_2=A.threshold_2,
-            rate_tier1=A.rate_tier1, rate_tier2=A.rate_tier2,
-        )
-        assert _r(off) == _r(on)
         # Manual check: (5m-3m)/5m × 100k × 15% = 40% × 100k × 15% = 6,000
-        assert _r(on) == 6_000
+        assert _r(v) == 6_000
 
-    def test_tier_on_with_tsb_above_10m(self):
-        """TSB $15m: band1 = (15-10)+(10-3) ... wait, band1 = MIN(15,10)-3 = 7m / 15m;
-        band2 = (15-10) / 15m = 5m / 15m. Tax = E × 7/15 × 15% + E × 5/15 × 25%."""
+    def test_tsb_above_10m_splits_across_bands(self):
+        """TSB $15m: band1 = (10-3)/15 = 7/15; band2 = (15-10)/15 = 5/15."""
         m = Member(tsb=15_000_000, split_pct=1.0)
         earnings = 100_000
-        from div296.calcs import div296_tax_for_member
-        on = div296_tax_for_member(
+        v = div296_tax_for_member(
             earnings, m,
-            tier10_on=True, threshold_1=A.threshold_1, threshold_2=A.threshold_2,
-            rate_tier1=A.rate_tier1, rate_tier2=A.rate_tier2,
+            A.threshold_1, A.threshold_2, A.rate_tier1, A.rate_tier2,
         )
         expected = (
             100_000 * (7_000_000 / 15_000_000) * 0.15
             + 100_000 * (5_000_000 / 15_000_000) * 0.25
         )
-        assert _r(on) == _r(expected)
+        assert _r(v) == _r(expected)
 
-    def test_tier_on_zero_tax_when_tsb_at_threshold_1(self):
+    def test_tsb_at_threshold_1_zero_tax(self):
         """TSB = $3m exactly: band1 = 0, band2 = 0 → tax = 0."""
         m = Member(tsb=3_000_000, split_pct=1.0)
-        from div296.calcs import div296_tax_for_member
-        on = div296_tax_for_member(
+        v = div296_tax_for_member(
             100_000, m,
-            tier10_on=True, threshold_1=A.threshold_1, threshold_2=A.threshold_2,
-            rate_tier1=A.rate_tier1, rate_tier2=A.rate_tier2,
+            A.threshold_1, A.threshold_2, A.rate_tier1, A.rate_tier2,
         )
-        assert _r(on) == 0
+        assert _r(v) == 0
 
     def test_zero_tsb_returns_zero_tax(self):
         m = Member(tsb=0, split_pct=1.0)
-        from div296.calcs import div296_tax_for_member
-        result = div296_tax_for_member(
+        v = div296_tax_for_member(
             100_000, m,
-            tier10_on=False, threshold_1=A.threshold_1, threshold_2=A.threshold_2,
-            rate_tier1=A.rate_tier1, rate_tier2=A.rate_tier2,
+            A.threshold_1, A.threshold_2, A.rate_tier1, A.rate_tier2,
         )
-        assert result == 0.0
+        assert v == 0.0
+
+
+# --- v3.0 API-break sanity ------------------------------------------------
+
+def test_member_no_proportion_override_field():
+    """v3.0 removed `Member.proportion_override`. Constructing with it must fail."""
+    with pytest.raises(TypeError):
+        Member(tsb=1_000_000, split_pct=1.0, proportion_override=0.5)  # type: ignore[call-arg]
