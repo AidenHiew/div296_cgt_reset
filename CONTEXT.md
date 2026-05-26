@@ -39,10 +39,37 @@ earnings attributable to the slice of TSB between $3m and $10m.
 ## Threshold 2 / Tier 2 ("$10m tier" / "+25% tier")
 
 **$10,000,000**. Additional 25% (`rate_tier2`) applied to the portion
-attributable to TSB above $10m. **v2.5 default: ON.** When the toggle is OFF
-the formula collapses to single-tier (15% on everything above $3m, ignoring
-the $10m threshold entirely — useful for comparison but not Bill-correct for
-high-TSB members).
+attributable to TSB above $10m. **Always applied — v3.0 removed the toggle.**
+The $10m tier is enacted law; the v2.x `tier10_on` toggle had no Bill-correct
+use case and was a footgun (default OFF before v2.5 produced wrong numbers
+for $12m+ members). v3.0 removes the option entirely.
+
+## band1 / band2 (per-member proportion bands)
+
+The two-band decomposition of a member's TSB used by the Div 296 tax formula:
+
+- **`band1`** = proportion of TSB in the `$3m–$10m` slice, taxed at `rate_tier1`
+  (15%). Excel: `MAX(0, MIN(tsb, threshold_2) - threshold_1) / tsb`.
+- **`band2`** = proportion of TSB above `$10m`, taxed at `rate_tier2` (25%).
+  Excel: `MAX(0, tsb - threshold_2) / tsb`.
+
+`band1 + band2` = total proportion of TSB above `$3m`. Both bands are
+displayed as auto-derived columns on Inputs Section 1 (cols D and E) from
+v3.0 onwards, so reviewers can manually reconcile:
+
+> `member tax = earnings × split × (band1 × 15% + band2 × 25%)`
+
+Single source of truth: the per-member tax formula in Analyser and Comparison
+reads `band1`/`band2` directly from the Inputs cells, not by recomputing
+inline.
+
+## v3.0 cut-over (breaking change)
+
+v3.0 removed the three control-panel toggles (`reset_on`, `tier10_on`,
+`discount_on`) and the `proportion_override` cell. Effect on default-config
+numbers: **zero** (the toggles' default-ON state was the only Bill-correct
+configuration). Breaking changes are in the Python API for `calcs.py`
+consumers; see README "What's new in v3.0.0" and the breaking-change manifest.
 
 ## Reset (cost-base reset election)
 

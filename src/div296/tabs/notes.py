@@ -53,9 +53,9 @@ TERMINOLOGY = [
      "for the per-asset display — see caveats below."),
     ("Div 296 tax",
      "Additional tax under Division 296 = member's attributed share of "
-     "earnings × proportion of TSB above $3m × 15% (plus 25% on the slice "
-     "above $10m when the tier toggle is ON). This model uses a user-entered "
-     "member split — see caveats below."),
+     "earnings × (proportion of TSB in $3m–$10m band × 15% + proportion "
+     "above $10m × 25%). Both bands are always applied per the enacted "
+     "law. Member splits are auto-derived from TSB share."),
     ("Original cost base",
      "Cost base used for ordinary CGT — unchanged by the reset election."),
     ("Div 296 cost base",
@@ -105,10 +105,11 @@ CAVEATS = [
      "on the year-on-year movement in TSB (unrealised + realised). The "
      "Comparison tab compares realised vs realised, so it understates the "
      "no-reset Div 296 burden."),
-    ("Multi-member split is a user assumption.",
+    ("Multi-member split is a TSB-proportion approximation.",
      "A real multi-member fund determines each member's share of Div 296 "
      "earnings via an actuarial certificate based on time-weighted average "
-     "balances. This model uses a user-entered split %."),
+     "balances. This model approximates that split as each member's TSB "
+     "divided by total fund TSB (auto-derived on Inputs Section 1)."),
     ("Wash sale / Part IVA risk.",
      "Disposing of an asset pre-30 June 2026 purely for the tax outcome and "
      "reacquiring it sits in anti-avoidance territory (TR 2008/1, Part IVA). "

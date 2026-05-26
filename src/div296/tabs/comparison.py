@@ -39,6 +39,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Protection, Si
 from openpyxl.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
+from div296._formulas import per_member_div296_tax_formula
 from div296.assumptions import ASSUMPTIONS
 from div296.styles import (
     BODY_FONT, CENTER, FMT_CURRENCY, FMT_CURRENCY_DELTA, INPUT_FILL, INPUT_FONT, SECTION_BAND_FILL, SECTION_BAND_FONT,
@@ -179,30 +180,17 @@ def _input_cell(ws: Worksheet, coord: str, value=None) -> None:
 
 
 def _div296_adj_formula(proceeds: str, cost_base_expr: str, held: str) -> str:
+    """v3.0: discount applies iff held > 12 months (no `discount_on` toggle)."""
     raw = f"({proceeds}-{cost_base_expr})"
     return (
         f'=IF({proceeds}="","",'
         f'IF({raw}<=0,{raw},'
-        f'IF(AND({held}="Yes",discount_on="ON"),{raw}*(1-discount_rate),{raw})))'
+        f'IF({held}="Yes",{raw}*(1-discount_rate),{raw})))'
     )
 
 
-def _member_tax_formula(member_inputs_row: int, earnings_cell: str) -> str:
-    """Same shape as Analyser's per-member tax, with earnings cell parameterised."""
-    tsb = f"{INPUTS_SHEET}!B{member_inputs_row}"
-    split = f"{INPUTS_SHEET}!C{member_inputs_row}"
-    auto_p = f"{INPUTS_SHEET}!D{member_inputs_row}"
-    override = f"{INPUTS_SHEET}!E{member_inputs_row}"
-    earnings_m = f"{earnings_cell}*{split}"
-    effective_p = f'IF({override}="",{auto_p},{override})'
-    band1 = f"MAX(0,MIN({tsb},threshold_2)-threshold_1)/{tsb}"
-    band2 = f"MAX(0,{tsb}-threshold_2)/{tsb}"
-    tier_on = f"{earnings_m}*{band1}*rate_tier1 + {earnings_m}*{band2}*rate_tier2"
-    tier_off = f"{earnings_m}*{effective_p}*rate_tier1"
-    return (
-        f'=IF(OR({tsb}="",{split}="",{tsb}<=0,{split}<=0,{earnings_cell}<=0),0,'
-        f'IF(tier10_on="ON",{tier_on},{tier_off}))'
-    )
+# v3.0: `_member_tax_formula` moved to `div296._formulas.per_member_div296_tax_formula`
+# (shared with analyser.py). Imported at the top of this module.
 
 
 # --- Big builders for each visual block ---
@@ -419,8 +407,8 @@ def _build_helpers(
     for i in range(ASSUMPTIONS.member_count):
         helper_row = HELPER_MEMBER_TAX_FIRST_ROW + i
         inputs_row = MEMBERS_FIRST_DATA_ROW + i
-        ws[f"{HELPER_COL_A}{helper_row}"] = _member_tax_formula(inputs_row, a_earnings)
-        ws[f"{HELPER_COL_B}{helper_row}"] = _member_tax_formula(inputs_row, b_earnings)
+        ws[f"{HELPER_COL_A}{helper_row}"] = per_member_div296_tax_formula(inputs_row, a_earnings)
+        ws[f"{HELPER_COL_B}{helper_row}"] = per_member_div296_tax_formula(inputs_row, b_earnings)
 
     headline_a_cell = f"{HELPER_COL_A}{HELPER_HEADLINE_ROW}"
     headline_b_cell = f"{HELPER_COL_B}{HELPER_HEADLINE_ROW}"
@@ -552,8 +540,8 @@ def _build_subtotals(ws: Worksheet, headline_a: str, headline_b: str,
         (SUBTOTAL_DIV296_ROW,   "Div 296 tax (headline)",
          f"={headline_a[1:]}", f"={headline_b[1:]}",
          "Division 296 additional tax payable. Each member's share is "
-         "computed from their TSB proportion above the $3m threshold, with "
-         "the +25% tier band applied where the toggle is enabled."),
+         "computed from their TSB proportion in the $3m–$10m band (taxed "
+         "at 15%) plus the slice above $10m (taxed at 25%)."),
         (SUBTOTAL_BURDEN_ROW,   "TOTAL TAX BURDEN",
          f"=B{SUBTOTAL_ORD_CGT_ROW}+B{SUBTOTAL_DIV296_ROW}",
          f"=C{SUBTOTAL_ORD_CGT_ROW}+C{SUBTOTAL_DIV296_ROW}",

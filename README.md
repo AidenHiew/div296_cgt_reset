@@ -4,15 +4,40 @@
 
 A Microsoft Excel workbook (`.xlsx`) that illustrates Division 296 tax outcomes for SMSFs and makes the case for pre–30 June 2026 action on assets sitting in an unrealised-loss position (the "reset trap").
 
-**Status:** v2.6.0 — stable. Authorship & provenance pass over v2.5.0 (workbook author metadata, visible attribution, print footers, LICENSE, source-package author fields).
+**Status:** v3.0.0 — stable. Structural simplification + transparency pass over v2.6.0. **Breaking calc-engine API change** (see "What's new" below). Numerical effect on the default-config v2.6 output: zero — every client-facing number stays byte-identical; only the partially-broken non-default paths are removed.
 
 **Previous releases:**
+- v2.6.0 (frozen as the last release on the v2 line; artifact `dist/Division_296_Model_v2.6.0.xlsx`). Authorship & provenance pass over v2.5.0.
 - v2.5.0 (frozen as reference; artifact `dist/Division_296_Model_v2.5.0.xlsx`). Client-feedback pass #3 over v2.4.0 (8 items: calc-default flip, Inputs member 2, full Comparison rewrite).
 - v2.4.0 (frozen as reference; artifact `dist/Division_296_Model_v2.4.0.xlsx`). Client-feedback pass over v2.3.0 (4 items).
 - v2.3.0 (frozen as reference; artifact `dist/Division_296_Model_v2.3.0.xlsx`). Client-feedback pass over v2.2.0 (16 items).
 - v2.2.0 (frozen as reference; artifact `dist/Division_296_Model_v2.2.0.xlsx`). Client-readability pass over v2.0.0.
 - v2.0.0 (frozen as reference; tag `v2.0.0`, artifact `dist/Division_296_Model_v2.0.0.xlsx`). UX pass over v1.0.0.
 - v1.0.0 (frozen as reference; tag `v1.0.0`, artifact `dist/Division_296_Model_v1.0.0.xlsx`).
+
+**What's new in v3.0.0:**
+- **Control panel removed.** The three toggles `RESET_ON`, `TIER10_ON`, `DISCOUNT_ON` are gone. Each had no Bill-correct use case in its non-default state. Tier 2 ($10m / +25%) is always applied per legislation; the CGT discount applies iff the asset's "Held > 12 months?" column is Yes. Inputs Section 1 now starts directly at Members.
+- **Proportion override column removed.** The `Inputs col E` "Proportion override (optional)" cell was silently inert in the default v2.5+ configuration — it only fed the now-removed `tier10_on=OFF` branch. v3.0 deletes the cell.
+- **Inputs Section 2 — two-band transparency.** Col D and col E are now auto-derived `band1` ($3m–$10m slice) and `band2` (>$10m slice) display columns. They sum to the old "above $3m" total. A reviewer can manually compute `tax = earnings × split × (D × 15% + E × 25%)` and reconcile against any tax cell. Single source of truth.
+- **Analyser fund summary — side-by-side scenarios.** Top of the Analyser tab now shows both `If no reset (default)` and `If elected to reset` scenarios with per-member tax breakdown and a signed `Difference (signed)` column. Per-asset detail below stays single-scenario (always elected reset) for drill-down. The "see the answer immediately" tile is on the first tab a user lands on after Inputs.
+- **Analyser state strip — read-only "Parameters in effect".** Row 2 now displays a live one-liner of rates and thresholds (`Rates 15% tier 1 / 25% tier 2 · Thresholds $3,000,000 / $10,000,000 · CGT discount 33.33% · Fund CGT 15%`). Auto-updates if Advanced Assumptions change.
+- **Shared `_member_tax_formula` helper.** Extracted to `src/div296/_formulas.py` and used by both `analyser.py` and `comparison.py` — prevents the two from drifting again.
+- **Calc engine simplification.** `div296_tax_for_member`, `div296_headline_tax`, `_apply_discount`, `ordinary_taxable_gain`, etc. all lose their `tier10_on` / `discount_on` parameters. `Member.proportion_override` field and `member_proportion_above_3m` function deleted. Net code-line decrease.
+
+**Breaking API changes (calc engine — for downstream consumers of `div296.calcs`):**
+- `Member(..., proportion_override=...)` → `TypeError` (field removed)
+- `div296_tax_for_member(earnings, member, tier10_on, ...)` → drop `tier10_on`
+- `div296_headline_tax(..., tier10_on, discount_on, ...)` → drop both
+- `_apply_discount(raw, asset, discount_on, rate)` → drop `discount_on`
+- `ordinary_taxable_gain(asset, discount_on, rate)` → drop `discount_on`
+- `div296_adjusted_gain(asset, reset_on, discount_on, rate)` → drop `discount_on`
+- `ordinary_cgt(asset, discount_on, rate, fund_cgt_rate)` → drop `discount_on`
+- `div296_fund_earnings(assets, reset_on, discount_on, rate)` → drop `discount_on`
+- `per_asset_div296_tax(asset, all, headline, reset_on, discount_on, rate)` → drop `discount_on`
+- `member_proportion_above_3m(...)` → function deleted entirely
+- Named ranges `reset_on`, `tier10_on`, `discount_on` removed from the workbook
+
+**Migration:** If you were passing `tier10_on=False`, `discount_on=False`, or a `proportion_override` value, you were not producing Bill-correct numbers. v3.0 removes these paths. The v2.6.0 .xlsx artifact is preserved as a frozen reference if you need to reproduce a v2.x scenario.
 
 **What's new in v2.6.0:**
 - **Workbook authorship** — Core Properties now stamp `creator = Aiden Hiew`, `lastModifiedBy = Aiden Hiew`, plus title/subject/description/keywords. Visible in Excel under File → Info.
@@ -49,7 +74,7 @@ python -m pip install -e .[dev]
 
 # 2. Build the workbook (runs a live recalc check at the end)
 python -m div296.build
-# -> dist/Division_296_Model_v2.6.0.xlsx
+# -> dist/Division_296_Model_v3.0.0.xlsx
 # -> Recalc validation: OK (no Excel error cells).
 
 # 3. Run the test suite (fast dev loop — skips live-recalc)
@@ -66,14 +91,14 @@ Pass `--no-validate` to skip the post-build recalc check (faster, not recommende
 ### Exporting to PDF (client-shareable Comparison page)
 
 ```bash
-python scripts/export_pdf.py dist/Division_296_Model_v2.6.0.xlsx
+python scripts/export_pdf.py dist/Division_296_Model_v3.0.0.xlsx
 # -> dist/Division_296_Model_v2.0.0_Comparison.pdf
 
 # Other tabs / whole workbook:
-python scripts/export_pdf.py dist/Division_296_Model_v2.6.0.xlsx --tab Analyser
-python scripts/export_pdf.py dist/Division_296_Model_v2.6.0.xlsx --all-tabs
-# -> dist/Division_296_Model_v2.6.0_Comparison.pdf  (default tab)
-# -> dist/Division_296_Model_v2.6.0.pdf             (--all-tabs)
+python scripts/export_pdf.py dist/Division_296_Model_v3.0.0.xlsx --tab Analyser
+python scripts/export_pdf.py dist/Division_296_Model_v3.0.0.xlsx --all-tabs
+# -> dist/Division_296_Model_v3.0.0_Comparison.pdf  (default tab)
+# -> dist/Division_296_Model_v3.0.0.pdf             (--all-tabs)
 ```
 
 Requires [LibreOffice](https://www.libreoffice.org/) installed (`soffice` on PATH, or the default `C:\Program Files\LibreOffice\program\soffice.exe` on Windows).
