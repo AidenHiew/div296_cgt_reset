@@ -31,6 +31,12 @@ Treasury's *Better Targeted Super Concessions* additional tax. Applied to a
 member's share of fund earnings above the TSB-proportional threshold. The
 model implements Year 1 only (no multi-year projection).
 
+**Fund earnings = `MAX(0, sum of Div 296 adjusted gains)`** — capital
+gains and losses are netted within the income year at the fund level,
+and the net is floored at zero (Div 296 earnings cannot be negative).
+This replaced the v3.0 per-asset floor in v3.1; see "Capital losses /
+netting" below.
+
 ## Threshold 1 / Tier 1
 
 **$3,000,000**. Additional 15% (`rate_tier1`) applied to the portion of
@@ -124,7 +130,9 @@ to the same total:
   earnings (auto-derived from TSB split).
 - **Per-asset** — each asset's share of the headline, allocated by
   `MAX(0, that asset's adjusted gain) / SUM(positive adjusted gains)`.
-  Loss assets contribute $0 to the per-asset allocation.
+  Loss assets contribute $0 to the per-asset allocation — **even though
+  they reduce the headline at fund level under v3.1 intra-year netting.**
+  Per-asset shares still sum exactly to the headline.
 
 The "Top 10 most affected" panel on Comparison ranks assets by **absolute tax
 difference** (v2.5+; previously ranked by absolute gain difference).
@@ -133,6 +141,45 @@ difference** (v2.5+; previously ranked by absolute gain difference).
 
 The 1/3 super-fund CGT discount on assets held > 12 months. Applies to
 ordinary CGT and to Div 296 *gains* (never to losses). Toggle defaults ON.
+
+## Capital losses / netting (v3.1)
+
+Capital gains and losses are netted **within the income year** at the
+fund level — for both ordinary CGT and Div 296. Three rules:
+
+1. **Ordinary CGT** uses the s102-5 ITAA 1997 method statement:
+   - Sum gross capital gains (split by holding period — long-held gains
+     are eligible for the 1/3 discount; short-held are not).
+   - Sum gross capital losses.
+   - Apply losses to non-discount gains first (taxpayer-favourable;
+     preserves the discount on long-held gains where possible — common
+     SMSF practice, but not the only legal allocation; the taxpayer may
+     elect otherwise per s102-5).
+   - Apply the 1/3 discount to the remaining long-held portion.
+   - Multiply by the fund CGT rate (15%).
+   - Result: the Analyser "Fund Ordinary CGT (after intra-year netting)"
+     cell. The per-asset Ord CGT column on the same tab is a STANDALONE
+     DIAGNOSTIC VIEW only — greyed out, not summed.
+
+2. **Div 296 fund earnings** = `MAX(0, sum of Div 296 adjusted gains)`.
+   Gains and losses net within the year; the net is floored at zero
+   (Div 296 earnings cannot be negative per the Treasury Bill).
+
+3. **Per-asset Div 296 tax** is still attributed only to positive-gain
+   assets via `MAX(0, my_gain) / SUM(positive_gains) × headline_tax`.
+   Loss assets bear $0 Div 296 tax, even when they reduce the headline
+   at fund level. Per-asset shares still reconcile to the headline.
+
+4. **Carry-forward losses** = `MAX(0, gross_losses − gross_gains)` at
+   the fund level on an ordinary-CGT basis (uses `original_cost_base`,
+   not affected by reset election). Display-only — the workbook does
+   not consume this against any subsequent year's calc; carry it
+   manually if material.
+
+v3.0 used a per-asset silo (ordinary CGT) and per-asset floor (Div 296)
+that contradicted both s102-5 and the Div 296 earnings concept. v3.1
+reverses both — see calcs.py "v3.1 capital-loss netting" docstring
+section for the breaking-change rationale.
 
 ---
 

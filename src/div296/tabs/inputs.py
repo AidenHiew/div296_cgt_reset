@@ -314,7 +314,23 @@ def build(wb: Workbook) -> Worksheet:
         c.alignment = CENTER
 
     # Held>12mo dropdown shared across all 50 rows.
-    held_dv = DataValidation(type="list", formula1='"Yes,No"', allow_blank=True)
+    #
+    # v3.1.2: errorStyle="stop" is belt-and-braces for direct typing — the
+    # dropdown rejects anything that isn't exactly "Yes" or "No". It does NOT
+    # block paste (xlsx data validation never has, without VBA), so the real
+    # paste-in normalisation happens in the hidden col J built below.
+    held_dv = DataValidation(
+        type="list",
+        formula1='"Yes,No"',
+        allow_blank=True,
+        errorStyle="stop",
+        showErrorMessage=True,
+        errorTitle="Invalid value",
+        error=(
+            "Enter 'Yes' or 'No'. Paste-in values are normalised "
+            "automatically (case and whitespace) by a hidden helper column."
+        ),
+    )
     ws.add_data_validation(held_dv)
 
     for offset in range(ASSUMPTIONS.asset_register_rows):
@@ -343,6 +359,29 @@ def build(wb: Workbook) -> Worksheet:
                     value = sample[col_idx - 2]
                 _input_cell(ws, coord, value=value, number_format=fmt)
         held_dv.add(f"I{row}")
+
+    # v3.1.2: hidden col J — normalised held>12mo flag. Every formula that
+    # reads the held flag now points at Inputs!J, not Inputs!I.
+    #
+    # Why: Inputs!I has a DataValidation list ("Yes"/"No") but data validation
+    # in xlsx only fires for direct typing into the dropdown. Pastes from
+    # another sheet or imported CSV bypass it entirely, so values like
+    # "Yes " (trailing space), "yes" (lowercase) or " YES " silently land in
+    # col I and break the exact-match `="Yes"` comparison used by ~100
+    # downstream formulas (analyser per-asset E/H, recon helpers M70/N70,
+    # comparison per-register grid). The conservative default is "No" — if
+    # someone pastes garbage, the discount is NOT applied (overstates tax
+    # marginally rather than understating it). Hidden so the user doesn't
+    # see helper plumbing; locked under sheet protection.
+    for offset in range(ASSUMPTIONS.asset_register_rows):
+        row = REGISTER_FIRST_DATA_ROW + offset
+        j_cell = ws.cell(
+            row=row, column=REGISTER_COL_HELD + 1,
+            value=f'=IF(I{row}="","",IF(TRIM(UPPER(I{row}))="YES","Yes","No"))',
+        )
+        j_cell.font = Font(name="Arial", size=10, italic=True, color="888888")
+    ws.column_dimensions["J"].hidden = True
+    ws.column_dimensions["J"].width = 14
 
     # CF for Projected gain/loss column — green text for gain, red text for loss.
     pl_first = REGISTER_FIRST_DATA_ROW
@@ -390,8 +429,9 @@ def build(wb: Workbook) -> Worksheet:
         _define_name(wb, name, coord)
 
     # --- Column widths + freeze ---
-    # 9 cols: A Code 32 / B Name 26 / C Orig CB 18 / D MV today 18 / E MV 30Jun 22
+    # 9 visible cols: A Code 32 / B Name 26 / C Orig CB 18 / D MV today 18 / E MV 30Jun 22
     # F Val source 24 / G Proceeds 18 / H Projected G/L 18 / I Held>12m 16
+    # (col J is hidden — see normalisation block above; width set there.)
     widths = [32, 26, 18, 18, 22, 24, 18, 18, 16]
     for col_idx, w in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(col_idx)].width = w

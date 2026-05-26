@@ -1,8 +1,8 @@
 """Notes tab — terminology, caveats, valuation log, provenance.
 
-Per spec §10 plus the locked additional disclosures (loss-offset divergence,
-pension-phase exclusion, reset-OFF realised-only, wash sale / Part IVA,
-transaction costs, alternative levers).
+Per spec §10 plus the locked additional disclosures (prior-year-loss
+exclusion, pension-phase exclusion, reset-OFF realised-only, wash sale /
+Part IVA, transaction costs, alternative levers).
 
 All text is FACTUAL DISCLOSURE only — no recommendation language.
 
@@ -37,16 +37,23 @@ INPUTS_SHEET = "'Inputs'"
 TERMINOLOGY = [
     ("Division 296 earnings",
      "Headline earnings figure used to compute Div 296 tax. In this model "
-     "(realised-only basis), this equals the sum of positive Div 296 "
-     "adjusted taxable capital gains across the asset register."),
-    ("Ordinary taxable capital gain",
-     "Capital gain on disposal using the asset's ORIGINAL cost base, "
-     "discounted by 1/3 if the asset has been held > 12 months and the "
-     "CGT discount toggle is ON."),
-    ("Div 296 adjusted taxable capital gain",
-     "Capital gain on disposal using the asset's Div 296 cost base — which "
-     "is the original cost base when reset = OFF, or the market value at "
-     "30 June 2026 when reset = ON. Same discount logic as the ordinary gain."),
+     "(realised-only basis), this equals the sum of per-asset Div 296 "
+     "adjusted gains across the register, NETTED against losses within the "
+     "income year and floored at zero (s102-5 method, v3.1+). Div 296 "
+     "earnings cannot be negative."),
+    ("Per-asset gain (post-discount where eligible, info only)",
+     "Diagnostic column on the Analyser per-asset table (col E). Shows "
+     "each asset's gain on a standalone basis: the 1/3 CGT discount is "
+     "applied where the asset has been held > 12 months (s115-100 ITAA "
+     "1997). Losses and short-held gains pass through gross. This column "
+     "does NOT sum to the fund tax base — fund-level capital-loss netting "
+     "lives in the Reconciliation panel."),
+    ("Per-asset Div 296 gain (post-discount where eligible, info only)",
+     "Diagnostic column on the Analyser per-asset table (col H). Same "
+     "framing as the per-asset ordinary gain column, but using the asset's "
+     "Div 296 cost base (= original cost base when reset = OFF, or market "
+     "value at 30 June 2026 when reset = ON). Does NOT sum to Div 296 "
+     "earnings because fund-level netting applies."),
     ("Ordinary CGT",
      "Capital gains tax on the ordinary taxable gain at the SMSF "
      "accumulation-phase rate of 15%. This model floors each asset at $0 "
@@ -88,13 +95,16 @@ CAVEATS = [
     ("30 June 2026 valuations are the load-bearing input.",
      "Garbage in, garbage out. Every Div 296 figure flows from the MV cells; "
      "use the Valuation Log below to record source and date for each asset."),
-    ("Loss-offset divergence from ATO method.",
-     "This model computes Ordinary CGT on a per-asset siloed basis "
-     "(MAX(0, gain) × 15% per asset, with losses kept as carry-forward). "
-     "ATO Subdivision 102-A nets gross gains and losses BEFORE the discount, "
-     "which generally produces lower Ordinary CGT and a smaller carry-forward "
-     "loss balance in years where gains and losses both occur. Real-world "
-     "figures must be reconciled by the firm's tax practitioner."),
+    ("Prior-year capital losses are NOT modelled.",
+     "v3.1 implements fund-level intra-year netting of capital gains and "
+     "losses (s102-5 ITAA 1997 method): gross gains and gross losses are "
+     "netted before the 1/3 discount is applied to whatever discountable "
+     "gain survives. Any net unused loss appears in the Reconciliation "
+     "panel as the current-year carry-forward. However, this model does "
+     "NOT take a brought-forward capital-loss balance as an input — if the "
+     "fund holds losses carried forward from prior years, they should be "
+     "applied to the figures here outside the workbook. Real-world figures "
+     "must be reconciled by the firm's tax practitioner."),
     ("Pension phase is NOT modelled.",
      "This model assumes 100% accumulation phase (fund earnings tax = 15%). "
      "Retirement-phase assets supporting a pension are taxed at 0% — for "

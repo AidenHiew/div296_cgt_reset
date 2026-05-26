@@ -1,4 +1,4 @@
-"""Analyser tab — v3.0 layout.
+"""Analyser tab — v3.0 layout with v3.1 capital-loss netting.
 
 Restructured in v3.0 around two design goals:
 
@@ -9,9 +9,24 @@ Restructured in v3.0 around two design goals:
    straight from Inputs col D/E — what the user sees on Inputs IS what the
    calc uses.
 
-The control panel removal (decision 1) means there are no toggles to mirror
-or narrate. Row 2 carries a read-only "Parameters in effect" strip pulled
-live from named ranges.
+v3.1 (capital-loss netting) — three changes on this sheet:
+
+- **Div 296 fund earnings** (row 8) — formula is `MAX(0, SUM(...))` not
+  `SUMIF(...,">0")`. Capital losses now net intra-year against gains;
+  the net is floored at zero.
+- **Per-asset Ord CGT (col F)** — relabelled "Per-asset Ord CGT (info only)",
+  greyed, no totals-row sum. It is now a STANDALONE DIAGNOSTIC VIEW, not
+  the real tax. Loss rows show "—". The authoritative fund Ord CGT is in
+  the Reconciliation panel and uses the s102-5 method statement.
+- **Reconciliation panel** — "Fund Ordinary CGT (after intra-year netting)"
+  replaces the old `SUM(F:F)` cell. Carry-forward losses cell is now
+  fund-level net unused gross loss (`MAX(0, gross_losses - gross_gains)`).
+
+Hidden helper cells (cols M, N, O at row 70) drive the new fund Ord CGT:
+
+    M70  H_disc_gains    — sum of positive gains where held>12m ("Yes")
+    N70  H_nond_gains    — sum of positive gains where held<>"Yes"
+    O70  H_gross_losses  — sum of |negative gains| (positive number)
 
 Layout (every formula references either an Inputs cell or a named range —
 never a magic number):
@@ -23,7 +38,7 @@ never a magic number):
 
     Row 6     Section band: "Fund summary"
     Row 7     Header row: blank | If no reset (default) | If elected | Diff
-    Row 8     Fund Div 296 earnings    (3 scenario columns + diff)
+    Row 8     Fund Div 296 earnings    (3 scenario columns + diff) — v3.1: MAX(0, SUM)
     Rows 9-12 Member 1-4 Div 296 tax   (3 scenario columns + diff)
     Row 13    Total Div 296 tax (headline)  (3 scenario columns + diff)
 
@@ -31,21 +46,27 @@ never a magic number):
     Row 16    Column headers (A..J visible, K..L hidden helpers)
     Rows 17-66 50 data rows. Always shows the elected-reset cost base.
                   A #row-num             B Asset                C Proceeds
-                  D Original CB          E Ordinary taxable gn  F Ordinary CGT
+                  D Original CB          E Ordinary taxable gn
+                  F Per-asset Ord CGT (info only — greyed, no sum)  ← v3.1
                   G Div 296 CB           H Div 296 adj gn       I Div 296 tax
                   J Reset impact         K helper (with reset)  L helper (without reset)
-    Row 67    Totals
+    Row 67    Totals (F omitted in v3.1)
+    Row 68    Footnote: col F is informational only
 
-    Row 69    Section band: "Reconciliation"
-    Row 70    Ordinary CGT payable
-    Row 71    Div 296 tax payable (= elected-reset headline)
-    Row 72    Capital losses carried forward
-    Row 73    Plain-English caption
+    Row 70    Section band: "Reconciliation"
+              (hidden helpers also live on this row at cols M/N/O)
+    Row 71    Fund Ordinary CGT (after intra-year netting)  ← v3.1 new formula
+    Row 72    Div 296 tax payable (= elected-reset headline)
+    Row 73    Capital losses carried forward  ← v3.1 fund net
+    Row 74    Plain-English caption  ← v3.1 reworded
 
 Per-asset Div 296 tax (col I) is the pro-rata of the elected-reset headline
 (D{HEADLINE_ROW}):
     I{r} = IF(SUMIF(H17:H66,">0")=0, 0,
               MAX(0, H{r}) / SUMIF(H17:H66,">0") * $D$13)
+
+(SUMIF(>0) is correct as the attribution DENOMINATOR — loss assets bear
+$0 tax. Only the fund-EARNINGS formula at row 8 changed in v3.1.)
 
 Hidden helper columns K, L compute both reset scenarios unconditionally
 (they do not reference any toggle), so the Reset Impact column J = K - L
@@ -101,12 +122,23 @@ PERASSET_FIRST_ROW = 17                        # was 21
 PERASSET_LAST_ROW = PERASSET_FIRST_ROW + ASSUMPTIONS.asset_register_rows - 1   # row 66
 TOTALS_ROW = PERASSET_LAST_ROW + 1             # row 67
 
-TRAP_LEGEND_ROW = TOTALS_ROW + 1               # row 68
-RECON_BAND_ROW = TOTALS_ROW + 2                # row 69
-RECON_ORD_CGT_ROW = RECON_BAND_ROW + 1         # row 70
-RECON_DIV296_ROW = RECON_BAND_ROW + 2          # row 71
-RECON_LOSSES_ROW = RECON_BAND_ROW + 3          # row 72
-RECON_LOSSES_CAPTION_ROW = RECON_LOSSES_ROW + 1   # row 73
+# v3.1: col F footnote (Per-asset Ord CGT info only) — squeezed in before
+# the trap legend; everything downstream shifts +1.
+F_INFO_FOOTNOTE_ROW = TOTALS_ROW + 1           # row 68 (NEW in v3.1)
+TRAP_LEGEND_ROW = TOTALS_ROW + 2               # row 69 (was 68)
+RECON_BAND_ROW = TOTALS_ROW + 3                # row 70 (was 69)
+RECON_ORD_CGT_ROW = RECON_BAND_ROW + 1         # row 71 (was 70)
+RECON_DIV296_ROW = RECON_BAND_ROW + 2          # row 72 (was 71)
+RECON_LOSSES_ROW = RECON_BAND_ROW + 3          # row 73 (was 72)
+RECON_LOSSES_CAPTION_ROW = RECON_LOSSES_ROW + 1   # row 74 (was 73)
+
+# v3.1: hidden helper cells driving the new Fund Ord CGT formula.
+# Placed at row 70 (= RECON_BAND_ROW) in hidden cols M, N, O so they're
+# adjacent to the consumer (cell B71) but invisible.
+HELPER_M_COL = 13                              # col M — H_disc_gains
+HELPER_N_COL = 14                              # col N — H_nond_gains
+HELPER_O_COL = 15                              # col O — H_gross_losses
+HELPER_HIDDEN_COLS = ("M", "N", "O")
 
 # Inputs↔Analyser offset (Inputs row = Analyser row - OFFSET)
 ROW_OFFSET = PERASSET_FIRST_ROW - REGISTER_FIRST_DATA_ROW   # 17 - 16 = 1
@@ -264,30 +296,34 @@ def build(wb: Workbook) -> Worksheet:
     elabel = ws.cell(row=FUND_EARNINGS_ROW, column=1, value="Fund Div 296 earnings")
     elabel.font = BODY_FONT
     elabel.alignment = Alignment(horizontal="left", vertical="center", indent=1)
-    # No-reset earnings = SUMIF over helper col L (per-asset no-reset gain).
+    # v3.1: No-reset earnings = MAX(0, SUM(helper col L)) — intra-year netting
+    # of gains and losses, floored at zero. Was SUMIF(>0) in v3.0 (per-asset
+    # floor, no netting).
     e_noreset = ws.cell(
         row=FUND_EARNINGS_ROW, column=FUND_NORESET_COL,
-        value=f'=SUMIF({l_first}:{l_last},">0")',
+        value=f'=MAX(0, SUM({l_first}:{l_last}))',
     )
     e_noreset.number_format = FMT_CURRENCY
     e_noreset.comment = Comment(
-        ("Sum of positive Div 296 adjusted gains across all 50 register rows, "
-         "using the ORIGINAL cost base (i.e. assuming no reset election). "
+        ("Sum of Div 296 adjusted gains and losses across all 50 register "
+         "rows (intra-year netting), floored at zero — Div 296 earnings "
+         "cannot be negative. Uses the ORIGINAL cost base (no reset election). "
          "Mirrors helper column L of the per-asset table."),
-        "v3.0",
+        "v3.1",
     )
-    # Elected earnings = SUMIF over col H (per-asset adjusted gain, which always
-    # uses the elected-reset cost base in v3.0).
+    # v3.1: Elected earnings = MAX(0, SUM(col H)) — same netting logic on the
+    # elected-reset scenario.
     e_elected = ws.cell(
         row=FUND_EARNINGS_ROW, column=FUND_ELECTED_COL,
-        value=f'=SUMIF({h_first}:{h_last},">0")',
+        value=f'=MAX(0, SUM({h_first}:{h_last}))',
     )
     e_elected.number_format = FMT_CURRENCY
     e_elected.comment = Comment(
-        ("Sum of positive Div 296 adjusted gains across all 50 register rows, "
-         "using the MARKET VALUE at 30 Jun 2026 as cost base (election made). "
-         "Mirrors column H of the per-asset table."),
-        "v3.0",
+        ("Sum of Div 296 adjusted gains and losses across all 50 register "
+         "rows (intra-year netting), floored at zero — Div 296 earnings "
+         "cannot be negative. Uses the MARKET VALUE at 30 Jun 2026 as cost "
+         "base (election made). Mirrors column H of the per-asset table."),
+        "v3.1",
     )
     # Difference (signed) = elected - no_reset.
     e_diff = ws.cell(
@@ -349,28 +385,37 @@ def build(wb: Workbook) -> Worksheet:
 
     # --- Per-asset analysis (elected-reset scenario only) ---
     _band(ws, PERASSET_BAND_ROW, "Per-asset analysis (elected-reset scenario)")
+    # v3.1: col F renamed to "Per-asset Ord CGT (info only)" — see module docstring.
     headers = [
         "#",
         "Asset", "Projected sale proceeds", "Original cost base",
-        "Ordinary taxable capital gain", "Ordinary CGT",
+        "Per-asset gain (post-discount where eligible, info only)",
+        "Per-asset Ord CGT (info only)",
         "Div 296 cost base",
-        "Div 296 adjusted taxable capital gain", "Div 296 tax",
+        "Per-asset Div 296 gain (post-discount where eligible, info only)",
+        "Div 296 tax",
         "Reset impact", "Helper: col H with reset", "Helper: col H without reset",
     ]
+    # v3.1: col F greyed to signal "info only — not the real tax".
+    F_INFO_HEADER_FILL = PatternFill("solid", fgColor="F4F4F4")
+    F_INFO_HEADER_FONT = Font(name="Arial", size=10, bold=True, italic=True, color="888888")
     HEADER_STYLE = {
         ROWNUM_COL:       (SECTION_BAND_FILL,  SECTION_BAND_FONT),
         ASSET_COL:        (SECTION_BAND_FILL,  SECTION_BAND_FONT),
         PROCEEDS_COL:     (PROC_HEADER_FILL,   GROUP_HEADER_FONT),
         ORIG_CB_COL:      (ORD_HEADER_FILL,    GROUP_HEADER_FONT),
-        ORD_GAIN_COL:     (ORD_HEADER_FILL,    GROUP_HEADER_FONT),
-        ORD_CGT_COL:      (ORD_HEADER_FILL,    GROUP_HEADER_FONT),
+        ORD_GAIN_COL:     (F_INFO_HEADER_FILL, F_INFO_HEADER_FONT),   # v3.1.1: greyed (info only)
+        ORD_CGT_COL:      (F_INFO_HEADER_FILL, F_INFO_HEADER_FONT),   # v3.1: greyed
         DIV_CB_COL:       (DIV_HEADER_FILL,    GROUP_HEADER_FONT),
-        DIV_GAIN_COL:     (DIV_HEADER_FILL,    GROUP_HEADER_FONT),
+        DIV_GAIN_COL:     (F_INFO_HEADER_FILL, F_INFO_HEADER_FONT),   # v3.1.1: greyed (info only)
         DIV_TAX_COL:      (DIV_HEADER_FILL,    GROUP_HEADER_FONT),
         RESET_IMPACT_COL: (RESET_HEADER_FILL,  RESET_HEADER_FONT),
         HELPER_J_COL:     (SECTION_BAND_FILL,  SECTION_BAND_FONT),
         HELPER_K_COL:     (SECTION_BAND_FILL,  SECTION_BAND_FONT),
     }
+    # v3.1: data-cell styling for col F (greyed italic).
+    F_INFO_DATA_FILL = PatternFill("solid", fgColor="FAFAFA")
+    F_INFO_DATA_FONT = Font(name="Arial", size=10, italic=True, color="888888")
     for col_idx, header in enumerate(headers, start=1):
         c = ws.cell(row=PERASSET_HEADER_ROW, column=col_idx, value=header)
         fill, font = HEADER_STYLE[col_idx]
@@ -389,10 +434,10 @@ def build(wb: Workbook) -> Worksheet:
     DATA_FILL = {
         PROCEEDS_COL:     PROC_DATA_FILL,
         ORIG_CB_COL:      ORD_DATA_FILL,
-        ORD_GAIN_COL:     ORD_DATA_FILL,
-        ORD_CGT_COL:      ORD_DATA_FILL,
+        ORD_GAIN_COL:     F_INFO_DATA_FILL,   # v3.1.1: greyed (info only)
+        ORD_CGT_COL:      F_INFO_DATA_FILL,   # v3.1: greyed
         DIV_CB_COL:       DIV_DATA_FILL,
-        DIV_GAIN_COL:     DIV_DATA_FILL,
+        DIV_GAIN_COL:     F_INFO_DATA_FILL,   # v3.1.1: greyed (info only)
         DIV_TAX_COL:      DIV_DATA_FILL,
         RESET_IMPACT_COL: RESET_DATA_FILL,
     }
@@ -403,12 +448,13 @@ def build(wb: Workbook) -> Worksheet:
 
         # Inputs column layout (v2.3): A code / B name / C orig CB / D MV today /
         # E MV 30 Jun / F val source / G proceeds / H projected G/L / I held>12m
+        # (raw, user-visible) / J held>12m (hidden, paste-normalised — v3.1.2).
         code = f"{INPUTS_SHEET}!A{i_row}"
         name = f"{INPUTS_SHEET}!B{i_row}"
         orig = f"{INPUTS_SHEET}!C{i_row}"
         mv = f"{INPUTS_SHEET}!E{i_row}"
         proceeds = f"{INPUTS_SHEET}!G{i_row}"
-        held = f"{INPUTS_SHEET}!I{i_row}"
+        held = f"{INPUTS_SHEET}!J{i_row}"
 
         # Col A — Row number
         rn = ws.cell(row=a_row, column=ROWNUM_COL, value=offset + 1)
@@ -422,22 +468,40 @@ def build(wb: Workbook) -> Worksheet:
         ws.cell(row=a_row, column=PROCEEDS_COL, value=f'=IF({proceeds}="","",{proceeds})')
         # Col D — Original cost base
         ws.cell(row=a_row, column=ORIG_CB_COL, value=f'=IF({orig}="","",{orig})')
-        # Col E — Ordinary taxable capital gain
-        ws.cell(row=a_row, column=ORD_GAIN_COL,
-                value=_ord_taxable_formula(proceeds, orig, held))
-        # Col F — Ordinary CGT (per-asset silo)
-        ws.cell(
+        # Col E — Per-asset gain (post-discount where eligible, info only).
+        # v3.1.1: renamed from "Ordinary taxable capital gain" — the value
+        # is per-asset post-discount (losses pass through gross; short-held
+        # gains pass through gross; only held gains get the 1/3 discount).
+        # This is a DIAGNOSTIC view, not the fund tax base. Fund-level netting
+        # lives in the Reconciliation panel below.
+        e_cell = ws.cell(row=a_row, column=ORD_GAIN_COL,
+                         value=_ord_taxable_formula(proceeds, orig, held))
+        e_cell.font = F_INFO_DATA_FONT
+        e_cell.alignment = Alignment(horizontal="right", vertical="center")
+        # Col F — Per-asset Ord CGT (info only, v3.1).
+        # Shows "—" for loss rows (E<=0) to signal the asset contributes
+        # nothing to the standalone per-asset view. The real fund-level tax
+        # lives in the Reconciliation panel (Fund Ordinary CGT, row 71).
+        f_cell = ws.cell(
             row=a_row, column=ORD_CGT_COL,
-            value=f'=IF({proceeds}="","",MAX(0,E{a_row})*fund_cgt_rate)',
+            value=f'=IF({proceeds}="","",IF(E{a_row}<=0,"—",MAX(0,E{a_row})*fund_cgt_rate))',
         )
+        f_cell.font = F_INFO_DATA_FONT
+        f_cell.alignment = Alignment(horizontal="right", vertical="center")
         # Col G — Div 296 cost base. v3.0: always the elected reset cost base.
         ws.cell(
             row=a_row, column=DIV_CB_COL,
             value=f'=IF({proceeds}="","",{mv})',
         )
-        # Col H — Div 296 adjusted gain (elected-reset scenario).
-        ws.cell(row=a_row, column=DIV_GAIN_COL,
-                value=_div296_adj_formula(proceeds, mv, held))
+        # Col H — Per-asset Div 296 gain (post-discount where eligible, info only).
+        # v3.1.1: renamed from "Div 296 adjusted taxable capital gain". Same
+        # diagnostic framing as col E — per-asset, post-discount for held gains,
+        # raw for losses and short-held gains. The fund Div 296 earnings figure
+        # nets gains and losses (see Reconciliation panel, row 71 area).
+        h_cell = ws.cell(row=a_row, column=DIV_GAIN_COL,
+                         value=_div296_adj_formula(proceeds, mv, held))
+        h_cell.font = F_INFO_DATA_FONT
+        h_cell.alignment = Alignment(horizontal="right", vertical="center")
         # Col I — Div 296 tax (pro-rata of the elected-reset headline at D{HEADLINE_ROW}).
         ws.cell(
             row=a_row, column=DIV_TAX_COL,
@@ -493,10 +557,13 @@ def build(wb: Workbook) -> Worksheet:
     totals_label.fill = TOTALS_FILL
     totals_label.border = DOUBLE_TOP
 
+    # v3.1: col F (Per-asset Ord CGT info only) is NOT summed — see
+    # F_INFO_FOOTNOTE_ROW for the explanation, and the Reconciliation panel
+    # row 71 for the authoritative Fund Ordinary CGT.
+    # v3.1.1: col H (Per-asset Div 296 gain, info only) and col E (Per-asset
+    # gain, info only) are also not summed — same diagnostic framing.
     for col_letter, col_const in (
         ("C", PROCEEDS_COL),
-        ("F", ORD_CGT_COL),
-        ("H", DIV_GAIN_COL),
         ("I", DIV_TAX_COL),
     ):
         rng = f"{col_letter}{PERASSET_FIRST_ROW}:{col_letter}{PERASSET_LAST_ROW}"
@@ -506,10 +573,45 @@ def build(wb: Workbook) -> Worksheet:
         cell.fill = TOTALS_FILL
         cell.border = DOUBLE_TOP
 
-    for col_const in (ORIG_CB_COL, ORD_GAIN_COL, DIV_CB_COL, RESET_IMPACT_COL):
+    # v3.1: col F totals cell shows "(see fund total)" in grey italic.
+    # v3.1.1: cols E and H follow the same pattern — info-only columns don't
+    # sum because per-asset post-discount values don't aggregate meaningfully
+    # once fund-level loss netting is in play (s102-5).
+    for info_only_col in (ORD_GAIN_COL, ORD_CGT_COL, DIV_GAIN_COL):
+        info_cell = ws.cell(
+            row=TOTALS_ROW, column=info_only_col,
+            value="(see fund total)",
+        )
+        info_cell.font = F_INFO_DATA_FONT
+        info_cell.fill = TOTALS_FILL
+        info_cell.border = DOUBLE_TOP
+        info_cell.alignment = Alignment(horizontal="right", vertical="center")
+
+    for col_const in (ORIG_CB_COL, DIV_CB_COL, RESET_IMPACT_COL):
         c = ws.cell(row=TOTALS_ROW, column=col_const)
         c.fill = TOTALS_FILL
         c.border = DOUBLE_TOP
+
+    # --- v3.1.1: footnote covering all three "info only" columns (E, F, H) ---
+    f_footnote = ws.cell(
+        row=F_INFO_FOOTNOTE_ROW, column=1,
+        value=('The greyed "(info only)" columns (per-asset gain, per-asset Ord '
+               'CGT, per-asset Div 296 gain) show each asset on a standalone '
+               'basis: the 1/3 CGT discount is applied per-asset where eligible '
+               '(s115-100 ITAA 1997 — held > 12 months); losses and short-held '
+               'gains pass through gross. These columns do NOT sum to the fund '
+               'total because capital losses offset capital gains within the '
+               'income year at the fund level (s102-5 ITAA 1997). For the '
+               'authoritative fund figures see the Reconciliation panel below '
+               '("Fund Ordinary CGT (after intra-year netting)" and "Div 296 '
+               'earnings").'),
+    )
+    f_footnote.font = Font(name="Arial", size=9, italic=True, color="666666")
+    f_footnote.alignment = Alignment(horizontal="left", vertical="center",
+                                     wrap_text=True, indent=1)
+    f_footnote.fill = PatternFill("solid", fgColor="F4F4F4")
+    ws.merge_cells(f"A{F_INFO_FOOTNOTE_ROW}:L{F_INFO_FOOTNOTE_ROW}")
+    ws.row_dimensions[F_INFO_FOOTNOTE_ROW].height = 32
 
     # --- Trap-row + reset-impact legend (plain-English) ---
     legend = ws.cell(
@@ -533,12 +635,84 @@ def build(wb: Workbook) -> Worksheet:
 
     # --- Reconciliation panel (stays at bottom per v3.0 decision 8) ---
     _band(ws, RECON_BAND_ROW, "Reconciliation")
-    ws.cell(row=RECON_ORD_CGT_ROW, column=1,
-            value="Ordinary CGT payable").font = BODY_FONT
-    ws.cell(
-        row=RECON_ORD_CGT_ROW, column=2,
-        value=f"=SUM(F{PERASSET_FIRST_ROW}:F{PERASSET_LAST_ROW})",
-    ).number_format = FMT_CURRENCY
+
+    # v3.1: hidden helper cells driving the new Fund Ord CGT formula.
+    # Ranges: Inputs!H16:H65 = projected gain/loss (= proceeds − orig cost base).
+    #         Inputs!J16:J65 = NORMALISED held>12m flag ("Yes"/"No"/blank).
+    # SUMIFS ignores text in the sum_range automatically; rows where Inputs!H
+    # is "" (the empty-row IF fallback) are skipped.
+    inputs_h_range = (
+        f"{INPUTS_SHEET}!H{REGISTER_FIRST_DATA_ROW}:"
+        f"H{REGISTER_FIRST_DATA_ROW + ASSUMPTIONS.asset_register_rows - 1}"
+    )
+    # v3.1.2: read from Inputs!J (paste-normalised), not Inputs!I (raw user
+    # input). Inputs!I has a Yes/No dropdown but its DataValidation only
+    # catches direct typing — pastes from another sheet/CSV bypass it.
+    # Inputs!J runs TRIM+UPPER on I and returns a clean "Yes"/"No"/"".
+    # See inputs.py for the rationale.
+    inputs_j_range = (
+        f"{INPUTS_SHEET}!J{REGISTER_FIRST_DATA_ROW}:"
+        f"J{REGISTER_FIRST_DATA_ROW + ASSUMPTIONS.asset_register_rows - 1}"
+    )
+    helper_disc_gains = (
+        f'=SUMIFS({inputs_h_range}, {inputs_h_range}, ">0", '
+        f'{inputs_j_range}, "Yes")'
+    )
+    helper_nond_gains = (
+        f'=SUMIFS({inputs_h_range}, {inputs_h_range}, ">0", '
+        f'{inputs_j_range}, "<>Yes")'
+    )
+    helper_gross_losses = f'=-SUMIF({inputs_h_range}, "<0")'
+    helper_disc_cell = ws.cell(
+        row=RECON_BAND_ROW, column=HELPER_M_COL, value=helper_disc_gains,
+    )
+    helper_disc_cell.number_format = FMT_CURRENCY
+    helper_nond_cell = ws.cell(
+        row=RECON_BAND_ROW, column=HELPER_N_COL, value=helper_nond_gains,
+    )
+    helper_nond_cell.number_format = FMT_CURRENCY
+    helper_loss_cell = ws.cell(
+        row=RECON_BAND_ROW, column=HELPER_O_COL, value=helper_gross_losses,
+    )
+    helper_loss_cell.number_format = FMT_CURRENCY
+    # Hide the helper cols.
+    for col in HELPER_HIDDEN_COLS:
+        ws.column_dimensions[col].hidden = True
+
+    # Fund Ordinary CGT — s102-5 method statement, losses to non-discount
+    # gains first (taxpayer-favourable; standard SMSF practice).
+    #   nd_after  = MAX(0, N - L)
+    #   d_after   = MAX(0, D - MAX(0, L - N))
+    #   net_taxable = nd_after + d_after * (1 - discount_rate)
+    #   CGT = net_taxable * fund_cgt_rate
+    d_ref = f"M{RECON_BAND_ROW}"  # disc gains
+    n_ref = f"N{RECON_BAND_ROW}"  # nondiscount gains
+    l_ref = f"O{RECON_BAND_ROW}"  # gross losses
+    fund_ord_cgt_formula = (
+        f"=(MAX(0,{n_ref}-{l_ref})"
+        f"+MAX(0,{d_ref}-MAX(0,{l_ref}-{n_ref}))*(1-discount_rate))"
+        f"*fund_cgt_rate"
+    )
+
+    ord_cgt_label = ws.cell(
+        row=RECON_ORD_CGT_ROW, column=1,
+        value="Fund Ordinary CGT (after intra-year netting)",
+    )
+    ord_cgt_label.font = BODY_FONT
+    fund_ord_cgt_cell = ws.cell(
+        row=RECON_ORD_CGT_ROW, column=2, value=fund_ord_cgt_formula,
+    )
+    fund_ord_cgt_cell.number_format = FMT_CURRENCY
+    fund_ord_cgt_cell.comment = Comment(
+        ("Per s102-5 ITAA 1997 method statement: gross capital gains and "
+         "losses are netted within the income year, then the 1/3 CGT discount "
+         "is applied to the net positive long-held portion. Losses are applied "
+         "to non-discount gains first (preserving the discount on long-held "
+         "gains where possible) — common SMSF practice; the taxpayer may elect "
+         "a different loss-application order. Consult adviser if a non-default "
+         "allocation is preferred."),
+        "v3.1",
+    )
 
     ws.cell(row=RECON_DIV296_ROW, column=1,
             value="Div 296 tax payable (elected-reset headline)").font = BODY_FONT
@@ -546,29 +720,30 @@ def build(wb: Workbook) -> Worksheet:
     ws.cell(row=RECON_DIV296_ROW, column=2,
             value=f"=D{HEADLINE_ROW}").number_format = FMT_CURRENCY
 
+    # v3.1: Carry-forward losses = net unused gross loss at fund level
+    # (MAX(0, gross_losses - gross_gains)). Was per-asset gross sum in v3.0.
+    cf_formula = (
+        f"=MAX(0, {l_ref} - ({d_ref} + {n_ref}))"
+    )
     ws.cell(row=RECON_LOSSES_ROW, column=1,
             value="Capital losses carried forward").font = BODY_FONT
-    cf_terms = []
-    for offset in range(ASSUMPTIONS.asset_register_rows):
-        i_row = REGISTER_FIRST_DATA_ROW + offset
-        orig_i = f"{INPUTS_SHEET}!C{i_row}"
-        proc_i = f"{INPUTS_SHEET}!G{i_row}"
-        cf_terms.append(f'IF({proc_i}="",0,MAX(0,{orig_i}-{proc_i}))')
     ws.cell(
-        row=RECON_LOSSES_ROW, column=2,
-        value="=" + "+".join(cf_terms),
+        row=RECON_LOSSES_ROW, column=2, value=cf_formula,
     ).number_format = FMT_CURRENCY
 
     caption = ws.cell(
         row=RECON_LOSSES_CAPTION_ROW, column=1,
-        value=("These losses can be applied against future realised capital "
-               "gains within the fund — they have no effect on Div 296."),
+        value=("Capital gains and losses are netted within the income year for "
+               "both ordinary CGT (per s102-5 ITAA 1997) and Div 296. Any net "
+               "unused gross loss is the carry-forward figure above, available "
+               "against future realised capital gains. Neither Div 296 earnings "
+               "nor net taxable capital gain can be negative."),
     )
     caption.font = Font(name="Arial", size=9, italic=True, color="666666")
     caption.alignment = Alignment(horizontal="left", vertical="center",
                                   wrap_text=True, indent=1)
     ws.merge_cells(f"A{RECON_LOSSES_CAPTION_ROW}:L{RECON_LOSSES_CAPTION_ROW}")
-    ws.row_dimensions[RECON_LOSSES_CAPTION_ROW].height = 20
+    ws.row_dimensions[RECON_LOSSES_CAPTION_ROW].height = 32
 
     # --- Trap shading on per-asset rows: red when ord raw gain < 0 AND Div 296 adj gain > 0 ---
     rng = (

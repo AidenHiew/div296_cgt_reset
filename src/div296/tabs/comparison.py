@@ -365,10 +365,11 @@ def _build_per_register_helpers(ws: Worksheet) -> tuple[str, str, str]:
     for n in range(n_first, n_last + 1):
         # v2.3 Inputs column layout: A code / B name / C orig CB / D MV today
         # / E MV 30 Jun / F val source / G proceeds / H projected G/L / I held
+        # (raw) / J held (hidden, paste-normalised — v3.1.2)
         proceeds = f"{INPUTS_SHEET}!G{n}"   # was H
         orig = f"{INPUTS_SHEET}!C{n}"        # was D
         mv = f"{INPUTS_SHEET}!E{n}"          # was F
-        held = f"{INPUTS_SHEET}!I{n}"        # unchanged
+        held = f"{INPUTS_SHEET}!J{n}"        # v3.1.2: J (normalised), was I
         ws[f"{PER_REG_GAIN_A_COL}{n}"] = _div296_adj_formula(proceeds, orig, held)
         ws[f"{PER_REG_GAIN_B_COL}{n}"] = _div296_adj_formula(proceeds, mv, held)
         # v2.5: per-row tax inlined into the sort metric so the helper grid
@@ -397,9 +398,14 @@ def _build_helpers(
     ws: Worksheet, gain_a_range: str, gain_b_range: str,
 ) -> tuple[str, str]:
     """Hidden L/M block: fund earnings (over the full register), per-member tax,
-    and headline totals. Returns (headline_a_abs, headline_b_abs)."""
-    ws[f"{HELPER_COL_A}{HELPER_FUND_EARNINGS_ROW}"] = f'=SUMIF({gain_a_range},">0")'
-    ws[f"{HELPER_COL_B}{HELPER_FUND_EARNINGS_ROW}"] = f'=SUMIF({gain_b_range},">0")'
+    and headline totals. Returns (headline_a_abs, headline_b_abs).
+
+    v3.1: fund-earnings cells use MAX(0, SUM(...)) — intra-year netting of
+    gains and losses, floored at zero. v3.0 used SUMIF(>0) which floored
+    per-asset before summing.
+    """
+    ws[f"{HELPER_COL_A}{HELPER_FUND_EARNINGS_ROW}"] = f'=MAX(0, SUM({gain_a_range}))'
+    ws[f"{HELPER_COL_B}{HELPER_FUND_EARNINGS_ROW}"] = f'=MAX(0, SUM({gain_b_range}))'
 
     a_earnings = f"${HELPER_COL_A}${HELPER_FUND_EARNINGS_ROW}"
     b_earnings = f"${HELPER_COL_B}${HELPER_FUND_EARNINGS_ROW}"
@@ -518,25 +524,30 @@ def _build_subtotals(ws: Worksheet, headline_a: str, headline_b: str,
         c.fill = SECTION_BAND_FILL
         c.alignment = CENTER
 
-    # Reference to the Analyser's Ordinary CGT total — this is the same in both
-    # scenarios (ordinary CGT doesn't depend on reset election).
-    # Analyser B74 = Ordinary CGT payable (reconciliation panel). The state strip
-    # added in v2.0.0 shifted this from B73 → B74 but the Comparison reference
-    # wasn't updated; fixed in v2.2.0.
-    ord_cgt_ref = f"={ANALYSER_SHEET}!B74"
+    # Reference to the Analyser's Fund Ordinary CGT total — same in both
+    # scenarios (ordinary CGT doesn't depend on reset election; uses
+    # original cost base via ordinary_raw_gain).
+    # v3.1: Fund Ordinary CGT lives at Analyser!B71 (was B70 in v3.0,
+    # then shifted +1 by the new col-F-info footnote at row 68). The v2.x
+    # reference to B74 was stale across v3.0 — fixed here.
+    ord_cgt_ref = f"={ANALYSER_SHEET}!B71"
 
     # v2.3 C-3: per-row definitions surfaced as cell Comments on the col-A label
     # so the reader can hover for a plain-English explanation of each subtotal.
+    # v3.1: "Div 296 earnings" formula nets gains and losses (was SUMIF(>0)).
     rows = [
         (SUBTOTAL_EARNINGS_ROW, "Div 296 earnings",
-         f"=SUMIF({gain_a_range},\">0\")", f"=SUMIF({gain_b_range},\">0\")",
+         f"=MAX(0, SUM({gain_a_range}))", f"=MAX(0, SUM({gain_b_range}))",
          "The total estimated Division 296 adjusted taxable capital gain "
-         "across all assets included in the analysis. Excludes losses."),
+         "across all assets included in the analysis, net of capital losses "
+         "within the year (s102-5 method). Floored at zero — Div 296 earnings "
+         "cannot be negative."),
         (SUBTOTAL_ORD_CGT_ROW,  "Ordinary CGT (unchanged by reset)",
          ord_cgt_ref, ord_cgt_ref,
-         "Ordinary capital gains tax (fund CGT rate applied to the realised "
-         "gain after any 1/3 CGT discount). Same in both scenarios — the "
-         "reset election affects Div 296, not ordinary CGT."),
+         "Ordinary capital gains tax — fund CGT rate applied to net taxable "
+         "capital gain after intra-year netting of capital losses (s102-5 ITAA "
+         "1997 method). Same in both scenarios — the reset election affects "
+         "Div 296, not ordinary CGT."),
         (SUBTOTAL_DIV296_ROW,   "Div 296 tax (headline)",
          f"={headline_a[1:]}", f"={headline_b[1:]}",
          "Division 296 additional tax payable. Each member's share is "
@@ -745,7 +756,7 @@ def _build_per_asset_detail(
 
     # Column sub-headers (29)
     sub_headers = ["Asset", "Proceeds", "Div 296 cost base",
-                   "Div 296 adj gain", "Div 296 tax"]
+                   "Div 296 adj gain (info only)", "Div 296 tax"]
     for col, header in zip(PANEL_A_COLS, sub_headers):
         c = ws[f"{col}{PANEL_HEADER_ROW}"]
         c.value = header
