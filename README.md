@@ -4,9 +4,10 @@
 
 A Microsoft Excel workbook (`.xlsx`) that illustrates Division 296 tax outcomes for SMSFs and makes the case for pre–30 June 2026 action on assets sitting in an unrealised-loss position (the "reset trap").
 
-**Status:** v3.2.0 — stable. **Layout-only change** vs v3.1.0: the Analyser per-asset table is restructured around explicit gross-gain and "1/3 CGT discount eligible?" flag columns so a reader can audit each asset's CGT directly from what's on screen. Default-config calc-engine outputs are byte-equivalent to v3.1.0 (no numerical drift). See "What's new in v3.2.0" below.
+**Status:** v3.2.1 — stable. Cosmetic patch over v3.2.0: the Analyser Fund-summary "Difference" column now uses the same muted green/red sign convention as the per-asset Reset-impact column (negative = saving from electing reset → green; positive = cost increase → red), and the column header is shortened from "Difference (signed)" to "Difference". No calc-engine changes. See "What's new in v3.2.x" below.
 
 **Previous releases:**
+- v3.2.0 (frozen as reference; artifact `dist/Division_296_Model_v3.2.0.xlsx`). Per-asset semantic refactor — Style 1 / Option B layout. Layout-only vs v3.1.0; numerically byte-equivalent.
 - v3.1.0 (frozen as reference; artifact `dist/Division_296_Model_v3.1.0.xlsx`). Capital-loss netting + per-asset table clarity pass over v3.0.0. Breaking numerical vs v3.0.0 for funds with offsetting losses.
 - v3.0.0 (frozen as the last release on the v3.0 line; artifact `dist/Division_296_Model_v3.0.0.xlsx`). Structural simplification + transparency pass over v2.6.0; breaking calc-engine API change vs v2.x.
 - v2.6.0 (frozen as the last release on the v2 line; artifact `dist/Division_296_Model_v2.6.0.xlsx`). Authorship & provenance pass over v2.5.0.
@@ -16,6 +17,11 @@ A Microsoft Excel workbook (`.xlsx`) that illustrates Division 296 tax outcomes 
 - v2.2.0 (frozen as reference; artifact `dist/Division_296_Model_v2.2.0.xlsx`). Client-readability pass over v2.0.0.
 - v2.0.0 (frozen as reference; tag `v2.0.0`, artifact `dist/Division_296_Model_v2.0.0.xlsx`). UX pass over v1.0.0.
 - v1.0.0 (frozen as reference; tag `v1.0.0`, artifact `dist/Division_296_Model_v1.0.0.xlsx`).
+
+**What's new in v3.2.1:**
+- **Sign-coloured "Difference" column on the Analyser Fund summary.** The Difference column (E8:E13) now renders negative values in muted green (`#0B6E4F`) and positive values in muted red (`#A61B1B`), matching the per-asset Reset-impact convention used elsewhere on the tab. Reads as a saving / cost signal at a glance instead of the prior loud `[Red]` for any non-zero. Implemented via conditional formatting (sign-only); existing font weights on the headline-vs-body bands are preserved.
+- **Header shortened.** "Difference (signed)" → "Difference". The accounting parentheses on negatives + the new colour cue make the "(signed)" parenthetical redundant.
+- **No calc-engine or layout changes.** Byte-equivalent to v3.2.0 on the §12 acceptance scenario.
 
 **What's new in v3.2.0:**
 - **Per-asset semantic refactor — Style 1 / Option B layout.** The Analyser per-asset table now exposes gross gain and the "1/3 CGT discount eligible? (Yes/No)" flag as separate visible columns on both the ordinary and Div 296 sides, with the per-asset Ord CGT derived cleanly from those two. A reader can now audit "$300k gross × Yes flag → $30k Ord CGT" directly from what's on the screen, without going to Inputs.
