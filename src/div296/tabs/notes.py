@@ -41,19 +41,30 @@ TERMINOLOGY = [
      "adjusted gains across the register, NETTED against losses within the "
      "income year and floored at zero (s102-5 method, v3.1+). Div 296 "
      "earnings cannot be negative."),
-    ("Per-asset gain (post-discount where eligible, info only)",
-     "Diagnostic column on the Analyser per-asset table (col E). Shows "
-     "each asset's gain on a standalone basis: the 1/3 CGT discount is "
-     "applied where the asset has been held > 12 months (s115-100 ITAA "
-     "1997). Losses and short-held gains pass through gross. This column "
-     "does NOT sum to the fund tax base — fund-level capital-loss netting "
-     "lives in the Reconciliation panel."),
+    ("Ord gross gain (info only)",
+     "Diagnostic column on the Analyser per-asset table (col E, v3.2). "
+     "Shows each asset's pre-discount gain or loss: proceeds − original "
+     "cost base. Losses pass through as negatives; no discount applied. "
+     "Combined with the discount-eligible flag (col F) to derive the "
+     "per-asset Ord CGT (col G). Does NOT sum to the fund tax base — "
+     "fund-level capital-loss netting lives in the Reconciliation panel."),
+    ("1/3 CGT discount eligible? (Yes/No)",
+     "Diagnostic column on the Analyser per-asset table (col F, v3.2). "
+     "Mirrors the normalised held>12m flag from Inputs!J: 'Yes' means the "
+     "asset qualifies for the s115-100 ITAA 1997 1/3 CGT discount and the "
+     "col G derivation applies it to the gross gain; 'No' or blank means "
+     "the per-asset gain passes through gross."),
+    ("Div 296 gross gain (info only)",
+     "Diagnostic column on the Analyser per-asset table (col I, v3.2). "
+     "Symmetric to col E on the Div 296 side: proceeds − Div 296 cost base "
+     "(market value at 30 June 2026 under the elected-reset scenario). No "
+     "discount applied; for standalone per-asset audit only."),
     ("Per-asset Div 296 gain (post-discount where eligible, info only)",
-     "Diagnostic column on the Analyser per-asset table (col H). Same "
-     "framing as the per-asset ordinary gain column, but using the asset's "
-     "Div 296 cost base (= original cost base when reset = OFF, or market "
-     "value at 30 June 2026 when reset = ON). Does NOT sum to Div 296 "
-     "earnings because fund-level netting applies."),
+     "Diagnostic column on the Analyser per-asset table (col J, v3.2 — was "
+     "col H in v3.1). Same framing as the per-asset ordinary gain column "
+     "but using the asset's Div 296 cost base (market value at 30 June 2026 "
+     "when reset election is made). Does NOT sum to Div 296 earnings "
+     "because fund-level netting applies."),
     ("Ordinary CGT",
      "Capital gains tax on the ordinary taxable gain at the SMSF "
      "accumulation-phase rate of 15%. This model floors each asset at $0 "

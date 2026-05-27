@@ -46,6 +46,7 @@ from div296.styles import (
     THIN_BOX, TITLE_FONT, TRAP_FILL,
     PROC_DATA_FILL, ORD_DATA_FILL, DIV_DATA_FILL,
 )
+from div296.tabs import analyser as analyser_tab
 from div296.tabs.inputs import (
     MEMBERS_FIRST_DATA_ROW, REGISTER_FIRST_DATA_ROW,
     REGISTER_LAST_DATA_ROW,
@@ -527,10 +528,9 @@ def _build_subtotals(ws: Worksheet, headline_a: str, headline_b: str,
     # Reference to the Analyser's Fund Ordinary CGT total — same in both
     # scenarios (ordinary CGT doesn't depend on reset election; uses
     # original cost base via ordinary_raw_gain).
-    # v3.1: Fund Ordinary CGT lives at Analyser!B71 (was B70 in v3.0,
-    # then shifted +1 by the new col-F-info footnote at row 68). The v2.x
-    # reference to B74 was stale across v3.0 — fixed here.
-    ord_cgt_ref = f"={ANALYSER_SHEET}!B71"
+    # v3.2: address derived from analyser.FUND_ORD_CGT_CELL constant so any
+    # future row shift on the Analyser tab propagates automatically.
+    ord_cgt_ref = f"={ANALYSER_SHEET}!{analyser_tab.FUND_ORD_CGT_CELL}"
 
     # v2.3 C-3: per-row definitions surfaced as cell Comments on the col-A label
     # so the reader can hover for a plain-English explanation of each subtotal.
