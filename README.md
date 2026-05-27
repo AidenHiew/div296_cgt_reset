@@ -4,9 +4,10 @@
 
 A Microsoft Excel workbook (`.xlsx`) that illustrates Division 296 tax outcomes for SMSFs and makes the case for pre–30 June 2026 action on assets sitting in an unrealised-loss position (the "reset trap").
 
-**Status:** v3.1.0 — stable. **Breaking numerical change** vs v3.0.0: ordinary CGT and Div 296 fund earnings now correctly net capital gains and losses within the income year (s102-5 ITAA 1997). Previously both were per-asset siloed/floored, which understated relief and overstated tax for any fund with offsetting losses. See "What's new in v3.1.0" below.
+**Status:** v3.2.0 — stable. **Layout-only change** vs v3.1.0: the Analyser per-asset table is restructured around explicit gross-gain and "1/3 CGT discount eligible?" flag columns so a reader can audit each asset's CGT directly from what's on screen. Default-config calc-engine outputs are byte-equivalent to v3.1.0 (no numerical drift). See "What's new in v3.2.0" below.
 
 **Previous releases:**
+- v3.1.0 (frozen as reference; artifact `dist/Division_296_Model_v3.1.0.xlsx`). Capital-loss netting + per-asset table clarity pass over v3.0.0. Breaking numerical vs v3.0.0 for funds with offsetting losses.
 - v3.0.0 (frozen as the last release on the v3.0 line; artifact `dist/Division_296_Model_v3.0.0.xlsx`). Structural simplification + transparency pass over v2.6.0; breaking calc-engine API change vs v2.x.
 - v2.6.0 (frozen as the last release on the v2 line; artifact `dist/Division_296_Model_v2.6.0.xlsx`). Authorship & provenance pass over v2.5.0.
 - v2.5.0 (frozen as reference; artifact `dist/Division_296_Model_v2.5.0.xlsx`). Client-feedback pass #3 over v2.4.0 (8 items: calc-default flip, Inputs member 2, full Comparison rewrite).
@@ -15,6 +16,15 @@ A Microsoft Excel workbook (`.xlsx`) that illustrates Division 296 tax outcomes 
 - v2.2.0 (frozen as reference; artifact `dist/Division_296_Model_v2.2.0.xlsx`). Client-readability pass over v2.0.0.
 - v2.0.0 (frozen as reference; tag `v2.0.0`, artifact `dist/Division_296_Model_v2.0.0.xlsx`). UX pass over v1.0.0.
 - v1.0.0 (frozen as reference; tag `v1.0.0`, artifact `dist/Division_296_Model_v1.0.0.xlsx`).
+
+**What's new in v3.2.0:**
+- **Per-asset semantic refactor — Style 1 / Option B layout.** The Analyser per-asset table now exposes gross gain and the "1/3 CGT discount eligible? (Yes/No)" flag as separate visible columns on both the ordinary and Div 296 sides, with the per-asset Ord CGT derived cleanly from those two. A reader can now audit "$300k gross × Yes flag → $30k Ord CGT" directly from what's on the screen, without going to Inputs.
+- **Column shift (visible cols A..L; was A..J).** New: col E "Ord gross gain (info only)", col F "1/3 CGT discount eligible? (Yes/No)", col I "Div 296 gross gain (info only)". Existing per-asset Ord CGT and Div 296 post-disc cols shifted right to cols G and J respectively. Div 296 tax → col K; Reset impact → col L. Hidden helpers M..Q.
+- **Cross-tab layout-constant pass.** `Analyser!B71` (Fund Ord CGT) is no longer a literal in `comparison.py` — surfaced via `analyser.FUND_ORD_CGT_CELL` so future Analyser row shifts propagate. Similar constants exposed for the headline cells (`HEADLINE_NORESET_CELL`, `HEADLINE_ELECTED_CELL`).
+- **Numerical-invariance promise.** v3.2 is a layout / presentation change only. Default-config calc-engine outputs are byte-equivalent to v3.1.0 — same Fund Ord CGT ($180,000 §12), same Div 296 earnings ($1,100,000 no-reset / $253,333 elected §12), same headline tax ($142,083 no-reset / $32,722 elected §12). No `calcs.py` changes.
+- **Notes terminology refresh.** Glossary entries added for "Ord gross gain (info only)", "1/3 CGT discount eligible? (Yes/No)", "Div 296 gross gain (info only)". The "Per-asset Div 296 gain" entry updated to point at col J (was col H).
+
+**Out of scope for v3.2 (filed as separate follow-up chips):** prior-year carry-forward loss support; Inputs!I DataValidation hardening for paste-in "Yes ".
 
 **What's new in v3.1.0:**
 - **Capital losses now net intra-year.** v3.0 floored each asset at zero before summing — both for ordinary CGT (per-asset silo) and Div 296 fund earnings (per-asset floor). Neither was consistent with how the ATO actually computes super-fund CGT (s102-5 ITAA 1997 method statement) or with the Div 296 earnings concept. v3.1 nets at the fund level for both.
