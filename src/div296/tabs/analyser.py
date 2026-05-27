@@ -294,7 +294,7 @@ def build(wb: Workbook) -> Worksheet:
         (1, "", None),                                  # cols A:B label zone
         (FUND_NORESET_COL, "If no reset (default)", "0F6E56"),    # green-ish
         (FUND_ELECTED_COL, "If elected to reset", "C7A752"),      # gold (reset theme)
-        (FUND_DIFF_COL, "Difference (signed)", "1D3B34"),         # dark teal
+        (FUND_DIFF_COL, "Difference", "1D3B34"),                  # dark teal
     ]
     # Merge label cols A:B on header row too (keeps the band visually clean).
     ws.merge_cells(
@@ -352,7 +352,7 @@ def build(wb: Workbook) -> Worksheet:
         row=FUND_EARNINGS_ROW, column=FUND_DIFF_COL,
         value=f"=D{FUND_EARNINGS_ROW}-C{FUND_EARNINGS_ROW}",
     )
-    e_diff.number_format = '$#,##0;[Red]($#,##0);"-"'
+    e_diff.number_format = '$#,##0;($#,##0);"-"'
 
     # --- Rows 9-12: Per-member Div 296 tax (3 scenario columns + signed diff) ---
     # Cell references for the earnings driver of each scenario.
@@ -383,7 +383,7 @@ def build(wb: Workbook) -> Worksheet:
             row=row, column=FUND_DIFF_COL,
             value=f"=D{row}-C{row}",
         )
-        t_df.number_format = '$#,##0;[Red]($#,##0);"-"'
+        t_df.number_format = '$#,##0;($#,##0);"-"'
 
     # --- Row 13: Headline total ---
     ws.merge_cells(f"A{HEADLINE_ROW}:B{HEADLINE_ROW}")
@@ -400,10 +400,32 @@ def build(wb: Workbook) -> Worksheet:
         h_total.font = Font(name="Arial", size=11, bold=True, color="1D3B34")
         h_total.fill = PatternFill("solid", fgColor="EFF5F3")
         if col_idx == FUND_DIFF_COL:
-            h_total.number_format = '$#,##0;[Red]($#,##0);"-"'
+            h_total.number_format = '$#,##0;($#,##0);"-"'
         else:
             h_total.number_format = FMT_CURRENCY
         h_total.border = Border(top=Side(style="thin", color="1D3B34"))
+
+    # Sign-coloured Difference column (negative = saving from electing reset → green;
+    # positive = cost increase → red). Matches the Reset-impact convention used on
+    # the per-asset table below. Muted RGB to sit visually with the rest of the workbook.
+    # Two ranges so CF font weight/size matches the base style of each band.
+    diff_letter = get_column_letter(FUND_DIFF_COL)
+    body_range = (
+        f"{diff_letter}{FUND_EARNINGS_ROW}:{diff_letter}{MEMBER_TAX_LAST_ROW}"
+    )
+    head_range = f"{diff_letter}{HEADLINE_ROW}:{diff_letter}{HEADLINE_ROW}"
+    for rng, size, bold in ((body_range, 10, False), (head_range, 11, True)):
+        top = int(rng.split(":")[0][1:])
+        fav = FormulaRule(
+            formula=[f"AND(ISNUMBER({diff_letter}{top}),{diff_letter}{top}<0)"],
+            font=Font(name="Arial", size=size, bold=bold, color="0B6E4F"),
+        )
+        unfav = FormulaRule(
+            formula=[f"AND(ISNUMBER({diff_letter}{top}),{diff_letter}{top}>0)"],
+            font=Font(name="Arial", size=size, bold=bold, color="A61B1B"),
+        )
+        ws.conditional_formatting.add(rng, fav)
+        ws.conditional_formatting.add(rng, unfav)
 
     # --- Per-asset analysis (elected-reset scenario only) ---
     _band(ws, PERASSET_BAND_ROW, "Per-asset analysis (elected-reset scenario)")
