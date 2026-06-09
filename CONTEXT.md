@@ -181,6 +181,32 @@ that contradicted both s102-5 and the Div 296 earnings concept. v3.1
 reverses both — see calcs.py "v3.1 capital-loss netting" docstring
 section for the breaking-change rationale.
 
+## CLASS Import (v3.3)
+
+Staging tab (after Inputs) that maps a **CLASS Super** *Investment Summary
+Report* CSV into asset-register shape. CLASS Super is the SMSF accounting
+software the firm exports holdings from.
+
+- **Input basis — Tax Cost Base.** The report can be exported on an *Accounting
+  Cost Base* or a *Tax Cost Base* basis with identical columns. The register's
+  "Original cost base" feeds CGT, so the import requires the **Tax Cost Base**
+  export. The basis is not encoded in the CSV, so it is enforced by an on-tab
+  banner, not a formula check.
+- **Mapping.** Security Code → Asset code; Holding Account Name → Asset name;
+  Total Cost → Original cost base; Market Value → Current market value. MV @
+  30 Jun 2026, Projected proceeds, and Held > 12 months are left blank for
+  deliberate entry (CLASS does not supply them in this report).
+- **Filter (blacklist).** Drops rows whose G/L Class contains "cash", the
+  realised-CGT line (Security Code `REASEDCGT`), and blank rows. Everything else
+  passes, so an unrecognised asset class is never silently lost.
+- **Negative tax cost base.** Passed through verbatim and flagged red — a base
+  reduced below nil (tax-deferred / return-of-capital) is CGT-event-E4 territory
+  for the preparer to resolve.
+- **Transfer.** Copy mapped-block columns A:G → `Inputs!A16` → Paste-Special
+  Values. Col H (Projected gain/loss) is the register formula and stays untouched.
+
+Design record: `docs/superpowers/specs/2026-06-01-class-import-mapping-design.md`.
+
 ---
 
 ## What's NOT in this glossary

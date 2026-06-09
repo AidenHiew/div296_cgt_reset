@@ -3,8 +3,8 @@
     python -m div296.build
     python -m div296.build --no-validate   # skip live recalc check
 
-Writes dist/Division_296_Model_v<version>.xlsx with the 4 tabs in spec
-order: Inputs, Analyser, Comparison, Notes.
+Writes dist/Division_296_Model_v<version>.xlsx with the 5 tabs in spec
+order: Inputs, CLASS Import, Analyser, Comparison, Notes.
 
 By default, after writing the file the build runs a pure-Python recalc
 via the `formulas` package and fails with a non-zero exit if any cell
@@ -22,7 +22,7 @@ from pathlib import Path
 from openpyxl import Workbook
 
 from div296 import __version__
-from div296.tabs import analyser, comparison, inputs, notes
+from div296.tabs import analyser, class_import, comparison, inputs, notes
 
 
 EXCEL_ERROR_RE = re.compile(r"#(REF|DIV/0|VALUE|NAME|NULL|NUM|N/A)!?\b")
@@ -53,6 +53,7 @@ def build_workbook() -> Workbook:
     wb.remove(default)
 
     inputs.build(wb)
+    class_import.build(wb)
     analyser.build(wb)
     comparison.build(wb)
     notes.build(wb)

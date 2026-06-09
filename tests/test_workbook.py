@@ -17,8 +17,11 @@ from pathlib import Path
 import pytest
 from openpyxl import load_workbook
 
+from openpyxl.utils import get_column_letter
+
 from div296 import named_ranges as nr
 from div296.build import build_workbook
+from div296.tabs import class_import as ci
 from div296.tabs.comparison import (
     DATA_FIRST_ROW as CMP_DATA_FIRST_ROW,
     DATA_LAST_ROW as CMP_DATA_LAST_ROW,
@@ -26,10 +29,11 @@ from div296.tabs.comparison import (
 )
 
 
-EXPECTED_TABS = ["Inputs", "Analyser", "Comparison", "Notes"]
+EXPECTED_TABS = ["Inputs", "CLASS Import", "Analyser", "Comparison", "Notes"]
 
 
-def test_workbook_has_four_tabs_in_spec_order(tmp_path: Path):
+def test_workbook_has_five_tabs_in_spec_order(tmp_path: Path):
+    """v3.3: CLASS Import staging tab inserted after Inputs."""
     out = tmp_path / "out.xlsx"
     wb = build_workbook()
     wb.save(out)
@@ -175,7 +179,7 @@ def test_all_tabs_protected(tmp_path: Path):
     wb = build_workbook()
     wb.save(out)
     wb_re = load_workbook(out)
-    for tab in ("Inputs", "Analyser", "Notes", "Comparison"):
+    for tab in ("Inputs", "CLASS Import", "Analyser", "Notes", "Comparison"):
         assert wb_re[tab].protection.sheet is True, f"{tab} is not protected"
 
 
@@ -184,7 +188,7 @@ def test_all_tabs_allow_column_resize_under_protection(tmp_path: Path):
     wb = build_workbook()
     wb.save(out)
     wb_re = load_workbook(out)
-    for sheet in ("Inputs", "Analyser", "Notes", "Comparison"):
+    for sheet in ("Inputs", "CLASS Import", "Analyser", "Notes", "Comparison"):
         ws = wb_re[sheet]
         assert ws.protection.sheet is True, f"{sheet} should be protected"
         assert ws.protection.formatColumns in (False, "0", 0), (
@@ -942,3 +946,76 @@ class TestNotes:
             assert ws.row_dimensions[labels[label]].hidden, (
                 f"Provenance row for {label!r} should be hidden"
             )
+
+
+# --- CLASS Import tab (v3.3) ---------------------------------------------
+
+def _class_import(tmp_path: Path):
+    out = tmp_path / "out.xlsx"
+    wb = build_workbook()
+    wb.save(out)
+    return load_workbook(out)[ci.SHEET]
+
+
+def test_class_import_inserted_after_inputs(tmp_path: Path):
+    out = tmp_path / "out.xlsx"
+    wb = build_workbook()
+    wb.save(out)
+    names = load_workbook(out).sheetnames
+    assert names.index(ci.SHEET) == names.index("Inputs") + 1
+
+
+def test_class_import_requires_tax_cost_basis_banner(tmp_path: Path):
+    """The basis cannot be auto-detected from the CSV, so a banner must warn."""
+    ws = _class_import(tmp_path)
+    banner = ws.cell(row=ci.BASIS_BANNER_ROW, column=1).value
+    assert banner and "TAX COST BASE" in banner.upper()
+
+
+def test_class_import_sample_data_preloaded(tmp_path: Path):
+    """Sample = DEMO tax-cost-base export. GOOGL carries the negative cost base."""
+    ws = _class_import(tmp_path)
+    # First sample row (BACCT cash) sits at the first paste data row.
+    assert ws[f"{ci.PASTE_COL_CODE}{ci.FIRST_DATA_ROW}"].value == "BACCT"
+    googl_row = ci.FIRST_DATA_ROW + 6
+    assert ws[f"{ci.PASTE_COL_CODE}{googl_row}"].value == "GOOGL"
+    assert ws[f"{ci.PASTE_COL_COST}{googl_row}"].value == -1772.96
+
+
+def test_class_import_mapped_formulas_read_correct_paste_columns(tmp_path: Path):
+    """Mapped block A=PasteB(code), C=PasteL(cost), D=PasteM(mv); filter present."""
+    ws = _class_import(tmp_path)
+    r = ci.FIRST_DATA_ROW
+    code_col = get_column_letter(ci.MAP_COL_START)
+    cost_col = get_column_letter(ci.MAP_COL_START + 2)
+    mv_col = get_column_letter(ci.MAP_COL_START + 3)
+    code_f = ws[f"{code_col}{r}"].value
+    cost_f = ws[f"{cost_col}{r}"].value
+    mv_f = ws[f"{mv_col}{r}"].value
+    assert f"${ci.PASTE_COL_CODE}{r}" in code_f
+    assert f"${ci.PASTE_COL_COST}{r}" in cost_f
+    assert f"${ci.PASTE_COL_MV}{r}" in mv_f
+    # Blacklist logic baked into the IF filter.
+    assert 'SEARCH("cash"' in code_f
+    assert '"REASEDCGT"' in code_f
+
+
+def test_class_import_negative_cost_base_is_flagged(tmp_path: Path):
+    """Decision 7: negative tax cost base passed through + flagged red."""
+    ws = _class_import(tmp_path)
+    googl_row = ci.FIRST_DATA_ROW + 6
+    flag = ws.cell(row=googl_row, column=ci.MAP_FLAG_COL_IDX).value
+    assert flag and "<0" in flag and "E4" in flag
+    # A conditional-format rule tints the mapped cost column on negatives.
+    cost_col = get_column_letter(ci.MAP_COL_START + 2)
+    cf_ranges = " ".join(str(r) for r in ws.conditional_formatting)
+    assert cost_col in cf_ranges
+
+
+def test_class_import_paste_unlocked_mapped_locked(tmp_path: Path):
+    """Paste zone must be editable; the formula-driven mapped block must not."""
+    ws = _class_import(tmp_path)
+    r = ci.FIRST_DATA_ROW
+    assert ws[f"{ci.PASTE_COL_CODE}{r}"].protection.locked is False
+    mapped_code = f"{get_column_letter(ci.MAP_COL_START)}{r}"
+    assert ws[mapped_code].protection.locked in (True, None)
