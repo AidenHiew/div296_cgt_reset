@@ -4,9 +4,10 @@
 
 A Microsoft Excel workbook (`.xlsx`) that illustrates Division 296 tax outcomes for SMSFs and makes the case for pre–30 June 2026 action on assets sitting in an unrealised-loss position (the "reset trap").
 
-**Status:** v3.2.1 — stable. Cosmetic patch over v3.2.0: the Analyser Fund-summary "Difference" column now uses the same muted green/red sign convention as the per-asset Reset-impact column (negative = saving from electing reset → green; positive = cost increase → red), and the column header is shortened from "Difference (signed)" to "Difference". No calc-engine changes. See "What's new in v3.2.x" below.
+**Status:** v3.3.0 — stable. Adds a **CLASS Import** staging tab: paste a CLASS Super *Investment Summary Report* (Tax Cost Base export) and it filters/maps the holdings into Inputs-register shape for a copy-paste-values transfer. Additive — no calc-engine or existing-tab changes, so default-config output stays byte-equivalent to v3.2.x. See "What's new in v3.3.0" below.
 
 **Previous releases:**
+- v3.2.1 (frozen as reference; artifact `dist/Division_296_Model_v3.2.1.xlsx`). Sign-coloured Analyser "Difference" column. Cosmetic over v3.2.0.
 - v3.2.0 (frozen as reference; artifact `dist/Division_296_Model_v3.2.0.xlsx`). Per-asset semantic refactor — Style 1 / Option B layout. Layout-only vs v3.1.0; numerically byte-equivalent.
 - v3.1.0 (frozen as reference; artifact `dist/Division_296_Model_v3.1.0.xlsx`). Capital-loss netting + per-asset table clarity pass over v3.0.0. Breaking numerical vs v3.0.0 for funds with offsetting losses.
 - v3.0.0 (frozen as the last release on the v3.0 line; artifact `dist/Division_296_Model_v3.0.0.xlsx`). Structural simplification + transparency pass over v2.6.0; breaking calc-engine API change vs v2.x.
@@ -17,6 +18,17 @@ A Microsoft Excel workbook (`.xlsx`) that illustrates Division 296 tax outcomes 
 - v2.2.0 (frozen as reference; artifact `dist/Division_296_Model_v2.2.0.xlsx`). Client-readability pass over v2.0.0.
 - v2.0.0 (frozen as reference; tag `v2.0.0`, artifact `dist/Division_296_Model_v2.0.0.xlsx`). UX pass over v1.0.0.
 - v1.0.0 (frozen as reference; tag `v1.0.0`, artifact `dist/Division_296_Model_v1.0.0.xlsx`).
+
+**What's new in v3.3.0:**
+- **New "CLASS Import" tab** (inserted after Inputs). Staging area to bring a CLASS Super *Investment Summary Report* into the asset register without hand-keying every holding. Paste the CLASS data rows into the green paste zone (CLASS's native 18 columns); a formula-driven mapped block to the right filters and reshapes them into register columns A–I.
+- **Tax Cost Base required.** The model's "Original cost base" feeds the CGT math, so the import must use the **Tax Cost Base** export, not Accounting. The CSV looks identical either way, so an on-tab amber banner enforces it (the basis can't be auto-detected from the data).
+- **Mapping.** Security Code → Asset code, Holding Account Name → Asset name, Total Cost → Original cost base, Market Value → Current market value. The three columns CLASS can't supply — MV @ 30 Jun, Projected proceeds, Held > 12 months — are left blank for deliberate entry (no hidden assumptions).
+- **Filter (blacklist).** Cash and Foreign-Cash rows and the realised-CGT line (`REASEDCGT`) are dropped; everything else passes (an unrecognised asset class is never silently lost). Dropped rows show greyed/blank; no row compaction.
+- **Negative tax cost base flagged.** A holding whose tax cost base has been reduced below nil (tax-deferred / return-of-capital — CGT-event-E4 territory) is passed through verbatim and flagged red for manual review.
+- **Transfer.** Copy mapped-block columns **A:G only** → `Inputs!A16` → Paste-Special **Values**. Col H (Projected gain/loss) is the register's own formula and a locked cell, so it's protected from an accidental paste.
+- **Additive / non-breaking.** No `calcs.py`, layout-constant, or downstream-tab changes; default output is byte-equivalent to v3.2.1.
+
+**Out of scope for v3.3 (filed as separate follow-up chips):** prior-year carry-forward loss support; auto-derivation of held>12m / proceeds; multi-fund/multi-pool exports.
 
 **What's new in v3.2.1:**
 - **Sign-coloured "Difference" column on the Analyser Fund summary.** The Difference column (E8:E13) now renders negative values in muted green (`#0B6E4F`) and positive values in muted red (`#A61B1B`), matching the per-asset Reset-impact convention used elsewhere on the tab. Reads as a saving / cost signal at a glance instead of the prior loud `[Red]` for any non-zero. Implemented via conditional formatting (sign-only); existing font weights on the headline-vs-body bands are preserved.
