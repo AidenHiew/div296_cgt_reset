@@ -495,7 +495,7 @@ class TestAnalyser:
         i = ws.cell(row=17, column=9).value   # NEW: Div 296 gross gain
         j = ws.cell(row=17, column=10).value  # Per-asset Div 296 gain (post-disc)
         k = ws.cell(row=17, column=11).value  # Div 296 tax (pro-rata of headline)
-        l = ws.cell(row=17, column=12).value  # Reset impact
+        reset_impact = ws.cell(row=17, column=12).value  # Reset impact
 
         assert "'Inputs'!A16" in a and "'Inputs'!B16" in a
         assert "'Inputs'!G16" in c    # Proceeds
@@ -526,7 +526,7 @@ class TestAnalyser:
             f"K17 attribution denominator must SUMIF over col J (post-disc), not H: {k!r}"
         )
         # Col L — Reset impact = M − N (hidden helpers for Div 296 gain with/without reset).
-        assert "M17" in l and "N17" in l
+        assert "M17" in reset_impact and "N17" in reset_impact
 
     def test_helper_columns_hidden(self, tmp_path: Path):
         """v3.2: hidden helpers shift right by 2 — M, N for Div 296 with/without
