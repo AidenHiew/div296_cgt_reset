@@ -12,6 +12,7 @@ Bill-correct calc; see CONTEXT.md v3.0 cut-over note). Sections renumbered.
     Row 11      Members TSB total row
     Row 12      Split-% sum check (tautological since v2.4 split is auto-derived;
                 kept as a visible 100% confirmation)
+    Row 13      Transfer-integrity tripwire (v3.3 audit — ISFORMULA over register)
     Row 14      Band: 2. Asset register
     Row 15      Register header row
     Rows 16-65  50 register data rows
@@ -68,6 +69,7 @@ MEMBER_HEADERS = [
 ]
 MEMBERS_TOTAL_ROW = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count       # row 11
 SPLIT_CHECK_ROW = MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count + 1     # row 12
+TRANSFER_CHECK_ROW = SPLIT_CHECK_ROW + 1                                    # row 13 — formula-paste tripwire
 
 # --- Zone 2: Asset register (rows 14-65) ---
 REGISTER_HEADER_ROW = 15
@@ -100,6 +102,29 @@ SAMPLE_REGISTER_ROWS = [
     ("L1", "Loss-making holding",   500_000, 100_000,   100_000,
      "Independent val, 30/06/26",   200_000,   "Yes"),
 ]
+
+# Seeded sample member TSBs — also used by the sample-data badge detection.
+SAMPLE_MEMBER_TSBS = (12_000_000, 3_500_000)
+
+
+def sample_detect_expr(sheet_prefix: str = "") -> str:
+    """Excel boolean — TRUE while seeded sample data is still present.
+
+    Detects the sample register codes (P1/S1/L1) OR the seeded member TSBs,
+    so the badge survives a register-only replacement (e.g. a CLASS Import
+    transfer). `sheet_prefix` is "" same-sheet or "'Inputs'!" cross-sheet.
+    """
+    p = sheet_prefix
+    codes = "AND(" + ",".join(
+        f'{p}A{REGISTER_FIRST_DATA_ROW + i}="{row[0]}"'
+        for i, row in enumerate(SAMPLE_REGISTER_ROWS)
+    ) + ")"
+    tsbs = "AND(" + ",".join(
+        f"{p}B{MEMBERS_FIRST_DATA_ROW + i}={v}"
+        for i, v in enumerate(SAMPLE_MEMBER_TSBS)
+    ) + ")"
+    return f"OR({codes},{tsbs})"
+
 
 # --- Zone 3: Advanced assumptions (rows 67-75) ---
 ADV_BAND_ROW = REGISTER_LAST_DATA_ROW + 2     # row 67
@@ -152,10 +177,16 @@ def build(wb: Workbook) -> Worksheet:
     ws.merge_cells("A1:I1")
 
     # --- Row 2: Sample-data badge ---
+    # v3.3 audit: converted from static string to formula keyed on register
+    # codes OR seeded member TSBs, so the badge survives a CLASS Import
+    # transfer that replaces the register while leaving the member rows intact.
+    _detect = sample_detect_expr()   # same-sheet (no prefix)
     badge = ws.cell(
         row=2, column=1,
-        value=("⚠  Sample data preloaded — overwrite every cell with your fund's "
-               "actual figures before sharing with a client."),
+        value=(
+            f'=IF({_detect},'
+            '"⚠  Sample data preloaded — overwrite every cell with your fund\'s '
+            'actual figures before sharing with a client.","")'),
     )
     badge.font = Font(name="Arial", size=10, bold=True, italic=True, color="8A6D00")
     badge.fill = PatternFill("solid", fgColor="FFF4CE")
@@ -285,6 +316,19 @@ def build(wb: Workbook) -> Worksheet:
         chk_range,
         CellIsRule(operator="equal", formula=["1"], fill=PatternFill("solid", fgColor="E1F5EE")),
     )
+
+    # --- Row 13: transfer-integrity tripwire (v3.3 audit) ---
+    # A normal Ctrl+V from the CLASS Import mapped block lands FORMULAS that
+    # re-point at this sheet's own cells — plausible garbage, no error value.
+    # ISFORMULA over the register catches it the moment it happens.
+    trip = ws.cell(
+        row=TRANSFER_CHECK_ROW, column=1,
+        value=(f'=IF(SUMPRODUCT(--ISFORMULA(A{REGISTER_FIRST_DATA_ROW}:G{REGISTER_LAST_DATA_ROW}))>0,'
+               f'"⚠ Formulas detected in the asset register — the CLASS Import transfer must use '
+               f'Paste-Special > Values. Press Ctrl+Z and re-paste as values.","")'),
+    )
+    trip.font = Font(name="Arial", size=10, bold=True, color="A61B1B")
+    ws.merge_cells(f"A{TRANSFER_CHECK_ROW}:I{TRANSFER_CHECK_ROW}")
 
     # --- Zone 2: Asset register (50 rows; sample data preloaded) ---
     _band(

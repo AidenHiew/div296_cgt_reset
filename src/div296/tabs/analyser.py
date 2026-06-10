@@ -97,6 +97,7 @@ from div296.styles import (
 from div296.tabs.inputs import (
     MEMBERS_FIRST_DATA_ROW,
     REGISTER_FIRST_DATA_ROW,
+    sample_detect_expr,
 )
 
 
@@ -230,11 +231,7 @@ def build(wb: Workbook) -> Worksheet:
     ws.row_dimensions[STATE_STRIP_ROW].height = 20
 
     # --- Row 3: Sample-data warning (conditional) ---
-    sample_detect = (
-        f'AND({INPUTS_SHEET}!A{REGISTER_FIRST_DATA_ROW}="P1",'
-        f'{INPUTS_SHEET}!A{REGISTER_FIRST_DATA_ROW + 1}="S1",'
-        f'{INPUTS_SHEET}!A{REGISTER_FIRST_DATA_ROW + 2}="L1")'
-    )
+    sample_detect = sample_detect_expr(f"{INPUTS_SHEET}!")
     badge = ws.cell(
         row=SAMPLE_WARN_ROW, column=1,
         value=(
