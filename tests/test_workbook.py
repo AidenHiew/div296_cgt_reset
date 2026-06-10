@@ -1069,3 +1069,17 @@ def test_class_import_overflow_rows_unlocked(tmp_path: Path):
     assert ws.cell(row=57, column=20).protection.locked is True, (
         "Mapped block must remain locked in overflow band"
     )
+
+
+def test_class_import_review_flag_covers_blank_cost(tmp_path: Path):
+    """v3.3 audit F5: a kept row with blank/non-numeric Total Cost must be
+    flagged, not mapped as a silent $0 cost base."""
+    out = tmp_path / "out.xlsx"
+    wb = build_workbook()
+    wb.save(out)
+    ws = load_workbook(out)["CLASS Import"]
+    flag = ws.cell(row=7, column=29).value   # AC7 — review flag, first data row
+    assert "NEGATIVE tax cost base" in flag
+    assert "blank/non-numeric" in flag
+    # Alignment warning cell exists on row 5.
+    assert "paste alignment" in ws["A5"].value
