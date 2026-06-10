@@ -220,7 +220,7 @@ def test_register_proj_gl_formula_cells_locked(tmp_path: Path):
     ws = load_workbook(out)["Inputs"]
     for row in range(16, 66):
         h = ws[f"H{row}"]
-        assert h.protection.locked is not False, f"Inputs!H{row} must be locked"
+        assert h.protection.locked is True, f"Inputs!H{row} must be locked"
         # Neighbouring input columns stay editable.
         assert ws[f"G{row}"].protection.locked is False
         assert ws[f"I{row}"].protection.locked is False
