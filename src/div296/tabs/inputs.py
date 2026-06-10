@@ -250,7 +250,7 @@ def build(wb: Workbook) -> Worksheet:
     # v2.5 FB-2: seed two members (Aiden's feedback — show split-balance behaviour).
     # Member 1 = $12m (§12 high-TSB case), Member 2 = $3.5m (just-above-threshold case).
     # Members 3–4 stay blank as illustrative placeholders.
-    SAMPLE_TSB_BY_MEMBER = (12_000_000, 3_500_000, None, None)
+    SAMPLE_TSB_BY_MEMBER = (*SAMPLE_MEMBER_TSBS, None, None)
     for i in range(ASSUMPTIONS.member_count):
         row = MEMBERS_FIRST_DATA_ROW + i
         ws.cell(row=row, column=1, value=f"Member {i+1}").font = BODY_FONT
