@@ -50,6 +50,7 @@ from div296.tabs import analyser as analyser_tab
 from div296.tabs.inputs import (
     MEMBERS_FIRST_DATA_ROW, REGISTER_FIRST_DATA_ROW,
     REGISTER_LAST_DATA_ROW,
+    sample_detect_expr,
 )
 
 
@@ -239,11 +240,7 @@ def _build_header_block(ws: Worksheet) -> None:
     # v2.2.0: Sample-data warning (row 9, full width left of the logo block).
     # Formula returns the warning string ONLY when the first three asset codes
     # still match the sample register; CF paints amber only in that case.
-    sample_detect = (
-        f'AND({INPUTS_SHEET}!A{REGISTER_FIRST_DATA_ROW}="P1",'
-        f'{INPUTS_SHEET}!A{REGISTER_FIRST_DATA_ROW + 1}="S1",'
-        f'{INPUTS_SHEET}!A{REGISTER_FIRST_DATA_ROW + 2}="L1")'
-    )
+    sample_detect = sample_detect_expr(f"{INPUTS_SHEET}!")
     sample_row = HEADER_DISCLAIMER_ROW + 1   # row 9
     badge = ws.cell(
         row=sample_row, column=1,

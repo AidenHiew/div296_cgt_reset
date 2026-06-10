@@ -1083,3 +1083,25 @@ def test_class_import_review_flag_covers_blank_cost(tmp_path: Path):
     assert "blank/non-numeric" in flag
     # Alignment warning cell exists on row 5.
     assert "paste alignment" in ws["A5"].value
+
+
+def test_inputs_transfer_tripwire(tmp_path: Path):
+    """v3.3 audit: warn when formulas (not values) are pasted into the register."""
+    out = tmp_path / "out.xlsx"
+    wb = build_workbook()
+    wb.save(out)
+    ws = load_workbook(out)["Inputs"]
+    v = ws["A13"].value
+    assert "ISFORMULA" in v and "Paste-Special" in v
+
+
+def test_sample_badge_survives_register_replacement(tmp_path: Path):
+    """v3.3 audit: badge must also key on the seeded member TSBs, not only
+    the register codes a CLASS transfer removes."""
+    out = tmp_path / "out.xlsx"
+    wb = build_workbook()
+    wb.save(out)
+    wb_re = load_workbook(out)
+    for sheet, cell in (("Inputs", "A2"), ("Analyser", "A3")):
+        v = wb_re[sheet][cell].value
+        assert "12000000" in v.replace(",", "") and "P1" in v
