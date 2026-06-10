@@ -344,10 +344,16 @@ def build(wb: Workbook) -> Worksheet:
             if col_idx == REGISTER_COL_PROJ_GL:
                 # Formula: proceeds (col G) − original cost base (col C).
                 # Blank if either source cell is empty.
-                value = (
+                # LOCKED (default) — this is the register's own formula and the
+                # CLASS Import transfer relies on the lock to reject an
+                # accidental A:H/A:I paste before it can wipe the column.
+                cell = ws[coord]
+                cell.value = (
                     f'=IF(AND(C{row}<>"",G{row}<>""),G{row}-C{row},"")'
                 )
-                _input_cell(ws, coord, value=value, number_format=fmt)
+                cell.number_format = fmt
+                cell.font = Font(name="Arial", size=10, italic=True, color="1D3B34")
+                cell.border = THIN_BOX
             else:
                 # Sample data indexing: cols < PROJ_GL use col_idx-1 directly;
                 # cols > PROJ_GL shift back by one to skip the formula col.

@@ -210,6 +210,22 @@ def test_input_cells_unlocked(tmp_path: Path):
     assert ws["C16"].protection.locked is False
 
 
+def test_register_proj_gl_formula_cells_locked(tmp_path: Path):
+    """v3.3 audit F1: the col-H register formula is the CLASS-transfer paste
+    guard — it must be LOCKED so an accidental A:H/A:I Paste-Special is
+    rejected by sheet protection instead of silently wiping the formulas."""
+    out = tmp_path / "out.xlsx"
+    wb = build_workbook()
+    wb.save(out)
+    ws = load_workbook(out)["Inputs"]
+    for row in range(16, 66):
+        h = ws[f"H{row}"]
+        assert h.protection.locked is not False, f"Inputs!H{row} must be locked"
+        # Neighbouring input columns stay editable.
+        assert ws[f"G{row}"].protection.locked is False
+        assert ws[f"I{row}"].protection.locked is False
+
+
 # --- Held>12m paste-in normalisation (v3.1.2) ---------------------------
 #
 # The Inputs!I dropdown only validates direct typing; pastes from another
