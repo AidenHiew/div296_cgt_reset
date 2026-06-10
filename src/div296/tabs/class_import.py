@@ -52,6 +52,7 @@ TITLE_ROW = 1
 BASIS_BANNER_ROW = 2
 HOWTO_BANNER_ROW = 3
 CAPACITY_WARN_ROW = 4
+ALIGN_WARN_ROW = CAPACITY_WARN_ROW + 1
 HEADER_ROW = 6
 FIRST_DATA_ROW = 7
 PASTE_ROWS = ASSUMPTIONS.asset_register_rows   # 50 — must equal the register depth
@@ -192,9 +193,19 @@ def build(wb: Workbook) -> Worksheet:
     cap.font = Font(name="Arial", size=10, bold=True, color="A61B1B")
     ws.merge_cells(start_row=CAPACITY_WARN_ROW, start_column=1, end_row=CAPACITY_WARN_ROW, end_column=PASTE_LAST_COL_IDX)
 
+    # --- Paste-alignment warning: codes present but no numeric Total Cost ---
+    align = ws.cell(
+        row=ALIGN_WARN_ROW, column=1,
+        value=(f'=IF(AND(COUNTA({PASTE_COL_CODE}{FIRST_DATA_ROW}:{PASTE_COL_CODE}{LAST_DATA_ROW})>0,'
+               f'COUNT({PASTE_COL_COST}{FIRST_DATA_ROW}:{PASTE_COL_COST}{LAST_DATA_ROW})=0),'
+               f'"⚠ Total Cost column (L) contains no numbers — check paste alignment / header row included.","")'),
+    )
+    align.font = Font(name="Arial", size=10, bold=True, color="A61B1B")
+    ws.merge_cells(start_row=ALIGN_WARN_ROW, start_column=1, end_row=ALIGN_WARN_ROW, end_column=PASTE_LAST_COL_IDX)
+
     # --- Copy-range hint pinned next to the mapped block itself ---
     hint = ws.cell(
-        row=CAPACITY_WARN_ROW + 1, column=MAP_COL_START,
+        row=ALIGN_WARN_ROW, column=MAP_COL_START,
         value=f"Copy {copy_range} → Inputs!A{REGISTER_FIRST_DATA_ROW} → Paste-Special > Values",
     )
     hint.font = Font(name="Arial", size=9, italic=True, color="555555")
@@ -273,12 +284,15 @@ def build(wb: Workbook) -> Worksheet:
                 cell.number_format = FMT_TEXT
             else:  # _FORMULA_SLOT (H)
                 cell.fill = FORMULA_FILL
-        # Review flag — negative tax cost base on a kept row.
+        # Review flag — negative tax cost base, or a kept row whose Total
+        # Cost is blank/non-numeric (header row or column-shifted paste).
         flag = ws.cell(row=r, column=MAP_FLAG_COL_IDX)
         cost_ref = f"${PASTE_COL_COST}{r}"
         flag.value = (
             f'=IF(AND(NOT({drop}),ISNUMBER({cost_ref}),{cost_ref}<0),'
-            f'">> NEGATIVE tax cost base - review (CGT event E4?)","")'
+            f'">> NEGATIVE tax cost base - review (CGT event E4?)",'
+            f'IF(AND(NOT({drop}),NOT(ISNUMBER({cost_ref}))),'
+            f'">> Total Cost blank/non-numeric - check paste alignment",""))'
         )
         flag.font = Font(name="Arial", size=9, bold=True, color="A61B1B")
 
