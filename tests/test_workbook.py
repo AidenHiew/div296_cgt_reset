@@ -1102,6 +1102,6 @@ def test_sample_badge_survives_register_replacement(tmp_path: Path):
     wb = build_workbook()
     wb.save(out)
     wb_re = load_workbook(out)
-    for sheet, cell in (("Inputs", "A2"), ("Analyser", "A3")):
+    for sheet, cell in (("Inputs", "A2"), ("Analyser", "A3"), ("Comparison", "A9")):
         v = wb_re[sheet][cell].value
         assert "12000000" in v.replace(",", "") and "P1" in v
