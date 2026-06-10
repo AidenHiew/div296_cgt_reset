@@ -103,13 +103,16 @@ C_DIV296_B = f"C{C_TAB.SUBTOTAL_DIV296_ROW}"           # C29
 C_NET_EFFECT = f"I{C_TAB.CARD_VALUE_ROW}"              # I22 (signed: elected − no-reset)
 
 
-# Cells the `formulas` recalc engine cannot evaluate (SUMPRODUCT with boolean
-# array math). Excluded from the validate-recalc assertion below. Verified
-# correct in real Excel/LibreOffice by hand and indirectly via test_calcs.py.
+# Cells the `formulas` recalc engine cannot evaluate (deep SUMIFS/LARGE/MATCH
+# dependency chains). Excluded from the validate-recalc assertion below.
+# Verified correct in real Excel/LibreOffice by hand and indirectly via
+# test_calcs.py. Derived from layout constants — v3.2 moved these helpers
+# from M70/N70/O70 to O70/P70/Q70 and the old literals went stale (audit
+# 2026-06-10), hence: no literals.
 KNOWN_FORMULAS_LIMITATIONS = (
-    "ANALYSER'!M70",         # H_disc_gains helper
-    "ANALYSER'!N70",         # H_nond_gains helper
-    "ANALYSER'!O70",         # H_gross_losses helper
+    f"ANALYSER'!{get_column_letter(A_TAB.HELPER_M_COL)}{A_TAB.RECON_BAND_ROW}",   # disc-gains helper (col O)
+    f"ANALYSER'!{get_column_letter(A_TAB.HELPER_N_COL)}{A_TAB.RECON_BAND_ROW}",   # nond-gains helper (col P)
+    f"ANALYSER'!{get_column_letter(A_TAB.HELPER_O_COL)}{A_TAB.RECON_BAND_ROW}",   # gross-losses helper (col Q)
     f"ANALYSER'!B{A_TAB.RECON_ORD_CGT_ROW}",      # Fund Ord CGT (depends on helpers)
     f"ANALYSER'!B{A_TAB.RECON_LOSSES_ROW}",       # Carry-forward losses (depends on helpers)
     # Comparison: Ord CGT subtotal pulls Analyser!B71 → propagates #VALUE!.
