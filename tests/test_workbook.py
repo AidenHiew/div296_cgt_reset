@@ -1037,6 +1037,22 @@ def test_class_import_paste_unlocked_mapped_locked(tmp_path: Path):
     assert ws[mapped_code].protection.locked in (True, None)
 
 
+def test_class_import_howto_banner_gives_physical_range(tmp_path: Path):
+    """v3.3 audit: the transfer instruction must name the PHYSICAL copy range
+    (T7:Z56) and tell the user to clear the demo data first."""
+    out = tmp_path / "out.xlsx"
+    wb = build_workbook()
+    wb.save(out)
+    ws = load_workbook(out)["CLASS Import"]
+    howto = ws["A3"].value
+    assert "T7:Z56" in howto
+    assert "Clear the green zone" in howto
+    assert "Inputs!A16" in howto
+    assert "Paste-Special > Values" in howto
+    # Hint cell sits directly above the mapped block.
+    assert "T7:Z56" in ws["T5"].value
+
+
 def test_class_import_overflow_rows_unlocked(tmp_path: Path):
     """v3.3 audit: rows below the 50-row paste zone must be unlocked so an
     oversize CLASS paste LANDS (triggering the row-4 capacity warning)

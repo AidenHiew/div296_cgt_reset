@@ -6,14 +6,16 @@ docs/superpowers/specs/2026-06-01-class-import-mapping-design.md):
 
     1. In CLASS, generate the Investment Summary Report on a TAX COST BASE
        basis (not Accounting) and export to CSV.
-    2. Copy the data rows (below the header) and paste into the green PASTE
-       ZONE (cols A-R) starting at the first data row.
+    2. Clear the green PASTE ZONE first (select A7:R56, press Delete) — the
+       tab ships with demo data and stale rows will transfer if not removed.
+       Then paste the CLASS data rows into the green zone.
     3. The MAPPED BLOCK (right) filters + maps each row into register shape.
-    4. Copy mapped-block cols A:G only -> Inputs!A16 -> Paste-Special > Values.
+    4. Copy mapped-block cols A:G only (physical range T7:Z56) -> Inputs!A16
+       -> Paste-Special > Values.
        (NOT col H — that is the register's own Projected gain/loss formula,
        and it is a locked cell so an accidental A:I paste is blocked.)
-    5. Fill MV @ 30 Jun (E), Projected proceeds (G), Held>12m (I) by hand,
-       and resolve any negative-cost-base flag.
+    5. Fill MV @ 30 Jun (E), Valuation source/date (F), Projected proceeds (G),
+       Held>12m (I) by hand, and resolve any negative-cost-base flag.
 
 Only 5 CLASS columns are read: Security Code (B), Holding Account Name (C),
 G/L Class (H), Total Cost (L), Market Value (M). Foreign holdings are already
@@ -36,10 +38,12 @@ from openpyxl.utils import get_column_letter
 from openpyxl.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
+from div296.assumptions import ASSUMPTIONS
 from div296.styles import (
     BODY_FONT, CENTER, FMT_CURRENCY, FMT_TEXT, INPUT_FILL, INPUT_FONT,
     SECTION_BAND_FILL, SECTION_BAND_FONT, THIN_BOX, TITLE_FONT,
 )
+from div296.tabs.inputs import REGISTER_FIRST_DATA_ROW
 
 SHEET = "CLASS Import"
 
@@ -50,7 +54,7 @@ HOWTO_BANNER_ROW = 3
 CAPACITY_WARN_ROW = 4
 HEADER_ROW = 6
 FIRST_DATA_ROW = 7
-PASTE_ROWS = 50
+PASTE_ROWS = ASSUMPTIONS.asset_register_rows   # 50 — must equal the register depth
 LAST_DATA_ROW = FIRST_DATA_ROW + PASTE_ROWS - 1   # row 56
 
 # --- Paste zone: CLASS native columns A..R (18). Columns read by the map: ---
@@ -162,16 +166,21 @@ def build(wb: Workbook) -> Worksheet:
     ws.row_dimensions[BASIS_BANNER_ROW].height = 30
 
     # --- How-to-paste banner ---
+    map_a = get_column_letter(MAP_COL_START)          # T — mapped col "A"
+    map_g = get_column_letter(MAP_COL_START + 6)      # Z — mapped col "G"
+    copy_range = f"{map_a}{FIRST_DATA_ROW}:{map_g}{LAST_DATA_ROW}"
     howto = ws.cell(
         row=HOWTO_BANNER_ROW, column=1,
-        value=("HOW TO USE:  paste CLASS data rows into the green zone (cols A-R).  Then copy the "
-               "MAPPED BLOCK columns A:G only → Inputs!A16 → Paste-Special > Values.  Do NOT copy "
-               "col H (register formula).  Fill E / G / I by hand afterwards."),
+        value=(f"HOW TO USE:  1) Clear the green zone first — select A{FIRST_DATA_ROW}:R{LAST_DATA_ROW} and press "
+               f"Delete (it ships with demo data).  2) Paste the CLASS data rows into the green zone.  "
+               f"3) Copy the mapped block's register cols A:G — physical range {copy_range} — then go to "
+               f"Inputs!A{REGISTER_FIRST_DATA_ROW} and Paste-Special > Values.  Do NOT copy mapped col H "
+               f"(the register's own locked formula).  4) On Inputs, fill E / F / G / I by hand afterwards."),
     )
     howto.font = Font(name="Arial", size=10, color="555555")
     howto.alignment = Alignment(horizontal="left", vertical="center", indent=1)
     ws.merge_cells(start_row=HOWTO_BANNER_ROW, start_column=1, end_row=HOWTO_BANNER_ROW, end_column=PASTE_LAST_COL_IDX)
-    ws.row_dimensions[HOWTO_BANNER_ROW].height = 26
+    ws.row_dimensions[HOWTO_BANNER_ROW].height = 40
 
     # --- Capacity warning (fires if >50 holdings pasted) ---
     cap = ws.cell(
@@ -182,6 +191,13 @@ def build(wb: Workbook) -> Worksheet:
     )
     cap.font = Font(name="Arial", size=10, bold=True, color="A61B1B")
     ws.merge_cells(start_row=CAPACITY_WARN_ROW, start_column=1, end_row=CAPACITY_WARN_ROW, end_column=PASTE_LAST_COL_IDX)
+
+    # --- Copy-range hint pinned next to the mapped block itself ---
+    hint = ws.cell(
+        row=CAPACITY_WARN_ROW + 1, column=MAP_COL_START,
+        value=f"Copy {copy_range} → Inputs!A{REGISTER_FIRST_DATA_ROW} → Paste-Special > Values",
+    )
+    hint.font = Font(name="Arial", size=9, italic=True, color="555555")
 
     # --- Paste-zone header (CLASS native order) ---
     for idx, header in enumerate(CLASS_HEADERS, start=1):
