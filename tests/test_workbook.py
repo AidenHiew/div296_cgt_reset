@@ -1035,3 +1035,21 @@ def test_class_import_paste_unlocked_mapped_locked(tmp_path: Path):
     assert ws[f"{ci.PASTE_COL_CODE}{r}"].protection.locked is False
     mapped_code = f"{get_column_letter(ci.MAP_COL_START)}{r}"
     assert ws[mapped_code].protection.locked in (True, None)
+
+
+def test_class_import_overflow_rows_unlocked(tmp_path: Path):
+    """v3.3 audit: rows below the 50-row paste zone must be unlocked so an
+    oversize CLASS paste LANDS (triggering the row-4 capacity warning)
+    instead of being rejected wholesale by sheet protection."""
+    out = tmp_path / "out.xlsx"
+    wb = build_workbook()
+    wb.save(out)
+    ws = load_workbook(out)["CLASS Import"]
+    for row in (57, 100, 256):
+        assert ws.cell(row=row, column=2).protection.locked is False, (
+            f"Overflow row {row} in paste-zone column must be unlocked"
+        )
+    # ...but the mapped block stays locked even in the overflow band.
+    assert ws.cell(row=57, column=20).protection.locked is True, (
+        "Mapped block must remain locked in overflow band"
+    )
