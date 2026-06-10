@@ -212,6 +212,14 @@ def build(wb: Workbook) -> Worksheet:
             mv_cell.value = mv
             mv_cell.number_format = FMT_CURRENCY
 
+    # --- Overflow landing zone (rows 57-256, paste-zone cols only) ---
+    # Unlocked so a >50-row CLASS paste lands instead of being rejected by
+    # sheet protection; nothing below LAST_DATA_ROW is mapped, and the
+    # capacity banner (CAPACITY_WARN_ROW) fires on COUNTA over this band.
+    for r in range(LAST_DATA_ROW + 1, LAST_DATA_ROW + 201):
+        for idx in range(1, PASTE_LAST_COL_IDX + 1):
+            ws.cell(row=r, column=idx).protection = Protection(locked=False)
+
     # --- Mapped-block header (register-shaped) ---
     for off, header in enumerate(MAP_HEADERS):
         col = MAP_COL_START + off
