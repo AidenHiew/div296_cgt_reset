@@ -82,7 +82,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
-from div296._formulas import per_member_div296_tax_formula
+from div296._formulas import div296_adj_gain_formula, per_member_div296_tax_formula
 from div296.assumptions import ASSUMPTIONS
 from div296.styles import (
     BODY_FONT, CENTER, FMT_CURRENCY, ROWNUM_FILL, ROWNUM_FONT,
@@ -185,26 +185,6 @@ def _band(ws: Worksheet, row: int, text: str, last_col_letter: str = "L") -> Non
     ws.merge_cells(f"A{row}:{last_col_letter}{row}")
     for col_idx in range(1, ord(last_col_letter) - ord("A") + 2):
         ws.cell(row=row, column=col_idx).fill = SECTION_BAND_FILL
-
-
-def _ord_taxable_formula(proceeds: str, orig: str, held: str) -> str:
-    """v3.0: discount applies iff held > 12 months (no `discount_on` toggle)."""
-    raw = f"({proceeds}-{orig})"
-    return (
-        f'=IF({proceeds}="","",'
-        f'IF({raw}<=0,{raw},'
-        f'IF({held}="Yes",{raw}*(1-discount_rate),{raw})))'
-    )
-
-
-def _div296_adj_formula(proceeds: str, cost_base_expr: str, held: str) -> str:
-    """v3.0: discount applies iff held > 12 months (no `discount_on` toggle)."""
-    raw = f"({proceeds}-{cost_base_expr})"
-    return (
-        f'=IF({proceeds}="","",'
-        f'IF({raw}<=0,{raw},'
-        f'IF({held}="Yes",{raw}*(1-discount_rate),{raw})))'
-    )
 
 
 def build(wb: Workbook) -> Worksheet:
@@ -586,7 +566,7 @@ def build(wb: Workbook) -> Worksheet:
         # fund headline over this col's positive entries.
         j_cell = ws.cell(
             row=a_row, column=DIV_GAIN_COL,
-            value=_div296_adj_formula(proceeds, mv, held),
+            value=div296_adj_gain_formula(proceeds, mv, held),
         )
         j_cell.font = F_INFO_DATA_FONT
         j_cell.alignment = Alignment(horizontal="right", vertical="center")
@@ -606,10 +586,10 @@ def build(wb: Workbook) -> Worksheet:
         # Helper M — Div 296 gain WITH reset (cost base = MV). Unconditional;
         # mirrors col J under the elected-reset scenario.
         ws.cell(row=a_row, column=HELPER_J_COL,
-                value=_div296_adj_formula(proceeds, mv, held))
+                value=div296_adj_gain_formula(proceeds, mv, held))
         # Helper N — Div 296 gain WITHOUT reset (cost base = orig). Unconditional.
         ws.cell(row=a_row, column=HELPER_K_COL,
-                value=_div296_adj_formula(proceeds, orig, held))
+                value=div296_adj_gain_formula(proceeds, orig, held))
         # Col L — Reset impact = M − N. Highlights the per-asset Δ of the
         # reset election.
         ws.cell(

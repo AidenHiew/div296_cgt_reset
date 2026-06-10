@@ -39,7 +39,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Protection, Si
 from openpyxl.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
-from div296._formulas import per_member_div296_tax_formula
+from div296._formulas import div296_adj_gain_formula, per_member_div296_tax_formula
 from div296.assumptions import ASSUMPTIONS
 from div296.styles import (
     BODY_FONT, CENTER, FMT_CURRENCY, FMT_CURRENCY_DELTA, INPUT_FILL, INPUT_FONT, SECTION_BAND_FILL, SECTION_BAND_FONT,
@@ -179,16 +179,6 @@ def _input_cell(ws: Worksheet, coord: str, value=None) -> None:
     cell.font = INPUT_FONT
     cell.fill = INPUT_FILL
     cell.border = THIN_BOX
-
-
-def _div296_adj_formula(proceeds: str, cost_base_expr: str, held: str) -> str:
-    """v3.0: discount applies iff held > 12 months (no `discount_on` toggle)."""
-    raw = f"({proceeds}-{cost_base_expr})"
-    return (
-        f'=IF({proceeds}="","",'
-        f'IF({raw}<=0,{raw},'
-        f'IF({held}="Yes",{raw}*(1-discount_rate),{raw})))'
-    )
 
 
 # v3.0: `_member_tax_formula` moved to `div296._formulas.per_member_div296_tax_formula`
@@ -368,8 +358,8 @@ def _build_per_register_helpers(ws: Worksheet) -> tuple[str, str, str]:
         orig = f"{INPUTS_SHEET}!C{n}"        # was D
         mv = f"{INPUTS_SHEET}!E{n}"          # was F
         held = f"{INPUTS_SHEET}!J{n}"        # v3.1.2: J (normalised), was I
-        ws[f"{PER_REG_GAIN_A_COL}{n}"] = _div296_adj_formula(proceeds, orig, held)
-        ws[f"{PER_REG_GAIN_B_COL}{n}"] = _div296_adj_formula(proceeds, mv, held)
+        ws[f"{PER_REG_GAIN_A_COL}{n}"] = div296_adj_gain_formula(proceeds, orig, held)
+        ws[f"{PER_REG_GAIN_B_COL}{n}"] = div296_adj_gain_formula(proceeds, mv, held)
         # v2.5: per-row tax inlined into the sort metric so the helper grid
         # itself measures tax impact, not raw gain impact.
         tax_a = (

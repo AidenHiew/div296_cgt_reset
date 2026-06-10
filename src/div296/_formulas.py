@@ -57,3 +57,17 @@ def per_member_div296_tax_formula(member_inputs_row: int, earnings_cell: str) ->
         f'OR({tsb}="",{split}="",{tsb}<=0,{split}<=0,{earnings_cell}<=0)'
     )
     return f"=IF({guard},0,{tax_expr})"
+
+
+def div296_adj_gain_formula(proceeds: str, cost_base_expr: str, held: str) -> str:
+    """Per-asset Div 296 adjusted gain: (proceeds − cost base), 1/3 CGT
+    discount applied iff the normalised held>12m flag is "Yes", never to
+    losses. Shared by Analyser (per-asset cols + hidden helpers) and
+    Comparison (per-register grid) — v3.4 dedup of two byte-identical copies.
+    """
+    raw = f"({proceeds}-{cost_base_expr})"
+    return (
+        f'=IF({proceeds}="","",'
+        f'IF({raw}<=0,{raw},'
+        f'IF({held}="Yes",{raw}*(1-discount_rate),{raw})))'
+    )
