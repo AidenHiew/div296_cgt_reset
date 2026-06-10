@@ -1105,3 +1105,15 @@ def test_sample_badge_survives_register_replacement(tmp_path: Path):
     for sheet, cell in (("Inputs", "A2"), ("Analyser", "A3"), ("Comparison", "A9")):
         v = wb_re[sheet][cell].value
         assert "12000000" in v.replace(",", "") and "P1" in v
+
+
+def test_recalc_limitations_derive_from_constants():
+    """v3.4 audit: the known-limitation list must track layout constants."""
+    from div296._recalc_limitations import (
+        KNOWN_FORMULAS_LIMITATIONS,
+        is_known_limitation,
+    )
+    assert any(e.endswith("O70") for e in KNOWN_FORMULAS_LIMITATIONS)
+    assert any(e.endswith("Q70") for e in KNOWN_FORMULAS_LIMITATIONS)
+    assert is_known_limitation("'[X.xlsx]ANALYSER'!B71")
+    assert not is_known_limitation("'[X.xlsx]ANALYSER'!C13")

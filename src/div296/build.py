@@ -76,24 +76,39 @@ def _stamp_print_footer(wb: Workbook) -> None:
 def validate_recalc(xlsx_path: Path) -> list[str]:
     """Recalc the workbook and return a list of cell keys with error values.
 
-    Empty list = clean. Raises ImportError if `formulas` is not installed —
-    callers decide whether to skip or fail in that case.
+    Empty list = clean. Known `formulas`-engine false positives (see
+    div296._recalc_limitations) are skipped and summarised on stdout.
+    Cells whose value accessor raises are REPORTED (a validation gate must
+    not silently treat unreadable cells as clean). Raises ImportError if
+    `formulas` is not installed — callers decide whether to skip or fail.
     """
     import formulas  # noqa: PLC0415 — optional dep, imported on demand
+
+    from div296._recalc_limitations import is_known_limitation
 
     xl = formulas.ExcelModel().loads(str(xlsx_path)).finish()
     sol = xl.calculate()
 
     errors: list[str] = []
+    skipped_known = 0
     for key, cell in sol.items():
         try:
             value = cell.value
-        except Exception:
+        except Exception as exc:  # noqa: BLE001 — engine raises arbitrary types
+            if is_known_limitation(key):
+                skipped_known += 1
+            else:
+                errors.append(f"{key} -> <unreadable: {exc!r}>")
             continue
-        # value may be ndarray, scalar, str, or formulas error object
         s = str(value)
         if EXCEL_ERROR_RE.search(s):
+            if is_known_limitation(key):
+                skipped_known += 1
+                continue
             errors.append(f"{key} -> {s}")
+    if skipped_known:
+        print(f"Recalc: skipped {skipped_known} known `formulas`-engine "
+              f"false-positive cell(s) — see div296/_recalc_limitations.py.")
     return errors
 
 
@@ -108,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--no-validate",
         action="store_true",
-        help="Skip the post-build recalc validation (faster; not recommended).",
+        help="Skip the post-build recalc validation check.",
     )
     args = parser.parse_args(argv)
 
