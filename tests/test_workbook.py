@@ -1143,6 +1143,14 @@ def test_comparison_positive_difference_red_cf(tmp_path: Path):
         raise AssertionError(f"no CF rule on {sub_range}")
 
 
+def test_watermark_on_all_tabs():
+    """v3.4 audit: the ILLUSTRATIVE print header must cover EVERY sheet
+    (was missing on Inputs and CLASS Import — a compliance gap)."""
+    wb = build_workbook()
+    for ws in wb.worksheets:
+        assert "ILLUSTRATIVE" in (ws.oddHeader.center.text or ""), ws.title
+
+
 def test_sample_badge_survives_register_replacement(tmp_path: Path):
     """v3.3 audit: badge must also key on the seeded member TSBs, not only
     the register codes a CLASS transfer removes."""
