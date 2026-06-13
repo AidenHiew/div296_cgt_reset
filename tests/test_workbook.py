@@ -1192,3 +1192,12 @@ def test_recalc_limitations_derive_from_constants():
     assert any(e.endswith("Q70") for e in KNOWN_FORMULAS_LIMITATIONS)
     assert is_known_limitation("'[X.xlsx]ANALYSER'!B71")
     assert not is_known_limitation("'[X.xlsx]ANALYSER'!C13")
+    # v3.4: the Comparison per-asset detail panel (LARGE/MATCH/INDEX false
+    # positives) is excluded across its full A..K x data-rows extent.
+    from div296.tabs import comparison as C
+    assert is_known_limitation(f"'[X.xlsx]COMPARISON'!{C.PANEL_A_COLS[0]}{C.DATA_FIRST_ROW}")
+    assert is_known_limitation(f"'[X.xlsx]COMPARISON'!{C.DELTA_COL}{C.DATA_LAST_ROW}")
+    # ...but the panel HEADER row (not part of the lookup chain) is not.
+    assert not is_known_limitation(
+        f"'[X.xlsx]COMPARISON'!{C.PANEL_A_COLS[0]}{C.PANEL_HEADER_ROW}"
+    )
