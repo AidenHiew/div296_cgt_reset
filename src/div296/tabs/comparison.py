@@ -371,8 +371,10 @@ def _build_per_register_helpers(ws: Worksheet) -> tuple[str, str, str]:
             f'MAX(0,{PER_REG_GAIN_B_COL}{n})/SUMIF({b_range},">0")*{headline_b_abs})'
         )
         # Tiebreaker: small positive amount decreasing with register row, so
-        # earlier-listed assets win ties without ever turning P negative.
-        tiebreak = f"({n_last}-ROW())*0.001"
+        # earlier-listed assets win ties without ever turning P negative. The
+        # +1 keeps the LAST register row strictly positive, so a genuine
+        # zero-delta asset there isn't dropped by the LARGE(...)<=0 rank cut.
+        tiebreak = f"(({n_last}+1)-ROW())*0.0001"
         # Incomplete rows (either gain cell blank) are excluded from the
         # top-10 ranking like empty rows — they're flagged on Inputs instead.
         ws[f"{PER_REG_DELTA_COL}{n}"] = (
@@ -438,11 +440,11 @@ def _build_metric_cards(ws: Worksheet, headline_a: str, headline_b: str) -> None
     # and per-member tables keep the short form ("If no reset (default)" / "If
     # elected to reset" / "Difference") to stay scannable. CONTEXT.md notes the
     # headline-only override. Card formula is SIGNED (reset − default), so a
-    # reset that reduces tax shows as a red-bracket negative.
+    # reset that reduces tax shows as a green-bracket negative.
     cards = [
-        ("A:D", "If no Div 296 CostBase Reset (default)",   f"={headline_a[1:]}",                       FMT_CURRENCY,       CARD_FILL_A),
-        ("E:H", "If elected to reset Div 296 CostBase Reset", f"={headline_b[1:]}",                     FMT_CURRENCY,       CARD_FILL_B),
-        ("I:K", "Difference (Net Div 296 Tax)",             f"={headline_b[1:]}-{headline_a[1:]}",      FMT_CURRENCY_DELTA, CARD_FILL_DELTA),
+        ("A:D", "If no Div 296 CostBase Reset (default)",   f"={headline_a}",                           FMT_CURRENCY,       CARD_FILL_A),
+        ("E:H", "If elected to reset Div 296 CostBase Reset", f"={headline_b}",                         FMT_CURRENCY,       CARD_FILL_B),
+        ("I:K", "Difference (Net Div 296 Tax)",             f"={headline_b}-{headline_a}",      FMT_CURRENCY_DELTA, CARD_FILL_DELTA),
     ]
     for merge_range, label, value_formula, value_fmt, fill in cards:
         start = merge_range.split(":")[0]
@@ -539,7 +541,7 @@ def _build_subtotals(ws: Worksheet, headline_a: str, headline_b: str,
          "1997 method). Same in both scenarios — the reset election affects "
          "Div 296, not ordinary CGT."),
         (SUBTOTAL_DIV296_ROW,   "Div 296 tax (headline)",
-         f"={headline_a[1:]}", f"={headline_b[1:]}",
+         f"={headline_a}", f"={headline_b}",
          "Division 296 additional tax payable. Each member's share is "
          "computed from their TSB proportion in the $3m–$10m band (taxed "
          "at 15%) plus the slice above $10m (taxed at 25%)."),
@@ -893,6 +895,19 @@ def _build_per_asset_detail(
     )
     overflow.font = Font(name="Arial", size=9, italic=True, color="666666")
     ws.merge_cells(f"A{DATA_OVERFLOW_NOTE_ROW}:{LAST_VISIBLE_COL}{DATA_OVERFLOW_NOTE_ROW}")
+
+    # v3.4 audit F4: error tripwire in the spacer row above the detail band.
+    # Every register row scores numerically (incomplete/empty rows score -1
+    # after the v3.4 blank guards), so COUNT < register depth means some row
+    # ERRORED (e.g. text pasted into a numeric Inputs column) — in which case
+    # LARGE() errors for every rank and the panel below renders silently empty.
+    err_check = ws.cell(
+        row=BAND_DETAIL_ROW - 1, column=1,
+        value=(f'=IF(COUNT({delta_range})<{ASSUMPTIONS.asset_register_rows},'
+               f'"⚠ Some register rows could not be evaluated — check for text in numeric '
+               f'columns on Inputs. The asset ranking below may be incomplete.","")'),
+    )
+    err_check.font = Font(name="Arial", size=9, bold=True, italic=True, color="A61B1B")
 
 
 def _build_footer_notes(ws: Worksheet) -> None:
