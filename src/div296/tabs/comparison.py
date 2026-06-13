@@ -568,7 +568,7 @@ def _build_subtotals(ws: Worksheet, headline_a: str, headline_b: str,
         for col in ("B", "C"):
             ws[f"{col}{row}"].number_format = FMT_CURRENCY
             ws[f"{col}{row}"].alignment = Alignment(horizontal="right", vertical="center")
-        # Change col uses signed-delta format (red brackets for negatives).
+        # Change col uses signed-delta format (green brackets for negatives).
         ws[f"D{row}"].number_format = FMT_CURRENCY_DELTA
         ws[f"D{row}"].alignment = Alignment(horizontal="right", vertical="center")
 
@@ -827,7 +827,7 @@ def _build_per_asset_detail(
         )
 
         # v2.5 FB-7: Change column at the FAR RIGHT, signed TAX delta
-        # (reset tax − default tax). Negative = reset reduces tax (red brackets).
+        # (reset tax − default tax). Negative = reset reduces tax (green brackets).
         ws[f"{DELTA_COL}{c_row}"] = (
             f'=IF({matched}=0,"",{tax_b}{c_row}-{tax_a}{c_row})'
         )
@@ -882,9 +882,11 @@ def _build_per_asset_detail(
     )
     ws.conditional_formatting.add(trap_range, trap_rule)
 
-    # v2.5 FB-7: dropped the green/red CF on the Change column. The
-    # FMT_CURRENCY_DELTA format renders negatives as red brackets, which is
-    # the consistent visual language across every Change cell on the tab.
+    # v2.5 FB-7 dropped the per-cell green/red CF here in favour of the
+    # FMT_CURRENCY_DELTA format (negatives render as green brackets). v3.4
+    # audit 3.1 re-adds a ONE-directional red highlight on POSITIVE (cost)
+    # Change values via _build_difference_red_cf — the trap this model exists
+    # to surface — while negatives keep the green-bracket format.
 
     # Overflow note — v2.5 FB-7: mentions tax delta (the new sort metric).
     overflow = ws.cell(
@@ -934,6 +936,27 @@ def _build_footer_notes(ws: Worksheet) -> None:
     ws.row_dimensions[SORT_NOTE_ROW].height = 30
 
 
+def _build_difference_red_cf(ws: Worksheet) -> None:
+    """v3.4 audit 3.1: a POSITIVE Difference means the reset COSTS money (the
+    trap this model exists to surface) — render it muted red, mirroring the
+    Analyser fund-summary rule. Negative (a saving) keeps the green-bracket
+    FMT_CURRENCY_DELTA styling. ISNUMBER guards skip blank/empty-member cells.
+    """
+    red = Font(name="Arial", size=10, bold=True, color="A61B1B")
+    ranges = (
+        f"I{CARD_VALUE_ROW}",                                       # Net-effect card
+        f"D{SUBTOTAL_EARNINGS_ROW}:D{SUBTOTAL_BURDEN_ROW}",         # subtotal Difference
+        f"E{PER_MEMBER_FIRST_ROW}:E{PER_MEMBER_LAST_ROW}",          # per-member Difference
+        f"{DELTA_COL}{DATA_FIRST_ROW}:{DELTA_COL}{DATA_LAST_ROW}",  # per-asset Change
+    )
+    for rng in ranges:
+        top = rng.split(":")[0]   # relative top-cell ref; rule auto-tracks down the range
+        ws.conditional_formatting.add(
+            rng,
+            FormulaRule(formula=[f"AND(ISNUMBER({top}),{top}>0)"], font=red),
+        )
+
+
 def build(wb: Workbook) -> Worksheet:
     ws = wb.create_sheet(SHEET)
     ws.sheet_view.showGridLines = False
@@ -956,6 +979,7 @@ def build(wb: Workbook) -> Worksheet:
         ws, gain_a_range, gain_b_range, delta_range, headline_a, headline_b,
     )
     _build_footer_notes(ws)
+    _build_difference_red_cf(ws)
 
     # --- Print header watermark (large grey text on every printed page) ---
     ws.oddHeader.center.text = "ILLUSTRATIVE — NOT ADVICE"
