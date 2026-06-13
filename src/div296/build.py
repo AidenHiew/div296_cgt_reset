@@ -92,6 +92,11 @@ def validate_recalc(xlsx_path: Path) -> list[str]:
     errors: list[str] = []
     skipped_known = 0
     for key, cell in sol.items():
+        if "'!" not in str(key):
+            # `formulas` keys workbook cells as "'[file]SHEET'!A1"; its solution
+            # also carries internal meta-entries (e.g. the 'self' Dispatcher)
+            # that have no .value and are not workbook cells — skip those.
+            continue
         try:
             value = cell.value
         except Exception as exc:  # noqa: BLE001 — engine raises arbitrary types
