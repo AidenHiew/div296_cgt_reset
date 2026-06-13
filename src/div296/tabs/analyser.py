@@ -515,7 +515,7 @@ def build(wb: Workbook) -> Worksheet:
         # derivation downstream.
         e_cell = ws.cell(
             row=a_row, column=ORD_GAIN_COL,
-            value=f'=IF({proceeds}="","",{proceeds}-{orig})',
+            value=f'=IF(OR({proceeds}="",{orig}=""),"",{proceeds}-{orig})',
         )
         e_cell.font = F_INFO_DATA_FONT
         e_cell.alignment = Alignment(horizontal="right", vertical="center")
@@ -537,7 +537,7 @@ def build(wb: Workbook) -> Worksheet:
         g_cell = ws.cell(
             row=a_row, column=ORD_CGT_COL,
             value=(
-                f'=IF({proceeds}="","",'
+                f'=IF({e_letter}{a_row}="","",'
                 f'IF({e_letter}{a_row}<=0,"—",'
                 f'{e_letter}{a_row}*(1-IF({f_letter}{a_row}="Yes",discount_rate,0))'
                 f'*fund_cgt_rate))'
@@ -548,14 +548,14 @@ def build(wb: Workbook) -> Worksheet:
         # Col H — Div 296 cost base. v3.0: always the elected reset cost base.
         ws.cell(
             row=a_row, column=DIV_CB_COL,
-            value=f'=IF({proceeds}="","",{mv})',
+            value=f'=IF(OR({proceeds}="",{mv}=""),"",{mv})',
         )
         # Col I — NEW Div 296 GROSS gain. Symmetric to col E: plain
         # proceeds − Div 296 CB (MV). No discount applied; for diagnostic
         # parity with the ord side.
         i_cell = ws.cell(
             row=a_row, column=DIV_GROSS_COL,
-            value=f'=IF({proceeds}="","",{proceeds}-{mv})',
+            value=f'=IF(OR({proceeds}="",{mv}=""),"",{proceeds}-{mv})',
         )
         i_cell.font = F_INFO_DATA_FONT
         i_cell.alignment = Alignment(horizontal="right", vertical="center")
@@ -577,7 +577,7 @@ def build(wb: Workbook) -> Worksheet:
         ws.cell(
             row=a_row, column=DIV_TAX_COL,
             value=(
-                f'=IF({proceeds}="","",'
+                f'=IF({postdisc_letter}{a_row}="","",'
                 f'IF(SUMIF({postdisc_first}:{postdisc_last},">0")=0,0,'
                 f'MAX(0,{postdisc_letter}{a_row})/'
                 f'SUMIF({postdisc_first}:{postdisc_last},">0")*$D${HEADLINE_ROW}))'
@@ -595,7 +595,7 @@ def build(wb: Workbook) -> Worksheet:
         ws.cell(
             row=a_row, column=RESET_IMPACT_COL,
             value=(
-                f'=IF({proceeds}="","",'
+                f'=IF(OR({helper_with_reset_letter}{a_row}="",{helper_without_reset_letter}{a_row}=""),"",'
                 f'{helper_with_reset_letter}{a_row}-{helper_without_reset_letter}{a_row})'
             ),
         )

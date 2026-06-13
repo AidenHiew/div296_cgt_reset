@@ -373,8 +373,11 @@ def _build_per_register_helpers(ws: Worksheet) -> tuple[str, str, str]:
         # Tiebreaker: small positive amount decreasing with register row, so
         # earlier-listed assets win ties without ever turning P negative.
         tiebreak = f"({n_last}-ROW())*0.001"
+        # Incomplete rows (either gain cell blank) are excluded from the
+        # top-10 ranking like empty rows — they're flagged on Inputs instead.
         ws[f"{PER_REG_DELTA_COL}{n}"] = (
-            f'=IF({proceeds}="",-1,ABS(({tax_b})-({tax_a}))+{tiebreak})'
+            f'=IF(OR({proceeds}="",{PER_REG_GAIN_A_COL}{n}="",{PER_REG_GAIN_B_COL}{n}=""),'
+            f'-1,ABS(({tax_b})-({tax_a}))+{tiebreak})'
         )
     return (
         a_range, b_range,
