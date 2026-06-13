@@ -271,7 +271,7 @@ def _build_context_strip(ws: Worksheet) -> None:
     header_a.alignment = Alignment(horizontal="left", vertical="center", indent=1)
 
     header_b = ws[f"B{CONTEXT_LABEL_ROW}"]
-    header_b.value = "Total Super Balance"
+    header_b.value = "Total Superannuation Balance (TSB)"
     header_b.font = Font(name="Arial", size=10, bold=True, color="1D3B34")
     header_b.alignment = Alignment(horizontal="left", vertical="center", indent=1)
     ws.merge_cells(f"B{CONTEXT_LABEL_ROW}:C{CONTEXT_LABEL_ROW}")
@@ -532,8 +532,8 @@ def _build_subtotals(ws: Worksheet, headline_a: str, headline_b: str,
          f"=MAX(0, SUM({gain_a_range}))", f"=MAX(0, SUM({gain_b_range}))",
          "The total estimated Division 296 adjusted taxable capital gain "
          "across all assets included in the analysis, net of capital losses "
-         "within the year (s102-5 method). Floored at zero — Div 296 earnings "
-         "cannot be negative."),
+         "within the year (intra-year netting of adjusted gains, floored at "
+         "zero). Div 296 earnings cannot be negative."),
         (SUBTOTAL_ORD_CGT_ROW,  "Ordinary CGT (unchanged by reset)",
          ord_cgt_ref, ord_cgt_ref,
          "Ordinary capital gains tax — fund CGT rate applied to net taxable "
@@ -719,7 +719,7 @@ def _build_per_asset_detail(
     # v2.5 FB-7: band header reworded — emphasises tax impact (the new sort
     # metric, displayed in the Change column).
     _band(ws, BAND_DETAIL_ROW,
-          f"Top {DISPLAY_ROWS} assets — Div 296 tax impact if you elect to reset")
+          f"Top {DISPLAY_ROWS} assets — Div 296 tax impact if the reset is elected")
 
     # Panel titles row — v2.5 FB-7: layout is now Panel A | Panel B | Change.
     panel_a_first, panel_a_last = PANEL_A_COLS[0], PANEL_A_COLS[-1]
@@ -913,9 +913,10 @@ def _build_per_asset_detail(
 def _build_footer_notes(ws: Worksheet) -> None:
     reminder = ws.cell(
         row=REMINDER_ROW, column=1,
-        value=("Note: assets currently in an unrealised-loss position may contribute "
-               "Div 296 tax IF you elect the reset that they do not contribute under "
-               "the default outcome — see the Analyser tab for per-asset detail."),
+        value=("Assets are ranked by the size of the change in Div 296 tax between "
+               "scenarios. An asset can contribute Div 296 tax if the reset is elected "
+               "even though it contributes none under the no-reset scenario — and "
+               "vice versa. See the Analyser tab for per-asset detail."),
     )
     reminder.font = Font(name="Arial", size=9, italic=True, color="666666")
     reminder.alignment = Alignment(wrap_text=True, vertical="top")

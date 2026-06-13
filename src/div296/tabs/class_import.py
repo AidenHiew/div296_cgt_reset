@@ -79,9 +79,9 @@ PASTE_USED_COL_IDX = {2, 3, 8, 12, 13}  # B, C, H, L, M
 MAP_COL_START = 20  # T
 MAP_HEADERS = [
     "A  Asset code", "B  Asset name", "C  Original cost base (tax)",
-    "D  Current market value", "E  MV @ 30 Jun 2026", "F  Valuation source/date",
-    "G  Projected proceeds", "H  Projected gain/loss (formula — DON'T copy)",
-    "I  Held > 12 months?",
+    "D  Current market value (as at today)", "E  Market value at 30 Jun 2026",
+    "F  Valuation source / date", "G  Projected sale proceeds",
+    "H  Projected gain/loss (formula — DON'T copy)", "I  Held > 12 months?",
 ]
 MAP_FLAG_COL_IDX = MAP_COL_START + len(MAP_HEADERS)  # AC
 # 0-based offsets into the mapped block.
