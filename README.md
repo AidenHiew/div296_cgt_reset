@@ -4,9 +4,10 @@
 
 A Microsoft Excel workbook (`.xlsx`) that illustrates Division 296 tax outcomes for SMSFs and makes the case for pre–30 June 2026 action on assets sitting in an unrealised-loss position (the "reset trap").
 
-**Status:** v3.3.0 — stable. Adds a **CLASS Import** staging tab: paste a CLASS Super *Investment Summary Report* (Tax Cost Base export) and it filters/maps the holdings into Inputs-register shape for a copy-paste-values transfer. Additive — no calc-engine or existing-tab changes, so default-config output stays byte-equivalent to v3.2.x. See "What's new in v3.3.0" below.
+**Status:** v3.4.0 — stable. Audit fix-pack hardening over v3.3.0: a locked `Inputs!H` CLASS-transfer guard, golden formula-string tests, a revived build-validation gate, blank-input guards (incomplete rows render blank instead of coercing to $0), red conditional formatting on positive Comparison Differences, the "ILLUSTRATIVE" print header + page setup on all five tabs, and a Notes / label / CONTEXT.md / README refresh. **§12 acceptance numbers unchanged.** See "What's new in v3.4.0" below.
 
 **Previous releases:**
+- v3.3.0 (frozen as reference; artifact `dist/Division_296_Model_v3.3.0.xlsx`). CLASS Import staging tab. Additive — byte-equivalent to v3.2.1.
 - v3.2.1 (frozen as reference; artifact `dist/Division_296_Model_v3.2.1.xlsx`). Sign-coloured Analyser "Difference" column. Cosmetic over v3.2.0.
 - v3.2.0 (frozen as reference; artifact `dist/Division_296_Model_v3.2.0.xlsx`). Per-asset semantic refactor — Style 1 / Option B layout. Layout-only vs v3.1.0; numerically byte-equivalent.
 - v3.1.0 (frozen as reference; artifact `dist/Division_296_Model_v3.1.0.xlsx`). Capital-loss netting + per-asset table clarity pass over v3.0.0. Breaking numerical vs v3.0.0 for funds with offsetting losses.
@@ -18,6 +19,14 @@ A Microsoft Excel workbook (`.xlsx`) that illustrates Division 296 tax outcomes 
 - v2.2.0 (frozen as reference; artifact `dist/Division_296_Model_v2.2.0.xlsx`). Client-readability pass over v2.0.0.
 - v2.0.0 (frozen as reference; tag `v2.0.0`, artifact `dist/Division_296_Model_v2.0.0.xlsx`). UX pass over v1.0.0.
 - v1.0.0 (frozen as reference; tag `v1.0.0`, artifact `dist/Division_296_Model_v1.0.0.xlsx`).
+
+**What's new in v3.4.0:**
+- **Phase 1 — CLASS-transfer guards.** `Inputs!H` (the register's Projected gain/loss formula) is now a **locked cell**, so the documented A:G Paste-Special-Values transfer can't silently wipe it. CLASS Import gains a physical copy-range banner, an oversize-paste capacity warning, a blank/non-numeric Total Cost flag, and a paste-alignment warning.
+- **Phase 2 — verification hardening.** Golden formula-string tests pin the exact arithmetic of the highest-blast-radius builders, so a sign flip now fails a test (the rest of the fast suite is structural). The post-build recalc validation gate works again via a shared known-limitations exclusion list. And **incomplete register rows now render blank instead of coercing a missing cost base to $0** — previously a row with proceeds but no Market value at 30 Jun showed the full proceeds as a gain.
+- **Phase 3 — UX + docs.** Positive Differences (the reset *costing* money — the trap this model exists to surface) now render red on the client-facing Comparison tab, mirroring Analyser. The "ILLUSTRATIVE — NOT ADVICE" print header and page setup now cover all five tabs (was missing on Inputs and CLASS Import). The Notes tab, on-sheet labels, CONTEXT.md glossary, and this README are refreshed; Inputs gains an unrecognised-held-flag highlight and numeric input warnings.
+- **§12 acceptance numbers unchanged.** Every fix is presentation, verification, or edge-case behaviour — the sample-data acceptance figures (Fund Ord CGT $180,000; Div 296 earnings $1,100,000 no-reset / $253,333 elected; headline tax $142,083 / $32,722) are identical to v3.1.0+.
+
+**Out of scope for v3.4 (deferred):** a LibreOffice-headless recalc CI job (the strongest numeric gate — `scripts/recalc.py` is kept for it); CI/tooling pins; member-name personalisation. See `docs/superpowers/plans/2026-06-10-audit-fix-pack.md`.
 
 **What's new in v3.3.0:**
 - **New "CLASS Import" tab** (inserted after Inputs). Staging area to bring a CLASS Super *Investment Summary Report* into the asset register without hand-keying every holding. Paste the CLASS data rows into the green paste zone (CLASS's native 18 columns); a formula-driven mapped block to the right filters and reshapes them into register columns A–I.
