@@ -745,7 +745,7 @@ class TestComparison:
         ws = _comparison(tmp_path)
         assert "Members & TSB" in str(ws["A12"].value)
         assert ws["A13"].value == "Members"
-        assert ws["B13"].value == "Total Super Balance"
+        assert ws["B13"].value == "Total Superannuation Balance (TSB)"
         assert ws["A14"].value == "Member 1"
         assert ws["A15"].value == "Member 2"
         assert ws["A16"].value == "Member 3"

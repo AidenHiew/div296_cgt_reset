@@ -125,7 +125,7 @@ python -m pip install -e .[dev]
 
 # 2. Build the workbook (runs a live recalc check at the end)
 python -m div296.build
-# -> dist/Division_296_Model_v3.1.0.xlsx
+# -> dist/Division_296_Model_v3.4.0.xlsx
 # -> Recalc validation: OK (no Excel error cells).
 
 # 3. Run the test suite (fast dev loop — skips live-recalc)
@@ -142,14 +142,14 @@ Pass `--no-validate` to skip the post-build recalc check (faster, not recommende
 ### Exporting to PDF (client-shareable Comparison page)
 
 ```bash
-python scripts/export_pdf.py dist/Division_296_Model_v3.1.0.xlsx
-# -> dist/Division_296_Model_v2.0.0_Comparison.pdf
+python scripts/export_pdf.py dist/Division_296_Model_v3.4.0.xlsx
+# -> dist/Division_296_Model_v3.4.0_Comparison.pdf
 
 # Other tabs / whole workbook:
-python scripts/export_pdf.py dist/Division_296_Model_v3.1.0.xlsx --tab Analyser
-python scripts/export_pdf.py dist/Division_296_Model_v3.1.0.xlsx --all-tabs
-# -> dist/Division_296_Model_v3.1.0_Comparison.pdf  (default tab)
-# -> dist/Division_296_Model_v3.1.0.pdf             (--all-tabs)
+python scripts/export_pdf.py dist/Division_296_Model_v3.4.0.xlsx --tab Analyser
+python scripts/export_pdf.py dist/Division_296_Model_v3.4.0.xlsx --all-tabs
+# -> dist/Division_296_Model_v3.4.0_Comparison.pdf  (default tab)
+# -> dist/Division_296_Model_v3.4.0.pdf             (--all-tabs)
 ```
 
 Requires [LibreOffice](https://www.libreoffice.org/) installed (`soffice` on PATH, or the default `C:\Program Files\LibreOffice\program\soffice.exe` on Windows).
@@ -172,15 +172,21 @@ div296_cgt_reset/
 │   ├── named_ranges.py        named-range registry
 │   ├── styles.py              colours, fills, fonts per spec §11
 │   ├── calcs.py               pure-Python mirror of every Excel formula
+│   ├── _formulas.py           shared Excel formula builders (Analyser/Comparison)
+│   ├── _recalc_limitations.py cells the pure-Python recalc engine can't evaluate
 │   └── tabs/
 │       ├── inputs.py
+│       ├── class_import.py    CLASS Super export -> register-shape staging (v3.3)
 │       ├── analyser.py
 │       ├── comparison.py
 │       └── notes.py
 ├── tests/
 │   ├── test_calcs.py          asserts spec §12 acceptance numbers
+│   ├── test_formula_golden.py pins exact formula strings (sign-flip tripwire)
+│   ├── test_integration.py    live recalc vs §12 numbers (slow)
 │   └── test_workbook.py       build -> recalc -> read back totals
 ├── scripts/
+│   ├── export_pdf.py          LibreOffice headless PDF export
 │   └── recalc.py              LibreOffice headless recalc helper
 ├── docs/
 │   └── BUILD_PLAN.md          frozen reference copy of the functional spec
@@ -205,10 +211,10 @@ These supplement [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) §1.
 
 | Spec § | Original | This build |
 |---|---|---|
-| §2 / §9 | 5 tabs including `Decision` | **4 tabs** (`Inputs`, `Analyser`, `Comparison`, `Notes`). Decision tab removed to keep the model purely illustrative. |
+| §2 / §9 | 5 tabs including `Decision` | **5 tabs** (`Inputs`, `CLASS Import`, `Analyser`, `Comparison`, `Notes`). Decision tab removed to keep the model purely illustrative; `CLASS Import` staging tab added in v3.3. |
 | §4 | Inputs zones: control panel → asset register → members & advanced assumptions (top to bottom) | **v1.5 reorder:** control panel → members → asset register → advanced assumptions. Fund-level setup is now compact and near the top; bulk asset data sits in the middle; set-once constants demoted to the bottom. |
 | §5 | Analyser column order: Asset / Proceeds / Original CB / **Div 296 CB** / Ord taxable gain / Ord CGT / Div 296 adj gain / Div 296 tax / Reset impact | **v1.5 reorder:** Div 296 cost base moved from col 4 to col 6, so each cost base sits directly next to the gain it computes. |
-| §8 | Lean Comparison panels (3 cols: Asset / Div 296 gain / Div 296 tax), 50 data rows reserved, no chart, no headline summary | **v1.5 redesign:** subtotals moved to the top; three hero metric cards (Scenario A / B / Net effect); fund-context strip; 5-col panels (Asset / Proceeds / Div 296 CB / Div 296 adj gain / Div 296 tax) plus a Δ column between panels; **TOTAL TAX BURDEN row** (Ord CGT + Div 296 tax) added to subtotals; 15 visible rows with overflow note to Analyser; bar chart kept at bottom. |
+| §8 | Lean Comparison panels (3 cols: Asset / Div 296 gain / Div 296 tax), 50 data rows reserved, no chart, no headline summary | **v1.5 redesign:** subtotals moved to the top; three hero metric cards (Scenario A / B / Net effect); fund-context strip; 5-col panels (Asset / Proceeds / Div 296 CB / Div 296 adj gain / Div 296 tax) plus a Δ column between panels; **TOTAL TAX BURDEN row** (Ord CGT + Div 296 tax) added to subtotals; 10 visible rows (top 10 by absolute Div 296 tax change) with overflow note to Analyser. |
 | §8 footer | "$X saved (green) / $X created (red)" recommendation | **Neutral net-effect calculation only.** Net-effect metric card reads "Net effect (A − B) = $X". No "saves/created" framing, no "you should..." text anywhere in the workbook. |
 
 ---
@@ -243,7 +249,7 @@ Factual disclosures, not recommendations:
   - **Analyser:** fund-state strip across the top, row-number column for printed reference, print titles repeat headers across pages, freeze panes removed for free scroll, column-group tinting (sand / slate / sage-teal / gold palette) to separate inputs / ordinary CGT / Div 296 / reset-impact, distinct totals row, gold accent on the Reset impact column.
   - **Inputs:** "Total value" renamed to "Current market value (as at today)" for clarity, column A widened, column resize allowed under sheet protection.
   - **Holistic:** dark-teal section titles unified across all tabs; "ILLUSTRATIVE — NOT ADVICE" print-header watermark now appears on all 4 tabs (was Comparison only).
-- **v2.2.0 (this release) — client-readability pass.** Same calc engine; presentation changes only — except for one stale-reference bugfix that affects displayed totals (see below). Highlights:
+- **v2.2.0 — client-readability pass.** Same calc engine; presentation changes only — except for one stale-reference bugfix that affects displayed totals (see below). Highlights:
   - **Plain-English re-labelling** across Comparison. "Scenario A — No reset" / "Scenario B — Reset elected" / "Net effect (A − B)" → **"Default outcome (no election lodged)" / "If you elect the reset by 30 Jun 2026" / "Change if you elect"**. All Greek `Δ` symbols dropped in favour of the word "Change". The "do nothing" framing is gone — not lodging an election by 30 Jun 2026 IS a permanent choice, and the new labels make that explicit.
   - **TSB traffic-light on Inputs.** New row 3 auto-checks whether any member's TSB sits above the $3m threshold and shows a green / red diagnostic so a client can see "does Div 296 even apply to me?" without reading any tax numbers.
   - **Sample-data warning propagated.** Comparison and Analyser now both show the amber "⚠ Sample data detected" badge whenever the asset register still contains the demo P1/S1/L1 codes — prevents an accountant accidentally PDF-exporting a polished-looking client tearsheet built on Mr Sample's commercial property.
