@@ -16,10 +16,11 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8",
-    "pytest-xdist>=3",   # parallel test execution: pytest -n auto
-    "ruff>=0.5",
-    "formulas>=1.2",     # pure-Python xlsx recalc for the integration test
+    "pytest>=8,<10",
+    "pytest-xdist>=3,<4",   # parallel test execution: pytest -n auto
+    "ruff==0.15.14",        # pinned: unpinned ruff broke PR #5 on rules the diff never touched
+    "formulas>=1.2",        # pure-Python xlsx recalc for the integration test
+    "numpy>=1.26",          # imported directly by tests/test_integration.py
 ]
 
 [project.scripts]
