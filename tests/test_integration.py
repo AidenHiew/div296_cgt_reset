@@ -87,8 +87,8 @@ def _col(idx: int) -> str:
 # tab layout constants so this test stays correct under future row shifts.
 
 # Analyser
-A_HEADLINE_NORESET = f"{_col(A_TAB.FUND_NORESET_COL)}{A_TAB.HEADLINE_ROW}"   # C13
-A_HEADLINE_ELECTED = f"{_col(A_TAB.FUND_ELECTED_COL)}{A_TAB.HEADLINE_ROW}"   # D13
+A_HEADLINE_NORESET = A_TAB.HEADLINE_NORESET_CELL   # C13 (derived in analyser.py)
+A_HEADLINE_ELECTED = A_TAB.HEADLINE_ELECTED_CELL   # D13 (derived in analyser.py)
 A_RECON_DIV296 = f"B{A_TAB.RECON_DIV296_ROW}"          # B72
 A_TOTAL_PROCEEDS = f"{_col(A_TAB.PROCEEDS_COL)}{A_TAB.TOTALS_ROW}"        # C67
 A_TOTAL_DIV296_GAIN = f"{_col(A_TAB.DIV_GAIN_COL)}{A_TAB.TOTALS_ROW}"     # H67

@@ -15,9 +15,9 @@ from div296.tabs import analyser as A_TAB
 from div296.tabs import comparison as C_TAB
 
 KNOWN_FORMULAS_LIMITATIONS: tuple[str, ...] = (
-    f"ANALYSER'!{get_column_letter(A_TAB.HELPER_M_COL)}{A_TAB.RECON_BAND_ROW}",   # disc-gains helper (col O)
-    f"ANALYSER'!{get_column_letter(A_TAB.HELPER_N_COL)}{A_TAB.RECON_BAND_ROW}",   # nond-gains helper (col P)
-    f"ANALYSER'!{get_column_letter(A_TAB.HELPER_O_COL)}{A_TAB.RECON_BAND_ROW}",   # gross-losses helper (col Q)
+    f"ANALYSER'!{get_column_letter(A_TAB.HELPER_DISC_GAINS_COL)}{A_TAB.RECON_BAND_ROW}",    # disc-gains helper (col O)
+    f"ANALYSER'!{get_column_letter(A_TAB.HELPER_NOND_GAINS_COL)}{A_TAB.RECON_BAND_ROW}",    # nond-gains helper (col P)
+    f"ANALYSER'!{get_column_letter(A_TAB.HELPER_GROSS_LOSSES_COL)}{A_TAB.RECON_BAND_ROW}",  # gross-losses helper (col Q)
     f"ANALYSER'!B{A_TAB.RECON_ORD_CGT_ROW}",      # Fund Ord CGT (depends on helpers)
     f"ANALYSER'!B{A_TAB.RECON_LOSSES_ROW}",       # Carry-forward losses (depends on helpers)
     # Comparison: Ord CGT subtotal pulls Analyser!B71 → propagates #VALUE!.
