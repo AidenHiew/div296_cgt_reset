@@ -1125,6 +1125,24 @@ def test_comparison_card_formulas_keep_absolute_refs():
     assert sub == f"=${C.HELPER_COL_A}${C.HELPER_HEADLINE_ROW}"
 
 
+def test_comparison_positive_difference_red_cf(tmp_path: Path):
+    """v3.4 audit 3.1: a positive Difference (reset costs money) renders red,
+    mirroring Analyser. Assert a '>0' CF rule covers the subtotal Difference."""
+    from div296.tabs import comparison as C
+    out = tmp_path / "out.xlsx"
+    wb = build_workbook()
+    wb.save(out)
+    ws = load_workbook(out)["Comparison"]
+    sub_range = f"D{C.SUBTOTAL_EARNINGS_ROW}:D{C.SUBTOTAL_BURDEN_ROW}"
+    for rng, rules in ws.conditional_formatting._cf_rules.items():
+        if sub_range in str(rng):   # str(rng) is "<ConditionalFormatting D27:D30>"
+            formulas = [f for rule in rules for f in (rule.formula or [])]
+            assert any(">0" in f for f in formulas), formulas
+            break
+    else:
+        raise AssertionError(f"no CF rule on {sub_range}")
+
+
 def test_sample_badge_survives_register_replacement(tmp_path: Path):
     """v3.3 audit: badge must also key on the seeded member TSBs, not only
     the register codes a CLASS transfer removes."""
