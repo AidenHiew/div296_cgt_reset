@@ -1112,6 +1112,19 @@ def test_incomplete_rows_blank_not_zero(tmp_path: Path):
     assert "no Market value at 30 Jun" in wb_re["Inputs"]["A13"].value
 
 
+def test_comparison_card_formulas_keep_absolute_refs():
+    """v3.4 audit 3.1: card/subtotal formulas must be '=$L$6' (absolute),
+    not '=L$6' produced by the accidental [1:] slice."""
+    from div296.tabs import comparison as C
+    wb = build_workbook()
+    ws = wb["Comparison"]
+    card_a = ws[f"A{C.CARD_VALUE_ROW}"].value
+    assert card_a == f"=${C.HELPER_COL_A}${C.HELPER_HEADLINE_ROW}"
+    # The Div 296 subtotal row mirrors the same headline cells (absolute).
+    sub = ws[f"B{C.SUBTOTAL_DIV296_ROW}"].value
+    assert sub == f"=${C.HELPER_COL_A}${C.HELPER_HEADLINE_ROW}"
+
+
 def test_sample_badge_survives_register_replacement(tmp_path: Path):
     """v3.3 audit: badge must also key on the seeded member TSBs, not only
     the register codes a CLASS transfer removes."""
