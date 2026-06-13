@@ -502,4 +502,14 @@ def build(wb: Workbook) -> Worksheet:
     ws.protection.selectLockedCells = False
     ws.protection.selectUnlockedCells = False
 
+    # --- Print header watermark + page setup (v3.4 audit: was missing here) ---
+    ws.oddHeader.center.text = "ILLUSTRATIVE — NOT ADVICE"
+    ws.oddHeader.center.size = 28
+    ws.oddHeader.center.color = "CCCCCC"
+    ws.page_setup.orientation = "portrait"
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0   # let the register + assumptions spill vertically
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.print_area = f"A1:I{ADV_FIRST_ROW + len(ADV_ROWS)}"
+
     return ws

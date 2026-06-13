@@ -876,6 +876,12 @@ def build(wb: Workbook) -> Worksheet:
     ws.oddHeader.center.text = "ILLUSTRATIVE — NOT ADVICE"
     ws.oddHeader.center.size = 28
     ws.oddHeader.center.color = "CCCCCC"
+    # v3.4 audit: 12 visible cols (~201 chars) spill ~3 portrait pages — fit
+    # to one page wide in landscape, let the 50-row register spill vertically.
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
 
     # --- Sheet protection ---
     ws.protection.sheet = True

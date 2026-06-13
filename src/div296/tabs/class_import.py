@@ -339,4 +339,13 @@ def build(wb: Workbook) -> Worksheet:
     ws.protection.selectLockedCells = False
     ws.protection.selectUnlockedCells = False
 
+    # --- Print header watermark + page setup (v3.4 audit: was missing here) ---
+    ws.oddHeader.center.text = "ILLUSTRATIVE — NOT ADVICE"
+    ws.oddHeader.center.size = 28
+    ws.oddHeader.center.color = "CCCCCC"
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0   # staff-only tab; let the paste zone spill
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+
     return ws
