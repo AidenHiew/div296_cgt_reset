@@ -1153,6 +1153,23 @@ def test_watermark_on_all_tabs():
         assert "ILLUSTRATIVE" in (ws.oddHeader.center.text or ""), ws.title
 
 
+def test_inputs_numeric_dv_and_held_flag_cf(tmp_path: Path):
+    """v3.4 audit: a numeric (warning) DV guards currency inputs, and an amber
+    CF flags unrecognised held>12m values that silently normalise to 'No'."""
+    from div296.tabs import inputs as I
+    out = tmp_path / "out.xlsx"
+    wb = build_workbook()
+    wb.save(out)
+    ws = load_workbook(out)["Inputs"]
+    dvs = list(ws.data_validations.dataValidation)
+    assert len(dvs) == 2, [dv.type for dv in dvs]
+    assert any(dv.type == "decimal" for dv in dvs)
+    # Amber CF on the held column (I) register range.
+    held_rng = f"I{I.REGISTER_FIRST_DATA_ROW}:I{I.REGISTER_LAST_DATA_ROW}"
+    cf_ranges = " ".join(str(r) for r in ws.conditional_formatting)
+    assert held_rng in cf_ranges, cf_ranges
+
+
 def test_sample_badge_survives_register_replacement(tmp_path: Path):
     """v3.3 audit: badge must also key on the seeded member TSBs, not only
     the register codes a CLASS transfer removes."""

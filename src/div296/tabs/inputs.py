@@ -221,9 +221,10 @@ def build(wb: Workbook) -> Worksheet:
         fill=PatternFill("solid", fgColor="E1F5EE"),
     )
     # Light amber when at least one member is above $3m but below $10m.
+    # v3.4 audit: FFF4CE (true amber) — pink (FBE9E9) is reserved for trap/loss.
     amber_rule = FormulaRule(
         formula=[f"AND({max_tsb_expr}>threshold_1,{max_tsb_expr}<=threshold_2)"],
-        fill=PatternFill("solid", fgColor="FBE9E9"),
+        fill=PatternFill("solid", fgColor="FFF4CE"),
     )
     # Darker amber when at least one member is above $10m.
     deep_amber_rule = FormulaRule(
@@ -377,10 +378,7 @@ def build(wb: Workbook) -> Worksheet:
         errorStyle="stop",
         showErrorMessage=True,
         errorTitle="Invalid value",
-        error=(
-            "Enter 'Yes' or 'No'. Paste-in values are normalised "
-            "automatically (case and whitespace) by a hidden helper column."
-        ),
+        error="Enter Yes or No.",
     )
     ws.add_data_validation(held_dv)
 
@@ -416,6 +414,34 @@ def build(wb: Workbook) -> Worksheet:
                     value = sample[col_idx - 2]
                 _input_cell(ws, coord, value=value, number_format=fmt)
         held_dv.add(f"I{row}")
+
+    # --- v3.4 audit: amber CF on UNRECOGNISED held>12m values ---
+    # Anything other than blank/Yes/No silently normalises to "No" (no
+    # discount) via hidden col J; make that silent coercion visible.
+    held_rng = f"I{REGISTER_FIRST_DATA_ROW}:I{REGISTER_LAST_DATA_ROW}"
+    ws.conditional_formatting.add(
+        held_rng,
+        FormulaRule(
+            formula=[f'AND(I{REGISTER_FIRST_DATA_ROW}<>"",'
+                     f'TRIM(UPPER(I{REGISTER_FIRST_DATA_ROW}))<>"YES",'
+                     f'TRIM(UPPER(I{REGISTER_FIRST_DATA_ROW}))<>"NO")'],
+            fill=PatternFill("solid", fgColor="FFF4CE"),
+        ),
+    )
+
+    # --- v3.4 audit: numeric DV (warning) on currency inputs ---
+    # Paste bypasses xlsx DV entirely, so a warning + the downstream formula
+    # guards is the right strength — this only catches direct typing.
+    money_dv = DataValidation(
+        type="decimal", operator="greaterThanOrEqual", formula1="0",
+        allow_blank=True, errorStyle="warning", showErrorMessage=True,
+        errorTitle="Expected a dollar amount",
+        error="This cell expects a non-negative number. Text here breaks downstream formulas.",
+    )
+    ws.add_data_validation(money_dv)
+    money_dv.add(f"B{MEMBERS_FIRST_DATA_ROW}:B{MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count - 1}")
+    for col in ("C", "D", "E", "G"):
+        money_dv.add(f"{col}{REGISTER_FIRST_DATA_ROW}:{col}{REGISTER_LAST_DATA_ROW}")
 
     # v3.1.2: hidden col J — normalised held>12mo flag. Every formula that
     # reads the held flag now points at Inputs!J, not Inputs!I.
