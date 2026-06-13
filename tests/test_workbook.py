@@ -1095,6 +1095,23 @@ def test_inputs_transfer_tripwire(tmp_path: Path):
     assert "ISFORMULA" in v and "Paste-Special" in v
 
 
+def test_incomplete_rows_blank_not_zero(tmp_path: Path):
+    """v3.4 audit F2/F3: a register row missing its cost-base cell must render
+    blank (""), never coerce the blank to $0 (a full-proceeds 'gain'). Every
+    per-asset Analyser cell must guard BOTH proceeds and its cost base."""
+    out = tmp_path / "out.xlsx"
+    wb = build_workbook()
+    wb.save(out)
+    wb_re = load_workbook(out)
+    a = wb_re["Analyser"]
+    # Col H/I/J guard proceeds AND MV; col E guards proceeds AND orig CB.
+    for coord in ("E17", "H17", "I17", "J17"):
+        f = a[coord].value
+        assert f.startswith("=IF(OR("), f"{coord}: {f}"
+    # Inputs completeness warning (row-13 tripwire, second priority) exists.
+    assert "no Market value at 30 Jun" in wb_re["Inputs"]["A13"].value
+
+
 def test_sample_badge_survives_register_replacement(tmp_path: Path):
     """v3.3 audit: badge must also key on the seeded member TSBs, not only
     the register codes a CLASS transfer removes."""

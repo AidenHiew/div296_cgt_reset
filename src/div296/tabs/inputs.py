@@ -317,15 +317,22 @@ def build(wb: Workbook) -> Worksheet:
         CellIsRule(operator="equal", formula=["1"], fill=PatternFill("solid", fgColor="E1F5EE")),
     )
 
-    # --- Row 13: transfer-integrity tripwire (v3.3 audit) ---
-    # A normal Ctrl+V from the CLASS Import mapped block lands FORMULAS that
-    # re-point at this sheet's own cells — plausible garbage, no error value.
-    # ISFORMULA over the register catches it the moment it happens.
+    # --- Row 13: transfer-integrity + completeness tripwire (v3.3/v3.4 audit) ---
+    # Priority 1: a normal Ctrl+V from the CLASS Import mapped block lands
+    # FORMULAS that re-point at this sheet's own cells — plausible garbage, no
+    # error value; ISFORMULA over the register catches it the moment it happens.
+    # Priority 2 (v3.4 audit F2): a row with proceeds but no Market value at
+    # 30 Jun is now blanked everywhere instead of showing the full proceeds as
+    # a gain — COUNTIFS surfaces those silently-excluded rows.
     trip = ws.cell(
         row=TRANSFER_CHECK_ROW, column=1,
         value=(f'=IF(SUMPRODUCT(--ISFORMULA(A{REGISTER_FIRST_DATA_ROW}:G{REGISTER_LAST_DATA_ROW}))>0,'
                f'"⚠ Formulas detected in the asset register — the CLASS Import transfer must use '
-               f'Paste-Special > Values. Press Ctrl+Z and re-paste as values.","")'),
+               f'Paste-Special > Values. Press Ctrl+Z and re-paste as values.",'
+               f'IF(COUNTIFS(G{REGISTER_FIRST_DATA_ROW}:G{REGISTER_LAST_DATA_ROW},"<>",'
+               f'E{REGISTER_FIRST_DATA_ROW}:E{REGISTER_LAST_DATA_ROW},"")>0,'
+               f'"⚠ Some rows have Projected sale proceeds but no Market value at 30 Jun 2026 — '
+               f'those rows are EXCLUDED from all figures until completed.",""))'),
     )
     trip.font = Font(name="Arial", size=10, bold=True, color="A61B1B")
     ws.merge_cells(f"A{TRANSFER_CHECK_ROW}:I{TRANSFER_CHECK_ROW}")

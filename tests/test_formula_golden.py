@@ -29,8 +29,9 @@ def test_per_member_tax_formula_golden():
 
 def test_analyser_div296_postdisc_gain_row17_golden(wb):
     # Col J, first per-asset row: elected-reset Div 296 gain (post-discount).
+    # v3.4 F2: blanks when EITHER proceeds or MV (col E) is blank.
     assert wb["Analyser"]["J17"].value == (
-        "=IF('Inputs'!G16=\"\",\"\","
+        "=IF(OR('Inputs'!G16=\"\",'Inputs'!E16=\"\"),\"\","
         "IF(('Inputs'!G16-'Inputs'!E16)<=0,('Inputs'!G16-'Inputs'!E16),"
         "IF('Inputs'!J16=\"Yes\","
         "('Inputs'!G16-'Inputs'!E16)*(1-discount_rate),"
@@ -40,16 +41,18 @@ def test_analyser_div296_postdisc_gain_row17_golden(wb):
 
 def test_analyser_ord_gross_gain_row17_golden(wb):
     # Col E, first per-asset row: ordinary gross gain (proceeds − orig CB).
+    # v3.4 F3: blanks when EITHER proceeds or orig CB is blank.
     assert wb["Analyser"]["E17"].value == (
-        "=IF('Inputs'!G16=\"\",\"\","
+        "=IF(OR('Inputs'!G16=\"\",'Inputs'!C16=\"\"),\"\","
         "'Inputs'!G16-'Inputs'!C16)"
     )
 
 
 def test_comparison_noreset_gain_row16_golden(wb):
     cell = f"{C_TAB.PER_REG_GAIN_A_COL}16"
+    # v3.4 F3: blanks when EITHER proceeds or orig CB is blank.
     assert wb["Comparison"][cell].value == (
-        "=IF('Inputs'!G16=\"\",\"\","
+        "=IF(OR('Inputs'!G16=\"\",'Inputs'!C16=\"\"),\"\","
         "IF(('Inputs'!G16-'Inputs'!C16)<=0,('Inputs'!G16-'Inputs'!C16),"
         "IF('Inputs'!J16=\"Yes\","
         "('Inputs'!G16-'Inputs'!C16)*(1-discount_rate),"
