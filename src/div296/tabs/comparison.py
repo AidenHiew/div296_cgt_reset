@@ -1,34 +1,34 @@
-"""Comparison tab — print-ready landscape A4 tearsheet (v1.5 redesign).
+"""Comparison tab — print-ready landscape A4 tearsheet.
 
-Layout (top to bottom):
-    Rows 1-10    Header block (banner, title, firm/prepared/date, disclaimer, logo)
-    Row 12       Section band: "Side-by-side comparison"
-    Rows 13-14   Fund-context strip (TSB / proportion / discount / tier)
-    Row 16       Band: "Headline — total Div 296 tax"
-    Rows 17-18   Three metric cards: Scenario A | Scenario B | Net effect
-    Row 20       Band: "Per-scenario subtotals"
-    Rows 21-25   Subtotals table (Earnings / Ord CGT (unchanged) / Div 296 tax / Total)
-    Row 27       Band: "Per-asset detail (first 15 assets)"
-    Rows 28-29   Panel headers + column sub-headers
-    Rows 30-44   15 data rows
-    Row 45       Note: "Showing first 15 assets — see Analyser for the full register"
-    Rows 47-48   Reminder + sort-order notes
-    Rows 50+     Chart
+Layout (top to bottom; row numbers are the module's layout constants):
+    Rows 1-10    Header block (banner, title, firm / prepared / date, disclaimer)
+    Row 12       Section band: "Members & TSB"
+    Rows 13-18   Fund-context strip (per-member TSB panel + fund total)
+    Row 20       Band: "Headline — total Div 296 tax"
+    Rows 21-23   Three metric cards: no-reset | elected | Net effect (+ footnote)
+    Row 25       Band: "Per-scenario subtotals"
+    Rows 26-30   Subtotals (Earnings / Ord CGT (unchanged) / Div 296 tax / TOTAL BURDEN)
+    Row 33       Band: "Per-member breakdown"
+    Rows 34-39   Per-member TSB + Div 296 tax (both scenarios) + Total row
+    Row 41       Band: "Per-asset detail"
+    Rows 42-43   Panel titles + column sub-headers
+    Rows 44-53   Top-10 assets by |Δ Div 296 tax| (DISPLAY_ROWS rows)
+    Row 54       Overflow note ("Showing top 10 — see Analyser for the full register")
+    Rows 55-56   Reminder + sort-order notes
 
 Columns:
-    A-E:  Panel A (no reset)         — Asset / Proceeds / Cost base / Adj gain / Tax
-    F:    Δ column (panel B − panel A adj gain)
-    G-K:  Panel B (reset elected)    — same five columns
-    L-M:  Hidden helper block (fund earnings, member tax, headlines, chart data)
+    A-E:  Panel A (no reset)        — Asset / Proceeds / Cost base / Adj gain / Tax
+    F-J:  Panel B (reset elected)   — same five columns
+    K:    Change column (Δ = panel B tax − panel A tax)
+    L-M:  Hidden fund helpers (per-member tax, headline totals)
+    N-P:  Hidden per-register grid (adj gain A / adj gain B / |Δ| sort metric)
+    R:    Hidden matched-register-row lookup for the top-10 panel
 
-Both panels compute independently of the master reset toggle, so the
-comparison always shows the *real* before/after picture regardless of
-what the user has selected on Inputs.
-
-Deviation from spec §8: panels carry more columns than the "lean" spec
-(Proceeds + Div 296 cost base added) per user request; subtotals at top
-rather than bottom; total tax burden row added. Net effect remains
-neutral ("Net effect = A − B") — no recommendation language.
+Both panels compute independently of any election state (v3.0 removed the
+reset toggle), so the comparison always shows the real before/after picture.
+The Net effect card is SIGNED (elected − no-reset): positive = the reset costs
+more Div 296 tax; negative (green brackets) = a saving. No recommendation
+language anywhere on the tab.
 """
 
 from __future__ import annotations
@@ -423,7 +423,7 @@ def _build_helpers(
     # Hide helper columns (L/M plus the per-register grid + matched-row col R).
     for col_letter in (HELPER_COL_A, HELPER_COL_B,
                        PER_REG_GAIN_A_COL, PER_REG_GAIN_B_COL,
-                       PER_REG_DELTA_COL, "Q", MATCHED_ROW_COL):
+                       PER_REG_DELTA_COL, MATCHED_ROW_COL):
         ws.column_dimensions[col_letter].hidden = True
 
     abs_a = f"${HELPER_COL_A}${HELPER_HEADLINE_ROW}"
@@ -617,9 +617,7 @@ def _build_subtotals(ws: Worksheet, headline_a: str, headline_b: str,
     ws.row_dimensions[note_row].height = 16
 
 
-def _build_per_member_breakdown(
-    ws: Worksheet, headline_a: str, headline_b: str,
-) -> None:
+def _build_per_member_breakdown(ws: Worksheet) -> None:
     """v2.3: 4-row per-member breakdown showing each member's TSB and their
     share of the Div 296 tax under both scenarios. Empty members render blank
     so the block degrades gracefully for single-member or 2-member funds.
@@ -974,7 +972,7 @@ def build(wb: Workbook) -> Worksheet:
 
     _build_metric_cards(ws, headline_a, headline_b)
     _build_subtotals(ws, headline_a, headline_b, gain_a_range, gain_b_range)
-    _build_per_member_breakdown(ws, headline_a, headline_b)
+    _build_per_member_breakdown(ws)
     _build_per_asset_detail(
         ws, gain_a_range, gain_b_range, delta_range, headline_a, headline_b,
     )

@@ -1,4 +1,4 @@
-"""Analyser tab — v3.0 layout with v3.1 capital-loss netting.
+"""Analyser tab — v3.2 per-asset layout with v3.1 capital-loss netting.
 
 Restructured in v3.0 around two design goals:
 
@@ -14,7 +14,7 @@ v3.1 (capital-loss netting) — three changes on this sheet:
 - **Div 296 fund earnings** (row 8) — formula is `MAX(0, SUM(...))` not
   `SUMIF(...,">0")`. Capital losses now net intra-year against gains;
   the net is floored at zero.
-- **Per-asset Ord CGT (col F)** — relabelled "Per-asset Ord CGT (info only)",
+- **Per-asset Ord CGT (col G, v3.2)** — "Per-asset Ord CGT (info only)",
   greyed, no totals-row sum. It is now a STANDALONE DIAGNOSTIC VIEW, not
   the real tax. Loss rows show "—". The authoritative fund Ord CGT is in
   the Reconciliation panel and uses the s102-5 method statement.
@@ -22,11 +22,11 @@ v3.1 (capital-loss netting) — three changes on this sheet:
   replaces the old `SUM(F:F)` cell. Carry-forward losses cell is now
   fund-level net unused gross loss (`MAX(0, gross_losses - gross_gains)`).
 
-Hidden helper cells (cols M, N, O at row 70) drive the new fund Ord CGT:
+Hidden recon helper cells (cols O, P, Q at row 70) drive the fund Ord CGT:
 
-    M70  H_disc_gains    — sum of positive gains where held>12m ("Yes")
-    N70  H_nond_gains    — sum of positive gains where held<>"Yes"
-    O70  H_gross_losses  — sum of |negative gains| (positive number)
+    O70  disc_gains    — sum of positive gains where held>12m ("Yes")
+    P70  nond_gains    — sum of positive gains where held<>"Yes"
+    Q70  gross_losses  — sum of |negative gains| (positive number)
 
 Layout (every formula references either an Inputs cell or a named range —
 never a magic number):
@@ -43,33 +43,34 @@ never a magic number):
     Row 13    Total Div 296 tax (headline)  (3 scenario columns + diff)
 
     Row 15    Section band: "Per-asset analysis (elected-reset scenario)"
-    Row 16    Column headers (A..J visible, K..L hidden helpers)
+    Row 16    Column headers (A..L visible, M..N hidden helpers)
     Rows 17-66 50 data rows. Always shows the elected-reset cost base.
-                  A #row-num             B Asset                C Proceeds
-                  D Original CB          E Ordinary taxable gn
-                  F Per-asset Ord CGT (info only — greyed, no sum)  ← v3.1
-                  G Div 296 CB           H Div 296 adj gn       I Div 296 tax
-                  J Reset impact         K helper (with reset)  L helper (without reset)
-    Row 67    Totals (F omitted in v3.1)
-    Row 68    Footnote: col F is informational only
+                  A #row-num   B Asset                  C Proceeds
+                  D Original CB              E Ord gross gain (info only)
+                  F 1/3 CGT discount eligible? (info)    G Per-asset Ord CGT (info)
+                  H Div 296 CB              I Div 296 gross gain (info)
+                  J Div 296 adj gain (post-discount)     K Div 296 tax
+                  L Reset impact   M helper (with reset)    N helper (without reset)
+    Row 67    Totals (greyed info-only cols omitted)
+    Row 68    Footnote: the greyed info-only columns are diagnostic, not tax
 
     Row 70    Section band: "Reconciliation"
-              (hidden helpers also live on this row at cols M/N/O)
+              (hidden recon helpers also live on this row at cols O/P/Q)
     Row 71    Fund Ordinary CGT (after intra-year netting)  ← v3.1 new formula
     Row 72    Div 296 tax payable (= elected-reset headline)
     Row 73    Capital losses carried forward  ← v3.1 fund net
     Row 74    Plain-English caption  ← v3.1 reworded
 
-Per-asset Div 296 tax (col I) is the pro-rata of the elected-reset headline
-(D{HEADLINE_ROW}):
-    I{r} = IF(SUMIF(H17:H66,">0")=0, 0,
-              MAX(0, H{r}) / SUMIF(H17:H66,">0") * $D$13)
+Per-asset Div 296 tax (col K) is the pro-rata of the elected-reset headline
+($D$13):
+    K{r} = IF(SUMIF(J17:J66,">0")=0, 0,
+              MAX(0, J{r}) / SUMIF(J17:J66,">0") * $D$13)
 
 (SUMIF(>0) is correct as the attribution DENOMINATOR — loss assets bear
 $0 tax. Only the fund-EARNINGS formula at row 8 changed in v3.1.)
 
-Hidden helper columns K, L compute both reset scenarios unconditionally
-(they do not reference any toggle), so the Reset Impact column J = K - L
+Hidden helper columns M, N compute both reset scenarios unconditionally
+(they do not reference any toggle), so the Reset Impact column L = M - N
 remains scenario-agnostic.
 """
 
@@ -85,7 +86,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 from div296._formulas import div296_adj_gain_formula, per_member_div296_tax_formula
 from div296.assumptions import ASSUMPTIONS
 from div296.styles import (
-    BODY_FONT, CENTER, FMT_CURRENCY, ROWNUM_FILL, ROWNUM_FONT,
+    BODY_FONT, CENTER, COLOUR_DIV296_HEADER, FMT_CURRENCY, ROWNUM_FILL, ROWNUM_FONT,
     SECTION_BAND_FILL, SECTION_BAND_FONT, STATE_STRIP_FILL, TITLE_FONT, TRAP_FILL,
     PROC_HEADER_FILL, PROC_DATA_FILL,
     ORD_HEADER_FILL, ORD_DATA_FILL,
@@ -137,10 +138,9 @@ RECON_LOSSES_CAPTION_ROW = RECON_LOSSES_ROW + 1   # row 74 (was 73)
 # Placed at row 70 (= RECON_BAND_ROW) in hidden cols O, P, Q (was M, N, O
 # in v3.1 — shifted +2 to make room for the new visible Disc-flag and
 # Div 296 gross cols). Adjacent to the consumer at B71 but invisible.
-HELPER_M_COL = 15                              # col O — H_disc_gains (legacy name retained for API stability; was col M in v3.1)
-HELPER_N_COL = 16                              # col P — H_nond_gains
-HELPER_O_COL = 17                              # col Q — H_gross_losses
-HELPER_HIDDEN_COLS = ("M", "N", "O", "P", "Q")
+HELPER_DISC_GAINS_COL = 15                     # col O — recon helper: discountable gains
+HELPER_NOND_GAINS_COL = 16                     # col P — recon helper: non-discountable gains
+HELPER_GROSS_LOSSES_COL = 17                   # col Q — recon helper: gross losses (as +ve)
 
 # Inputs↔Analyser offset (Inputs row = Analyser row - OFFSET)
 ROW_OFFSET = PERASSET_FIRST_ROW - REGISTER_FIRST_DATA_ROW   # 17 - 16 = 1
@@ -165,10 +165,19 @@ DIV_CB_COL = 8                                 # col H — Div 296 cost base
 DIV_GROSS_COL = 9                              # col I — NEW Div 296 GROSS gain (proceeds − MV)
 DIV_GAIN_COL = 10                              # col J — Per-asset Div 296 post-disc gain (info-only; semantics unchanged from v3.1, position shifted from H)
 DIV_TAX_COL = 11                               # col K — Div 296 tax (pro-rata of headline)
-RESET_IMPACT_COL = 12                          # col L — Reset impact = HELPER_J − HELPER_K
-HELPER_J_COL = 13                              # col M — Div 296 gain WITH reset (hidden)
-HELPER_K_COL = 14                              # col N — Div 296 gain WITHOUT reset (hidden)
+RESET_IMPACT_COL = 12                          # col L — Reset impact = with-reset − no-reset
+HELPER_WITH_RESET_COL = 13                     # col M — Div 296 gain WITH reset (hidden)
+HELPER_NORESET_COL = 14                        # col N — Div 296 gain WITHOUT reset (hidden)
 LAST_VISIBLE_COL_LETTER = "L"
+
+# Hidden helper columns (per-asset scenario helpers M/N + recon-row helpers
+# O/P/Q), derived from the constants above so a column shift can't strand the
+# tuple (audit 2026-06-10: was a hardcoded ("M","N","O","P","Q") literal).
+HELPER_HIDDEN_COLS = tuple(
+    get_column_letter(c)
+    for c in (HELPER_WITH_RESET_COL, HELPER_NORESET_COL,
+              HELPER_DISC_GAINS_COL, HELPER_NOND_GAINS_COL, HELPER_GROSS_LOSSES_COL)
+)
 
 
 # --- Cross-tab cell-address constants (v3.2 slice 1) ---
@@ -260,7 +269,7 @@ def build(wb: Workbook) -> Worksheet:
     # L to N (the +2 shift comes from the new visible Disc-flag and Div 296
     # gross cols inserted upstream).
     postdisc_col = get_column_letter(DIV_GAIN_COL)          # "J"
-    noreset_col = get_column_letter(HELPER_K_COL)            # "N"
+    noreset_col = get_column_letter(HELPER_NORESET_COL)            # "N"
     postdisc_first = f"{postdisc_col}{PERASSET_FIRST_ROW}"
     postdisc_last = f"{postdisc_col}{PERASSET_LAST_ROW}"
     noreset_first = f"{noreset_col}{PERASSET_FIRST_ROW}"
@@ -269,7 +278,7 @@ def build(wb: Workbook) -> Worksheet:
     # --- Row 7: Header row ---
     fund_headers = [
         (1, "", None),                                  # cols A:B label zone
-        (FUND_NORESET_COL, "If no reset (default)", "0F6E56"),    # green-ish
+        (FUND_NORESET_COL, "If no reset (default)", COLOUR_DIV296_HEADER),  # green-ish
         (FUND_ELECTED_COL, "If elected to reset", "C7A752"),      # gold (reset theme)
         (FUND_DIFF_COL, "Difference", "1D3B34"),                  # dark teal
     ]
@@ -438,8 +447,8 @@ def build(wb: Workbook) -> Worksheet:
         DIV_GAIN_COL:     (F_INFO_HEADER_FILL, F_INFO_HEADER_FONT),   # v3.1.1: greyed (info only — post-disc)
         DIV_TAX_COL:      (DIV_HEADER_FILL,    GROUP_HEADER_FONT),
         RESET_IMPACT_COL: (RESET_HEADER_FILL,  RESET_HEADER_FONT),
-        HELPER_J_COL:     (SECTION_BAND_FILL,  SECTION_BAND_FONT),
-        HELPER_K_COL:     (SECTION_BAND_FILL,  SECTION_BAND_FONT),
+        HELPER_WITH_RESET_COL:     (SECTION_BAND_FILL,  SECTION_BAND_FONT),
+        HELPER_NORESET_COL:     (SECTION_BAND_FILL,  SECTION_BAND_FONT),
     }
     # v3.1: data-cell styling for greyed "info only" cells.
     F_INFO_DATA_FILL = PatternFill("solid", fgColor="FAFAFA")
@@ -460,7 +469,7 @@ def build(wb: Workbook) -> Worksheet:
     # currency_cols.
     currency_cols = [PROCEEDS_COL, ORIG_CB_COL, ORD_GAIN_COL, ORD_CGT_COL,
                      DIV_CB_COL, DIV_GROSS_COL, DIV_GAIN_COL, DIV_TAX_COL,
-                     RESET_IMPACT_COL, HELPER_J_COL, HELPER_K_COL]
+                     RESET_IMPACT_COL, HELPER_WITH_RESET_COL, HELPER_NORESET_COL]
 
     DATA_FILL = {
         PROCEEDS_COL:     PROC_DATA_FILL,
@@ -493,8 +502,8 @@ def build(wb: Workbook) -> Worksheet:
         # within this row's formulas.
         e_letter = get_column_letter(ORD_GAIN_COL)            # "E"
         f_letter = get_column_letter(DISC_FLAG_COL)           # "F"
-        helper_with_reset_letter = get_column_letter(HELPER_J_COL)     # "M"
-        helper_without_reset_letter = get_column_letter(HELPER_K_COL)  # "N"
+        helper_with_reset_letter = get_column_letter(HELPER_WITH_RESET_COL)     # "M"
+        helper_without_reset_letter = get_column_letter(HELPER_NORESET_COL)  # "N"
         postdisc_letter = get_column_letter(DIV_GAIN_COL)     # "J"
 
         # Col A — Row number
@@ -585,10 +594,10 @@ def build(wb: Workbook) -> Worksheet:
         )
         # Helper M — Div 296 gain WITH reset (cost base = MV). Unconditional;
         # mirrors col J under the elected-reset scenario.
-        ws.cell(row=a_row, column=HELPER_J_COL,
+        ws.cell(row=a_row, column=HELPER_WITH_RESET_COL,
                 value=div296_adj_gain_formula(proceeds, mv, held))
         # Helper N — Div 296 gain WITHOUT reset (cost base = orig). Unconditional.
-        ws.cell(row=a_row, column=HELPER_K_COL,
+        ws.cell(row=a_row, column=HELPER_NORESET_COL,
                 value=div296_adj_gain_formula(proceeds, orig, held))
         # Col L — Reset impact = M − N. Highlights the per-asset Δ of the
         # reset election.
@@ -744,15 +753,15 @@ def build(wb: Workbook) -> Worksheet:
     )
     helper_gross_losses = f'=-SUMIF({inputs_h_range}, "<0")'
     helper_disc_cell = ws.cell(
-        row=RECON_BAND_ROW, column=HELPER_M_COL, value=helper_disc_gains,
+        row=RECON_BAND_ROW, column=HELPER_DISC_GAINS_COL, value=helper_disc_gains,
     )
     helper_disc_cell.number_format = FMT_CURRENCY
     helper_nond_cell = ws.cell(
-        row=RECON_BAND_ROW, column=HELPER_N_COL, value=helper_nond_gains,
+        row=RECON_BAND_ROW, column=HELPER_NOND_GAINS_COL, value=helper_nond_gains,
     )
     helper_nond_cell.number_format = FMT_CURRENCY
     helper_loss_cell = ws.cell(
-        row=RECON_BAND_ROW, column=HELPER_O_COL, value=helper_gross_losses,
+        row=RECON_BAND_ROW, column=HELPER_GROSS_LOSSES_COL, value=helper_gross_losses,
     )
     helper_loss_cell.number_format = FMT_CURRENCY
     # Hide the helper cols.
@@ -767,9 +776,9 @@ def build(wb: Workbook) -> Worksheet:
     #   CGT = net_taxable * fund_cgt_rate
     # v3.2: helper cells moved from M70/N70/O70 to O70/P70/Q70 (shift +2)
     # to make room for the new Disc-flag and Div 296 gross visible cols.
-    d_ref = f"{get_column_letter(HELPER_M_COL)}{RECON_BAND_ROW}"  # disc gains  (O70 in v3.2)
-    n_ref = f"{get_column_letter(HELPER_N_COL)}{RECON_BAND_ROW}"  # nondisc gains (P70)
-    l_ref = f"{get_column_letter(HELPER_O_COL)}{RECON_BAND_ROW}"  # gross losses  (Q70)
+    d_ref = f"{get_column_letter(HELPER_DISC_GAINS_COL)}{RECON_BAND_ROW}"  # disc gains  (O70 in v3.2)
+    n_ref = f"{get_column_letter(HELPER_NOND_GAINS_COL)}{RECON_BAND_ROW}"  # nondisc gains (P70)
+    l_ref = f"{get_column_letter(HELPER_GROSS_LOSSES_COL)}{RECON_BAND_ROW}"  # gross losses  (Q70)
     fund_ord_cgt_formula = (
         f"=(MAX(0,{n_ref}-{l_ref})"
         f"+MAX(0,{d_ref}-MAX(0,{l_ref}-{n_ref}))*(1-discount_rate))"

@@ -847,7 +847,9 @@ class TestComparison:
 
     def test_helper_columns_hidden(self, tmp_path: Path):
         ws = _comparison(tmp_path)
-        for col_letter in ("L", "M", "N", "O", "P", "Q", "R"):
+        # v3.4: col Q dropped from the hidden tuple — nothing writes it (the
+        # per-register grid is N/O/P and the matched-row lookup is R).
+        for col_letter in ("L", "M", "N", "O", "P", "R"):
             assert ws.column_dimensions[col_letter].hidden, f"col {col_letter} should be hidden"
         for col_letter in ("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"):
             assert not ws.column_dimensions[col_letter].hidden, f"col {col_letter} must be visible"
