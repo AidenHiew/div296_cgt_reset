@@ -1,34 +1,34 @@
-"""Comparison tab — print-ready landscape A4 tearsheet (v1.5 redesign).
+"""Comparison tab — print-ready landscape A4 tearsheet.
 
-Layout (top to bottom):
-    Rows 1-10    Header block (banner, title, firm/prepared/date, disclaimer, logo)
-    Row 12       Section band: "Side-by-side comparison"
-    Rows 13-14   Fund-context strip (TSB / proportion / discount / tier)
-    Row 16       Band: "Headline — total Div 296 tax"
-    Rows 17-18   Three metric cards: Scenario A | Scenario B | Net effect
-    Row 20       Band: "Per-scenario subtotals"
-    Rows 21-25   Subtotals table (Earnings / Ord CGT (unchanged) / Div 296 tax / Total)
-    Row 27       Band: "Per-asset detail (first 15 assets)"
-    Rows 28-29   Panel headers + column sub-headers
-    Rows 30-44   15 data rows
-    Row 45       Note: "Showing first 15 assets — see Analyser for the full register"
-    Rows 47-48   Reminder + sort-order notes
-    Rows 50+     Chart
+Layout (top to bottom; row numbers are the module's layout constants):
+    Rows 1-10    Header block (banner, title, firm / prepared / date, disclaimer)
+    Row 12       Section band: "Members & TSB"
+    Rows 13-18   Fund-context strip (per-member TSB panel + fund total)
+    Row 20       Band: "Headline — total Div 296 tax"
+    Rows 21-23   Three metric cards: no-reset | elected | Net effect (+ footnote)
+    Row 25       Band: "Per-scenario subtotals"
+    Rows 26-30   Subtotals (Earnings / Ord CGT (unchanged) / Div 296 tax / TOTAL BURDEN)
+    Row 33       Band: "Per-member breakdown"
+    Rows 34-39   Per-member TSB + Div 296 tax (both scenarios) + Total row
+    Row 41       Band: "Per-asset detail"
+    Rows 42-43   Panel titles + column sub-headers
+    Rows 44-53   Top-10 assets by |Δ Div 296 tax| (DISPLAY_ROWS rows)
+    Row 54       Overflow note ("Showing top 10 — see Analyser for the full register")
+    Rows 55-56   Reminder + sort-order notes
 
 Columns:
-    A-E:  Panel A (no reset)         — Asset / Proceeds / Cost base / Adj gain / Tax
-    F:    Δ column (panel B − panel A adj gain)
-    G-K:  Panel B (reset elected)    — same five columns
-    L-M:  Hidden helper block (fund earnings, member tax, headlines, chart data)
+    A-E:  Panel A (no reset)        — Asset / Proceeds / Cost base / Adj gain / Tax
+    F-J:  Panel B (reset elected)   — same five columns
+    K:    Change column (Δ = panel B tax − panel A tax)
+    L-M:  Hidden fund helpers (per-member tax, headline totals)
+    N-P:  Hidden per-register grid (adj gain A / adj gain B / |Δ| sort metric)
+    R:    Hidden matched-register-row lookup for the top-10 panel
 
-Both panels compute independently of the master reset toggle, so the
-comparison always shows the *real* before/after picture regardless of
-what the user has selected on Inputs.
-
-Deviation from spec §8: panels carry more columns than the "lean" spec
-(Proceeds + Div 296 cost base added) per user request; subtotals at top
-rather than bottom; total tax burden row added. Net effect remains
-neutral ("Net effect = A − B") — no recommendation language.
+Both panels compute independently of any election state (v3.0 removed the
+reset toggle), so the comparison always shows the real before/after picture.
+The Net effect card is SIGNED (elected − no-reset): positive = the reset costs
+more Div 296 tax; negative (green brackets) = a saving. No recommendation
+language anywhere on the tab.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Protection, Si
 from openpyxl.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
-from div296._formulas import per_member_div296_tax_formula
+from div296._formulas import div296_adj_gain_formula, per_member_div296_tax_formula
 from div296.assumptions import ASSUMPTIONS
 from div296.styles import (
     BODY_FONT, CENTER, FMT_CURRENCY, FMT_CURRENCY_DELTA, INPUT_FILL, INPUT_FONT, SECTION_BAND_FILL, SECTION_BAND_FONT,
@@ -181,16 +181,6 @@ def _input_cell(ws: Worksheet, coord: str, value=None) -> None:
     cell.border = THIN_BOX
 
 
-def _div296_adj_formula(proceeds: str, cost_base_expr: str, held: str) -> str:
-    """v3.0: discount applies iff held > 12 months (no `discount_on` toggle)."""
-    raw = f"({proceeds}-{cost_base_expr})"
-    return (
-        f'=IF({proceeds}="","",'
-        f'IF({raw}<=0,{raw},'
-        f'IF({held}="Yes",{raw}*(1-discount_rate),{raw})))'
-    )
-
-
 # v3.0: `_member_tax_formula` moved to `div296._formulas.per_member_div296_tax_formula`
 # (shared with analyser.py). Imported at the top of this module.
 
@@ -281,7 +271,7 @@ def _build_context_strip(ws: Worksheet) -> None:
     header_a.alignment = Alignment(horizontal="left", vertical="center", indent=1)
 
     header_b = ws[f"B{CONTEXT_LABEL_ROW}"]
-    header_b.value = "Total Super Balance"
+    header_b.value = "Total Superannuation Balance (TSB)"
     header_b.font = Font(name="Arial", size=10, bold=True, color="1D3B34")
     header_b.alignment = Alignment(horizontal="left", vertical="center", indent=1)
     ws.merge_cells(f"B{CONTEXT_LABEL_ROW}:C{CONTEXT_LABEL_ROW}")
@@ -368,8 +358,8 @@ def _build_per_register_helpers(ws: Worksheet) -> tuple[str, str, str]:
         orig = f"{INPUTS_SHEET}!C{n}"        # was D
         mv = f"{INPUTS_SHEET}!E{n}"          # was F
         held = f"{INPUTS_SHEET}!J{n}"        # v3.1.2: J (normalised), was I
-        ws[f"{PER_REG_GAIN_A_COL}{n}"] = _div296_adj_formula(proceeds, orig, held)
-        ws[f"{PER_REG_GAIN_B_COL}{n}"] = _div296_adj_formula(proceeds, mv, held)
+        ws[f"{PER_REG_GAIN_A_COL}{n}"] = div296_adj_gain_formula(proceeds, orig, held)
+        ws[f"{PER_REG_GAIN_B_COL}{n}"] = div296_adj_gain_formula(proceeds, mv, held)
         # v2.5: per-row tax inlined into the sort metric so the helper grid
         # itself measures tax impact, not raw gain impact.
         tax_a = (
@@ -381,10 +371,15 @@ def _build_per_register_helpers(ws: Worksheet) -> tuple[str, str, str]:
             f'MAX(0,{PER_REG_GAIN_B_COL}{n})/SUMIF({b_range},">0")*{headline_b_abs})'
         )
         # Tiebreaker: small positive amount decreasing with register row, so
-        # earlier-listed assets win ties without ever turning P negative.
-        tiebreak = f"({n_last}-ROW())*0.001"
+        # earlier-listed assets win ties without ever turning P negative. The
+        # +1 keeps the LAST register row strictly positive, so a genuine
+        # zero-delta asset there isn't dropped by the LARGE(...)<=0 rank cut.
+        tiebreak = f"(({n_last}+1)-ROW())*0.0001"
+        # Incomplete rows (either gain cell blank) are excluded from the
+        # top-10 ranking like empty rows — they're flagged on Inputs instead.
         ws[f"{PER_REG_DELTA_COL}{n}"] = (
-            f'=IF({proceeds}="",-1,ABS(({tax_b})-({tax_a}))+{tiebreak})'
+            f'=IF(OR({proceeds}="",{PER_REG_GAIN_A_COL}{n}="",{PER_REG_GAIN_B_COL}{n}=""),'
+            f'-1,ABS(({tax_b})-({tax_a}))+{tiebreak})'
         )
     return (
         a_range, b_range,
@@ -428,7 +423,7 @@ def _build_helpers(
     # Hide helper columns (L/M plus the per-register grid + matched-row col R).
     for col_letter in (HELPER_COL_A, HELPER_COL_B,
                        PER_REG_GAIN_A_COL, PER_REG_GAIN_B_COL,
-                       PER_REG_DELTA_COL, "Q", MATCHED_ROW_COL):
+                       PER_REG_DELTA_COL, MATCHED_ROW_COL):
         ws.column_dimensions[col_letter].hidden = True
 
     abs_a = f"${HELPER_COL_A}${HELPER_HEADLINE_ROW}"
@@ -445,11 +440,11 @@ def _build_metric_cards(ws: Worksheet, headline_a: str, headline_b: str) -> None
     # and per-member tables keep the short form ("If no reset (default)" / "If
     # elected to reset" / "Difference") to stay scannable. CONTEXT.md notes the
     # headline-only override. Card formula is SIGNED (reset − default), so a
-    # reset that reduces tax shows as a red-bracket negative.
+    # reset that reduces tax shows as a green-bracket negative.
     cards = [
-        ("A:D", "If no Div 296 CostBase Reset (default)",   f"={headline_a[1:]}",                       FMT_CURRENCY,       CARD_FILL_A),
-        ("E:H", "If elected to reset Div 296 CostBase Reset", f"={headline_b[1:]}",                     FMT_CURRENCY,       CARD_FILL_B),
-        ("I:K", "Difference (Net Div 296 Tax)",             f"={headline_b[1:]}-{headline_a[1:]}",      FMT_CURRENCY_DELTA, CARD_FILL_DELTA),
+        ("A:D", "If no Div 296 CostBase Reset (default)",   f"={headline_a}",                           FMT_CURRENCY,       CARD_FILL_A),
+        ("E:H", "If elected to reset Div 296 CostBase Reset", f"={headline_b}",                         FMT_CURRENCY,       CARD_FILL_B),
+        ("I:K", "Difference (Net Div 296 Tax)",             f"={headline_b}-{headline_a}",      FMT_CURRENCY_DELTA, CARD_FILL_DELTA),
     ]
     for merge_range, label, value_formula, value_fmt, fill in cards:
         start = merge_range.split(":")[0]
@@ -537,8 +532,8 @@ def _build_subtotals(ws: Worksheet, headline_a: str, headline_b: str,
          f"=MAX(0, SUM({gain_a_range}))", f"=MAX(0, SUM({gain_b_range}))",
          "The total estimated Division 296 adjusted taxable capital gain "
          "across all assets included in the analysis, net of capital losses "
-         "within the year (s102-5 method). Floored at zero — Div 296 earnings "
-         "cannot be negative."),
+         "within the year (intra-year netting of adjusted gains, floored at "
+         "zero). Div 296 earnings cannot be negative."),
         (SUBTOTAL_ORD_CGT_ROW,  "Ordinary CGT (unchanged by reset)",
          ord_cgt_ref, ord_cgt_ref,
          "Ordinary capital gains tax — fund CGT rate applied to net taxable "
@@ -546,7 +541,7 @@ def _build_subtotals(ws: Worksheet, headline_a: str, headline_b: str,
          "1997 method). Same in both scenarios — the reset election affects "
          "Div 296, not ordinary CGT."),
         (SUBTOTAL_DIV296_ROW,   "Div 296 tax (headline)",
-         f"={headline_a[1:]}", f"={headline_b[1:]}",
+         f"={headline_a}", f"={headline_b}",
          "Division 296 additional tax payable. Each member's share is "
          "computed from their TSB proportion in the $3m–$10m band (taxed "
          "at 15%) plus the slice above $10m (taxed at 25%)."),
@@ -573,7 +568,7 @@ def _build_subtotals(ws: Worksheet, headline_a: str, headline_b: str,
         for col in ("B", "C"):
             ws[f"{col}{row}"].number_format = FMT_CURRENCY
             ws[f"{col}{row}"].alignment = Alignment(horizontal="right", vertical="center")
-        # Change col uses signed-delta format (red brackets for negatives).
+        # Change col uses signed-delta format (green brackets for negatives).
         ws[f"D{row}"].number_format = FMT_CURRENCY_DELTA
         ws[f"D{row}"].alignment = Alignment(horizontal="right", vertical="center")
 
@@ -622,9 +617,7 @@ def _build_subtotals(ws: Worksheet, headline_a: str, headline_b: str,
     ws.row_dimensions[note_row].height = 16
 
 
-def _build_per_member_breakdown(
-    ws: Worksheet, headline_a: str, headline_b: str,
-) -> None:
+def _build_per_member_breakdown(ws: Worksheet) -> None:
     """v2.3: 4-row per-member breakdown showing each member's TSB and their
     share of the Div 296 tax under both scenarios. Empty members render blank
     so the block degrades gracefully for single-member or 2-member funds.
@@ -726,7 +719,7 @@ def _build_per_asset_detail(
     # v2.5 FB-7: band header reworded — emphasises tax impact (the new sort
     # metric, displayed in the Change column).
     _band(ws, BAND_DETAIL_ROW,
-          f"Top {DISPLAY_ROWS} assets — Div 296 tax impact if you elect to reset")
+          f"Top {DISPLAY_ROWS} assets — Div 296 tax impact if the reset is elected")
 
     # Panel titles row — v2.5 FB-7: layout is now Panel A | Panel B | Change.
     panel_a_first, panel_a_last = PANEL_A_COLS[0], PANEL_A_COLS[-1]
@@ -832,7 +825,7 @@ def _build_per_asset_detail(
         )
 
         # v2.5 FB-7: Change column at the FAR RIGHT, signed TAX delta
-        # (reset tax − default tax). Negative = reset reduces tax (red brackets).
+        # (reset tax − default tax). Negative = reset reduces tax (green brackets).
         ws[f"{DELTA_COL}{c_row}"] = (
             f'=IF({matched}=0,"",{tax_b}{c_row}-{tax_a}{c_row})'
         )
@@ -887,9 +880,11 @@ def _build_per_asset_detail(
     )
     ws.conditional_formatting.add(trap_range, trap_rule)
 
-    # v2.5 FB-7: dropped the green/red CF on the Change column. The
-    # FMT_CURRENCY_DELTA format renders negatives as red brackets, which is
-    # the consistent visual language across every Change cell on the tab.
+    # v2.5 FB-7 dropped the per-cell green/red CF here in favour of the
+    # FMT_CURRENCY_DELTA format (negatives render as green brackets). v3.4
+    # audit 3.1 re-adds a ONE-directional red highlight on POSITIVE (cost)
+    # Change values via _build_difference_red_cf — the trap this model exists
+    # to surface — while negatives keep the green-bracket format.
 
     # Overflow note — v2.5 FB-7: mentions tax delta (the new sort metric).
     overflow = ws.cell(
@@ -901,13 +896,27 @@ def _build_per_asset_detail(
     overflow.font = Font(name="Arial", size=9, italic=True, color="666666")
     ws.merge_cells(f"A{DATA_OVERFLOW_NOTE_ROW}:{LAST_VISIBLE_COL}{DATA_OVERFLOW_NOTE_ROW}")
 
+    # v3.4 audit F4: error tripwire in the spacer row above the detail band.
+    # Every register row scores numerically (incomplete/empty rows score -1
+    # after the v3.4 blank guards), so COUNT < register depth means some row
+    # ERRORED (e.g. text pasted into a numeric Inputs column) — in which case
+    # LARGE() errors for every rank and the panel below renders silently empty.
+    err_check = ws.cell(
+        row=BAND_DETAIL_ROW - 1, column=1,
+        value=(f'=IF(COUNT({delta_range})<{ASSUMPTIONS.asset_register_rows},'
+               f'"⚠ Some register rows could not be evaluated — check for text in numeric '
+               f'columns on Inputs. The asset ranking below may be incomplete.","")'),
+    )
+    err_check.font = Font(name="Arial", size=9, bold=True, italic=True, color="A61B1B")
+
 
 def _build_footer_notes(ws: Worksheet) -> None:
     reminder = ws.cell(
         row=REMINDER_ROW, column=1,
-        value=("Note: assets currently in an unrealised-loss position may contribute "
-               "Div 296 tax IF you elect the reset that they do not contribute under "
-               "the default outcome — see the Analyser tab for per-asset detail."),
+        value=("Assets are ranked by the size of the change in Div 296 tax between "
+               "scenarios. An asset can contribute Div 296 tax if the reset is elected "
+               "even though it contributes none under the no-reset scenario — and "
+               "vice versa. See the Analyser tab for per-asset detail."),
     )
     reminder.font = Font(name="Arial", size=9, italic=True, color="666666")
     reminder.alignment = Alignment(wrap_text=True, vertical="top")
@@ -924,6 +933,27 @@ def _build_footer_notes(ws: Worksheet) -> None:
     sort_note.alignment = Alignment(wrap_text=True, vertical="top")
     ws.merge_cells(f"A{SORT_NOTE_ROW}:{LAST_VISIBLE_COL}{SORT_NOTE_ROW}")
     ws.row_dimensions[SORT_NOTE_ROW].height = 30
+
+
+def _build_difference_red_cf(ws: Worksheet) -> None:
+    """v3.4 audit 3.1: a POSITIVE Difference means the reset COSTS money (the
+    trap this model exists to surface) — render it muted red, mirroring the
+    Analyser fund-summary rule. Negative (a saving) keeps the green-bracket
+    FMT_CURRENCY_DELTA styling. ISNUMBER guards skip blank/empty-member cells.
+    """
+    red = Font(name="Arial", size=10, bold=True, color="A61B1B")
+    ranges = (
+        f"I{CARD_VALUE_ROW}",                                       # Net-effect card
+        f"D{SUBTOTAL_EARNINGS_ROW}:D{SUBTOTAL_BURDEN_ROW}",         # subtotal Difference
+        f"E{PER_MEMBER_FIRST_ROW}:E{PER_MEMBER_LAST_ROW}",          # per-member Difference
+        f"{DELTA_COL}{DATA_FIRST_ROW}:{DELTA_COL}{DATA_LAST_ROW}",  # per-asset Change
+    )
+    for rng in ranges:
+        top = rng.split(":")[0]   # relative top-cell ref; rule auto-tracks down the range
+        ws.conditional_formatting.add(
+            rng,
+            FormulaRule(formula=[f"AND(ISNUMBER({top}),{top}>0)"], font=red),
+        )
 
 
 def build(wb: Workbook) -> Worksheet:
@@ -943,11 +973,12 @@ def build(wb: Workbook) -> Worksheet:
 
     _build_metric_cards(ws, headline_a, headline_b)
     _build_subtotals(ws, headline_a, headline_b, gain_a_range, gain_b_range)
-    _build_per_member_breakdown(ws, headline_a, headline_b)
+    _build_per_member_breakdown(ws)
     _build_per_asset_detail(
         ws, gain_a_range, gain_b_range, delta_range, headline_a, headline_b,
     )
     _build_footer_notes(ws)
+    _build_difference_red_cf(ws)
 
     # --- Print header watermark (large grey text on every printed page) ---
     ws.oddHeader.center.text = "ILLUSTRATIVE — NOT ADVICE"

@@ -140,7 +140,8 @@ difference** (v2.5+; previously ranked by absolute gain difference).
 ## Discount (CGT discount)
 
 The 1/3 super-fund CGT discount on assets held > 12 months. Applies to
-ordinary CGT and to Div 296 *gains* (never to losses). Toggle defaults ON.
+ordinary CGT and to Div 296 *gains* (never to losses). Always applied —
+v3.0 removed the discount toggle.
 
 ## Capital losses / netting (v3.1)
 
@@ -194,7 +195,7 @@ software the firm exports holdings from.
   banner, not a formula check.
 - **Mapping.** Security Code → Asset code; Holding Account Name → Asset name;
   Total Cost → Original cost base; Market Value → Current market value. MV @
-  30 Jun 2026, Projected proceeds, and Held > 12 months are left blank for
+  30 Jun 2026, Projected sale proceeds, and Held > 12 months are left blank for
   deliberate entry (CLASS does not supply them in this report).
 - **Filter (blacklist).** Drops rows whose G/L Class contains "cash", the
   realised-CGT line (Security Code `REASEDCGT`), and blank rows. Everything else
@@ -206,6 +207,32 @@ software the firm exports holdings from.
   Values. Col H (Projected gain/loss) is the register formula and stays untouched.
 
 Design record: `docs/superpowers/specs/2026-06-01-class-import-mapping-design.md`.
+
+## Reset impact
+
+Per-asset column on the Analyser tab (col L): (Div 296 adjusted gain WITH
+reset) − (Div 296 adjusted gain WITHOUT reset). Negative = the reset reduces
+the asset's Div 296 gain; positive = the reset *creates* a Div 296 gain that
+did not exist before (the "reset trap", typically on assets in an
+unrealised-loss position at 30 June 2026).
+
+## TOTAL TAX BURDEN
+
+Comparison-tab subtotal row: Ordinary CGT + Div 296 tax, on the year-1
+realised basis. Shown under both scenarios with the signed Difference.
+
+## Review flag
+
+Manual-review column on the CLASS Import tab (col AC): flags a kept row whose
+tax cost base is negative (CGT-event-E4 territory) or whose Total Cost is
+blank / non-numeric (a header row or a column-shifted paste). Disclosure only —
+it does not block the transfer.
+
+## Valuation log
+
+The Inputs register's "Valuation source / date" column (col F), mirrored on the
+Notes tab. Load-bearing: every 30 June 2026 market value should record where it
+came from and when, since every Div 296 figure flows from those MV cells.
 
 ---
 

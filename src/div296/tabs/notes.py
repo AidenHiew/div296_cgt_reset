@@ -67,8 +67,10 @@ TERMINOLOGY = [
      "because fund-level netting applies."),
     ("Ordinary CGT",
      "Capital gains tax on the ordinary taxable gain at the SMSF "
-     "accumulation-phase rate of 15%. This model floors each asset at $0 "
-     "for the per-asset display — see caveats below."),
+     "accumulation-phase rate of 15%. The per-asset column (Analyser col G) "
+     "is diagnostic only — loss rows display '—', and the real fund-level "
+     "figure (with s102-5 capital-loss netting) lives in the Reconciliation "
+     "panel."),
     ("Div 296 tax",
      "Additional tax under Division 296 = member's attributed share of "
      "earnings × (proportion of TSB in $3m–$10m band × 15% + proportion "
@@ -78,8 +80,9 @@ TERMINOLOGY = [
      "Cost base used for ordinary CGT — unchanged by the reset election."),
     ("Div 296 cost base",
      "Cost base used ONLY for Div 296 calculations. Equals the original "
-     "cost base if reset = OFF, or the market value at 30 June 2026 if "
-     "reset = ON."),
+     "cost base under the no-reset scenario, or the market value at 30 June "
+     "2026 if the reset is elected. The Analyser per-asset table always shows "
+     "the elected-reset scenario; the Comparison tab shows both side-by-side."),
     ("Reset election",
      "One-off, all-or-nothing, irrevocable election to reset every CGT "
      "asset's Div 296 cost base to its market value at 30 June 2026. "
@@ -90,6 +93,11 @@ TERMINOLOGY = [
      "Positive = reset creates a Div 296 gain that did not previously exist "
      "(the 'reset trap', typically on assets held in an unrealised-loss "
      "position at 30 June 2026)."),
+    ("CLASS Import (staging tab)",
+     "Staging area that maps a pasted CLASS Super Investment Summary Report "
+     "(Tax Cost Base export) into the shape of the Inputs asset register. "
+     "Holds no live links into the model — data only reaches the register "
+     "via the documented Paste-Special-Values transfer."),
 ]
 
 CAVEATS = [
@@ -101,11 +109,17 @@ CAVEATS = [
      "regulations. The Royal Assent date held on the Notes tab is "
      "user-editable — verify against current ATO guidance before use."),
     ("The reset is all-or-nothing and irrevocable.",
-     "This model lets you toggle it freely FOR COMPARISON ONLY. The actual "
-     "election applies to every CGT asset held at 30 June 2026."),
+     "This model presents both scenarios side-by-side FOR COMPARISON ONLY. "
+     "The actual election applies to every CGT asset held at 30 June 2026."),
     ("30 June 2026 valuations are the load-bearing input.",
      "Garbage in, garbage out. Every Div 296 figure flows from the MV cells; "
      "use the Valuation Log below to record source and date for each asset."),
+    ("CLASS Import requires the TAX cost base export.",
+     "The CLASS Import tab maps an Investment Summary Report exported on a "
+     "Tax Cost Base basis only — an Accounting-basis export looks identical "
+     "in the CSV but silently overstates cost bases for trusts, ETFs and "
+     "managed funds. Negative tax cost bases are passed through and flagged "
+     "for manual review (possible CGT event E4)."),
     ("Prior-year capital losses are NOT modelled.",
      "v3.1 implements fund-level intra-year netting of capital gains and "
      "losses (s102-5 ITAA 1997 method): gross gains and gross losses are "
