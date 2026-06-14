@@ -1,15 +1,104 @@
 # Division 296 CGT Cost Base Reset Model
 
+**Author & maintainer:** Aiden Hiew · **License:** Proprietary — see [LICENSE](LICENSE)
+
 A Microsoft Excel workbook (`.xlsx`) that illustrates Division 296 tax outcomes for SMSFs and makes the case for pre–30 June 2026 action on assets sitting in an unrealised-loss position (the "reset trap").
 
-**Status:** v2.5.0 — stable. Client-feedback pass #3 over v2.4.0 (8 items: calc-default flip, Inputs member 2, full Comparison rewrite). Workbook, builder, tests, and PDF export all green.
+**Status:** v3.3.0 — stable. Adds a **CLASS Import** staging tab: paste a CLASS Super *Investment Summary Report* (Tax Cost Base export) and it filters/maps the holdings into Inputs-register shape for a copy-paste-values transfer. Additive — no calc-engine or existing-tab changes, so default-config output stays byte-equivalent to v3.2.x. See "What's new in v3.3.0" below.
 
 **Previous releases:**
-- v2.4.0 (frozen as reference; artifact `dist/Division_296_Model_v2.5.0.xlsx`). Client-feedback pass over v2.3.0 (4 items).
+- v3.2.1 (frozen as reference; artifact `dist/Division_296_Model_v3.2.1.xlsx`). Sign-coloured Analyser "Difference" column. Cosmetic over v3.2.0.
+- v3.2.0 (frozen as reference; artifact `dist/Division_296_Model_v3.2.0.xlsx`). Per-asset semantic refactor — Style 1 / Option B layout. Layout-only vs v3.1.0; numerically byte-equivalent.
+- v3.1.0 (frozen as reference; artifact `dist/Division_296_Model_v3.1.0.xlsx`). Capital-loss netting + per-asset table clarity pass over v3.0.0. Breaking numerical vs v3.0.0 for funds with offsetting losses.
+- v3.0.0 (frozen as the last release on the v3.0 line; artifact `dist/Division_296_Model_v3.0.0.xlsx`). Structural simplification + transparency pass over v2.6.0; breaking calc-engine API change vs v2.x.
+- v2.6.0 (frozen as the last release on the v2 line; artifact `dist/Division_296_Model_v2.6.0.xlsx`). Authorship & provenance pass over v2.5.0.
+- v2.5.0 (frozen as reference; artifact `dist/Division_296_Model_v2.5.0.xlsx`). Client-feedback pass #3 over v2.4.0 (8 items: calc-default flip, Inputs member 2, full Comparison rewrite).
+- v2.4.0 (frozen as reference; artifact `dist/Division_296_Model_v2.4.0.xlsx`). Client-feedback pass over v2.3.0 (4 items).
 - v2.3.0 (frozen as reference; artifact `dist/Division_296_Model_v2.3.0.xlsx`). Client-feedback pass over v2.2.0 (16 items).
 - v2.2.0 (frozen as reference; artifact `dist/Division_296_Model_v2.2.0.xlsx`). Client-readability pass over v2.0.0.
 - v2.0.0 (frozen as reference; tag `v2.0.0`, artifact `dist/Division_296_Model_v2.0.0.xlsx`). UX pass over v1.0.0.
 - v1.0.0 (frozen as reference; tag `v1.0.0`, artifact `dist/Division_296_Model_v1.0.0.xlsx`).
+
+**What's new in v3.3.0:**
+- **New "CLASS Import" tab** (inserted after Inputs). Staging area to bring a CLASS Super *Investment Summary Report* into the asset register without hand-keying every holding. Paste the CLASS data rows into the green paste zone (CLASS's native 18 columns); a formula-driven mapped block to the right filters and reshapes them into register columns A–I.
+- **Tax Cost Base required.** The model's "Original cost base" feeds the CGT math, so the import must use the **Tax Cost Base** export, not Accounting. The CSV looks identical either way, so an on-tab amber banner enforces it (the basis can't be auto-detected from the data).
+- **Mapping.** Security Code → Asset code, Holding Account Name → Asset name, Total Cost → Original cost base, Market Value → Current market value. The three columns CLASS can't supply — MV @ 30 Jun, Projected proceeds, Held > 12 months — are left blank for deliberate entry (no hidden assumptions).
+- **Filter (blacklist).** Cash and Foreign-Cash rows and the realised-CGT line (`REASEDCGT`) are dropped; everything else passes (an unrecognised asset class is never silently lost). Dropped rows show greyed/blank; no row compaction.
+- **Negative tax cost base flagged.** A holding whose tax cost base has been reduced below nil (tax-deferred / return-of-capital — CGT-event-E4 territory) is passed through verbatim and flagged red for manual review.
+- **Transfer.** Copy mapped-block columns **A:G only** → `Inputs!A16` → Paste-Special **Values**. Col H (Projected gain/loss) is the register's own formula and a locked cell, so it's protected from an accidental paste.
+- **Additive / non-breaking.** No `calcs.py`, layout-constant, or downstream-tab changes; default output is byte-equivalent to v3.2.1.
+
+**Out of scope for v3.3 (filed as separate follow-up chips):** prior-year carry-forward loss support; auto-derivation of held>12m / proceeds; multi-fund/multi-pool exports.
+
+**What's new in v3.2.1:**
+- **Sign-coloured "Difference" column on the Analyser Fund summary.** The Difference column (E8:E13) now renders negative values in muted green (`#0B6E4F`) and positive values in muted red (`#A61B1B`), matching the per-asset Reset-impact convention used elsewhere on the tab. Reads as a saving / cost signal at a glance instead of the prior loud `[Red]` for any non-zero. Implemented via conditional formatting (sign-only); existing font weights on the headline-vs-body bands are preserved.
+- **Header shortened.** "Difference (signed)" → "Difference". The accounting parentheses on negatives + the new colour cue make the "(signed)" parenthetical redundant.
+- **No calc-engine or layout changes.** Byte-equivalent to v3.2.0 on the §12 acceptance scenario.
+
+**What's new in v3.2.0:**
+- **Per-asset semantic refactor — Style 1 / Option B layout.** The Analyser per-asset table now exposes gross gain and the "1/3 CGT discount eligible? (Yes/No)" flag as separate visible columns on both the ordinary and Div 296 sides, with the per-asset Ord CGT derived cleanly from those two. A reader can now audit "$300k gross × Yes flag → $30k Ord CGT" directly from what's on the screen, without going to Inputs.
+- **Column shift (visible cols A..L; was A..J).** New: col E "Ord gross gain (info only)", col F "1/3 CGT discount eligible? (Yes/No)", col I "Div 296 gross gain (info only)". Existing per-asset Ord CGT and Div 296 post-disc cols shifted right to cols G and J respectively. Div 296 tax → col K; Reset impact → col L. Hidden helpers M..Q.
+- **Cross-tab layout-constant pass.** `Analyser!B71` (Fund Ord CGT) is no longer a literal in `comparison.py` — surfaced via `analyser.FUND_ORD_CGT_CELL` so future Analyser row shifts propagate. Similar constants exposed for the headline cells (`HEADLINE_NORESET_CELL`, `HEADLINE_ELECTED_CELL`).
+- **Numerical-invariance promise.** v3.2 is a layout / presentation change only. Default-config calc-engine outputs are byte-equivalent to v3.1.0 — same Fund Ord CGT ($180,000 §12), same Div 296 earnings ($1,100,000 no-reset / $253,333 elected §12), same headline tax ($142,083 no-reset / $32,722 elected §12). No `calcs.py` changes.
+- **Notes terminology refresh.** Glossary entries added for "Ord gross gain (info only)", "1/3 CGT discount eligible? (Yes/No)", "Div 296 gross gain (info only)". The "Per-asset Div 296 gain" entry updated to point at col J (was col H).
+
+**Out of scope for v3.2 (filed as separate follow-up chips):** prior-year carry-forward loss support; Inputs!I DataValidation hardening for paste-in "Yes ".
+
+**What's new in v3.1.0:**
+- **Capital losses now net intra-year.** v3.0 floored each asset at zero before summing — both for ordinary CGT (per-asset silo) and Div 296 fund earnings (per-asset floor). Neither was consistent with how the ATO actually computes super-fund CGT (s102-5 ITAA 1997 method statement) or with the Div 296 earnings concept. v3.1 nets at the fund level for both.
+- **Ordinary CGT** — new `ordinary_cgt_fund()` function and a new Analyser cell "Fund Ordinary CGT (after intra-year netting)". Applies losses to non-discount gains first (taxpayer-favourable; standard SMSF practice) before applying the 1/3 discount to the remaining long-held portion. Disclosure caption attached to the cell notes that the taxpayer may elect a different loss-application order per s102-5.
+- **Div 296 fund earnings** — formula is now `MAX(0, SUM(adjusted_gains))` not `SUMIF(adjusted_gains, ">0")`. Capital losses reduce earnings; the net is floored at zero (Div 296 earnings cannot be negative).
+- **Per-asset Ord CGT column (Analyser col F)** — relabelled **"Per-asset Ord CGT (info only)"**, greyed, italic, no totals-row sum, loss rows show "—". Diagnostic view only; the real tax is in the Reconciliation panel. Footnote row 68 explains the change.
+- **Carry-forward losses** — was `SUM(per-asset gross losses)`; now `MAX(0, gross_losses − gross_gains)` at the fund level (true net unused loss). Caption reworded.
+- **Comparison subtotals** — "Div 296 earnings" rows use the new netting formula; "Ordinary CGT" reference fixed to point at the v3.1 Analyser cell (was stale across v3.0).
+- **Excel ↔ Python parity** — three hidden helper cells (`M70`, `N70`, `O70` on Analyser) split positive gains by holding period and sum gross losses, using `SUMPRODUCT(ISNUMBER(...) * ...)` to safely ignore blank-row text values. New unit test pins the Python-side numbers; the Python mirrors Excel byte-for-byte by design.
+
+**Numerical impact on the spec §12 acceptance scenario** (single member, TSB $12m, 3 assets including a $300k loss asset):
+- No-reset Div 296 earnings: $1,400,000 → **$1,100,000**
+- No-reset Div 296 headline tax: $180,833 → **$142,083**
+- Fund Ordinary CGT (real, after netting): $210,000 → **$180,000**
+- Carry-forward losses: $300,000 → **$0** (the $2.1m gross gains absorb the $300k loss)
+- Reset-on numbers unchanged ($32,722 headline tax; $253,333 earnings) — under reset the loss asset becomes a Div 296 gain, so there are no losses to net.
+
+**Breaking changes (calc engine — for downstream consumers of `div296.calcs`):**
+- `div296_fund_earnings(...)` returns net-then-floor instead of sum-of-positives. Numerical change only — API unchanged.
+- New: `ordinary_cgt_fund(assets, discount_rate, fund_cgt_rate)` and `carry_forward_loss_fund(assets)` — the authoritative fund-level functions. The old per-asset `ordinary_cgt(asset, ...)` and `carry_forward_loss(asset)` are retained as standalone diagnostic helpers but should no longer be summed to compute fund-level tax.
+
+**Migration:** If you were summing per-asset `ordinary_cgt(...)` across the fund, switch to `ordinary_cgt_fund(register, ...)`. If you were summing per-asset `carry_forward_loss(...)`, switch to `carry_forward_loss_fund(register)`. Both behaviours changed in the same direction (now correctly net intra-year).
+
+**What's new in v3.0.0:**
+- **Control panel removed.** The three toggles `RESET_ON`, `TIER10_ON`, `DISCOUNT_ON` are gone. Each had no Bill-correct use case in its non-default state. Tier 2 ($10m / +25%) is always applied per legislation; the CGT discount applies iff the asset's "Held > 12 months?" column is Yes. Inputs Section 1 now starts directly at Members.
+- **Proportion override column removed.** The `Inputs col E` "Proportion override (optional)" cell was silently inert in the default v2.5+ configuration — it only fed the now-removed `tier10_on=OFF` branch. v3.0 deletes the cell.
+- **Inputs Section 2 — two-band transparency.** Col D and col E are now auto-derived `band1` ($3m–$10m slice) and `band2` (>$10m slice) display columns. They sum to the old "above $3m" total. A reviewer can manually compute `tax = earnings × split × (D × 15% + E × 25%)` and reconcile against any tax cell. Single source of truth.
+- **Analyser fund summary — side-by-side scenarios.** Top of the Analyser tab now shows both `If no reset (default)` and `If elected to reset` scenarios with per-member tax breakdown and a signed `Difference (signed)` column. Per-asset detail below stays single-scenario (always elected reset) for drill-down. The "see the answer immediately" tile is on the first tab a user lands on after Inputs.
+- **Analyser state strip — read-only "Parameters in effect".** Row 2 now displays a live one-liner of rates and thresholds (`Rates 15% tier 1 / 25% tier 2 · Thresholds $3,000,000 / $10,000,000 · CGT discount 33.33% · Fund CGT 15%`). Auto-updates if Advanced Assumptions change.
+- **Shared `_member_tax_formula` helper.** Extracted to `src/div296/_formulas.py` and used by both `analyser.py` and `comparison.py` — prevents the two from drifting again.
+- **Calc engine simplification.** `div296_tax_for_member`, `div296_headline_tax`, `_apply_discount`, `ordinary_taxable_gain`, etc. all lose their `tier10_on` / `discount_on` parameters. `Member.proportion_override` field and `member_proportion_above_3m` function deleted. Net code-line decrease.
+
+**Breaking API changes (calc engine — for downstream consumers of `div296.calcs`):**
+- `Member(..., proportion_override=...)` → `TypeError` (field removed)
+- `div296_tax_for_member(earnings, member, tier10_on, ...)` → drop `tier10_on`
+- `div296_headline_tax(..., tier10_on, discount_on, ...)` → drop both
+- `_apply_discount(raw, asset, discount_on, rate)` → drop `discount_on`
+- `ordinary_taxable_gain(asset, discount_on, rate)` → drop `discount_on`
+- `div296_adjusted_gain(asset, reset_on, discount_on, rate)` → drop `discount_on`
+- `ordinary_cgt(asset, discount_on, rate, fund_cgt_rate)` → drop `discount_on`
+- `div296_fund_earnings(assets, reset_on, discount_on, rate)` → drop `discount_on`
+- `per_asset_div296_tax(asset, all, headline, reset_on, discount_on, rate)` → drop `discount_on`
+- `member_proportion_above_3m(...)` → function deleted entirely
+- Named ranges `reset_on`, `tier10_on`, `discount_on` removed from the workbook
+
+**Migration:** If you were passing `tier10_on=False`, `discount_on=False`, or a `proportion_override` value, you were not producing Bill-correct numbers. v3.0 removes these paths. The v2.6.0 .xlsx artifact is preserved as a frozen reference if you need to reproduce a v2.x scenario.
+
+**What's new in v2.6.0:**
+- **Workbook authorship** — Core Properties now stamp `creator = Aiden Hiew`, `lastModifiedBy = Aiden Hiew`, plus title/subject/description/keywords. Visible in Excel under File → Info.
+- **Visible attribution on Notes tab** — small italic line directly under the title: `Prepared by: Aiden Hiew · Model version v2.6.0 · Built YYYY-MM-DD`. Survives screenshots and PDF export.
+- **Print footer on every tab** — `Prepared by Aiden Hiew` (left) / `v2.6.0 | Page X of N` (right) in soft grey 8pt. Carries attribution onto every printed page and exported PDF.
+- **LICENSE** — added a proprietary "all rights reserved" LICENSE at repo root with copyright line, permitted-use scope, no-warranty and not-advice disclaimers.
+- **README author line** — `Author & maintainer: Aiden Hiew · License: Proprietary` directly under the title.
+- **Source-package metadata** — `pyproject.toml` authors/maintainers set to `Aiden Hiew` with GitHub noreply email; `src/div296/__init__.py` exposes `__author__ = "Aiden Hiew"`.
+- **pyproject version sync** — bumped `pyproject.toml` `version` to `2.6.0` (was stale at `1.0.0`).
+- No calc changes, no UI changes to existing cells, no acceptance-number changes — v2.6.0 is byte-identical to v2.5.0 for every model output; only metadata and chrome differ.
 
 **What's new in v2.5.0:**
 - **Calc default** — `$10m / +25% tier` toggle on Inputs B6 now defaults to ON (was OFF). When OFF the formula taxed all >$3m earnings at only 15%, ignoring the legislated $10m threshold; ON applies 15% to the $3m-$10m slice and 25% additional to the >$10m slice as per the Bill. The toggle remains in the UI for comparison. §12 acceptance numbers updated: Member 1 ($12m TSB) headline tax 28,500→32,722 (reset on) and 157,500→180,833 (reset off); net effect of electing reset 129,000→148,111.
@@ -36,7 +125,7 @@ python -m pip install -e .[dev]
 
 # 2. Build the workbook (runs a live recalc check at the end)
 python -m div296.build
-# -> dist/Division_296_Model_v2.5.0.xlsx
+# -> dist/Division_296_Model_v3.1.0.xlsx
 # -> Recalc validation: OK (no Excel error cells).
 
 # 3. Run the test suite (fast dev loop — skips live-recalc)
@@ -53,14 +142,14 @@ Pass `--no-validate` to skip the post-build recalc check (faster, not recommende
 ### Exporting to PDF (client-shareable Comparison page)
 
 ```bash
-python scripts/export_pdf.py dist/Division_296_Model_v2.5.0.xlsx
+python scripts/export_pdf.py dist/Division_296_Model_v3.1.0.xlsx
 # -> dist/Division_296_Model_v2.0.0_Comparison.pdf
 
 # Other tabs / whole workbook:
-python scripts/export_pdf.py dist/Division_296_Model_v2.5.0.xlsx --tab Analyser
-python scripts/export_pdf.py dist/Division_296_Model_v2.5.0.xlsx --all-tabs
-# -> dist/Division_296_Model_v2.5.0_Comparison.pdf  (default tab)
-# -> dist/Division_296_Model_v2.5.0.pdf             (--all-tabs)
+python scripts/export_pdf.py dist/Division_296_Model_v3.1.0.xlsx --tab Analyser
+python scripts/export_pdf.py dist/Division_296_Model_v3.1.0.xlsx --all-tabs
+# -> dist/Division_296_Model_v3.1.0_Comparison.pdf  (default tab)
+# -> dist/Division_296_Model_v3.1.0.pdf             (--all-tabs)
 ```
 
 Requires [LibreOffice](https://www.libreoffice.org/) installed (`soffice` on PATH, or the default `C:\Program Files\LibreOffice\program\soffice.exe` on Windows).
@@ -128,7 +217,7 @@ These supplement [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) §1.
 
 Factual disclosures, not recommendations:
 
-1. **Loss-offset divergence from ATO method.** The per-asset Ordinary CGT silo overstates tax in years with offsetting gains and losses, and overstates carry-forward losses. Reconcile with the firm's tax practitioner.
+1. **Prior-year capital losses are NOT modelled.** v3.1 implements fund-level intra-year netting of capital gains and losses (s102-5 ITAA 1997). However, this model does not take a brought-forward capital-loss balance as an input — if the fund holds losses carried forward from prior years, they should be applied to the figures here outside the workbook. Real-world figures must be reconciled with the firm's tax practitioner.
 2. **Pension phase not modelled.** Assumes 100% accumulation phase, fund earnings tax = 15%. Retirement-phase assets are 0% — model overstates Ordinary CGT for funds with pension members.
 3. **Reset OFF scenario is realised-only.** In reality, a fund that does not elect the reset is taxed under Div 296 on TSB movement (unrealised + realised). The Comparison tab compares realised vs realised.
 4. **Wash sale / Part IVA risk.** Selling pre–30 June 2026 purely for the tax outcome and reacquiring sits in anti-avoidance territory (TR 2008/1).
