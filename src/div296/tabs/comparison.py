@@ -39,15 +39,18 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Protection, Si
 from openpyxl.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
+from div296._formulas import per_member_div296_tax_formula
 from div296.assumptions import ASSUMPTIONS
 from div296.styles import (
     BODY_FONT, CENTER, FMT_CURRENCY, FMT_CURRENCY_DELTA, INPUT_FILL, INPUT_FONT, SECTION_BAND_FILL, SECTION_BAND_FONT,
     THIN_BOX, TITLE_FONT, TRAP_FILL,
     PROC_DATA_FILL, ORD_DATA_FILL, DIV_DATA_FILL,
 )
+from div296.tabs import analyser as analyser_tab
 from div296.tabs.inputs import (
     MEMBERS_FIRST_DATA_ROW, REGISTER_FIRST_DATA_ROW,
     REGISTER_LAST_DATA_ROW,
+    sample_detect_expr,
 )
 
 
@@ -179,30 +182,17 @@ def _input_cell(ws: Worksheet, coord: str, value=None) -> None:
 
 
 def _div296_adj_formula(proceeds: str, cost_base_expr: str, held: str) -> str:
+    """v3.0: discount applies iff held > 12 months (no `discount_on` toggle)."""
     raw = f"({proceeds}-{cost_base_expr})"
     return (
         f'=IF({proceeds}="","",'
         f'IF({raw}<=0,{raw},'
-        f'IF(AND({held}="Yes",discount_on="ON"),{raw}*(1-discount_rate),{raw})))'
+        f'IF({held}="Yes",{raw}*(1-discount_rate),{raw})))'
     )
 
 
-def _member_tax_formula(member_inputs_row: int, earnings_cell: str) -> str:
-    """Same shape as Analyser's per-member tax, with earnings cell parameterised."""
-    tsb = f"{INPUTS_SHEET}!B{member_inputs_row}"
-    split = f"{INPUTS_SHEET}!C{member_inputs_row}"
-    auto_p = f"{INPUTS_SHEET}!D{member_inputs_row}"
-    override = f"{INPUTS_SHEET}!E{member_inputs_row}"
-    earnings_m = f"{earnings_cell}*{split}"
-    effective_p = f'IF({override}="",{auto_p},{override})'
-    band1 = f"MAX(0,MIN({tsb},threshold_2)-threshold_1)/{tsb}"
-    band2 = f"MAX(0,{tsb}-threshold_2)/{tsb}"
-    tier_on = f"{earnings_m}*{band1}*rate_tier1 + {earnings_m}*{band2}*rate_tier2"
-    tier_off = f"{earnings_m}*{effective_p}*rate_tier1"
-    return (
-        f'=IF(OR({tsb}="",{split}="",{tsb}<=0,{split}<=0,{earnings_cell}<=0),0,'
-        f'IF(tier10_on="ON",{tier_on},{tier_off}))'
-    )
+# v3.0: `_member_tax_formula` moved to `div296._formulas.per_member_div296_tax_formula`
+# (shared with analyser.py). Imported at the top of this module.
 
 
 # --- Big builders for each visual block ---
@@ -250,11 +240,7 @@ def _build_header_block(ws: Worksheet) -> None:
     # v2.2.0: Sample-data warning (row 9, full width left of the logo block).
     # Formula returns the warning string ONLY when the first three asset codes
     # still match the sample register; CF paints amber only in that case.
-    sample_detect = (
-        f'AND({INPUTS_SHEET}!A{REGISTER_FIRST_DATA_ROW}="P1",'
-        f'{INPUTS_SHEET}!A{REGISTER_FIRST_DATA_ROW + 1}="S1",'
-        f'{INPUTS_SHEET}!A{REGISTER_FIRST_DATA_ROW + 2}="L1")'
-    )
+    sample_detect = sample_detect_expr(f"{INPUTS_SHEET}!")
     sample_row = HEADER_DISCLAIMER_ROW + 1   # row 9
     badge = ws.cell(
         row=sample_row, column=1,
@@ -377,10 +363,11 @@ def _build_per_register_helpers(ws: Worksheet) -> tuple[str, str, str]:
     for n in range(n_first, n_last + 1):
         # v2.3 Inputs column layout: A code / B name / C orig CB / D MV today
         # / E MV 30 Jun / F val source / G proceeds / H projected G/L / I held
+        # (raw) / J held (hidden, paste-normalised — v3.1.2)
         proceeds = f"{INPUTS_SHEET}!G{n}"   # was H
         orig = f"{INPUTS_SHEET}!C{n}"        # was D
         mv = f"{INPUTS_SHEET}!E{n}"          # was F
-        held = f"{INPUTS_SHEET}!I{n}"        # unchanged
+        held = f"{INPUTS_SHEET}!J{n}"        # v3.1.2: J (normalised), was I
         ws[f"{PER_REG_GAIN_A_COL}{n}"] = _div296_adj_formula(proceeds, orig, held)
         ws[f"{PER_REG_GAIN_B_COL}{n}"] = _div296_adj_formula(proceeds, mv, held)
         # v2.5: per-row tax inlined into the sort metric so the helper grid
@@ -409,9 +396,14 @@ def _build_helpers(
     ws: Worksheet, gain_a_range: str, gain_b_range: str,
 ) -> tuple[str, str]:
     """Hidden L/M block: fund earnings (over the full register), per-member tax,
-    and headline totals. Returns (headline_a_abs, headline_b_abs)."""
-    ws[f"{HELPER_COL_A}{HELPER_FUND_EARNINGS_ROW}"] = f'=SUMIF({gain_a_range},">0")'
-    ws[f"{HELPER_COL_B}{HELPER_FUND_EARNINGS_ROW}"] = f'=SUMIF({gain_b_range},">0")'
+    and headline totals. Returns (headline_a_abs, headline_b_abs).
+
+    v3.1: fund-earnings cells use MAX(0, SUM(...)) — intra-year netting of
+    gains and losses, floored at zero. v3.0 used SUMIF(>0) which floored
+    per-asset before summing.
+    """
+    ws[f"{HELPER_COL_A}{HELPER_FUND_EARNINGS_ROW}"] = f'=MAX(0, SUM({gain_a_range}))'
+    ws[f"{HELPER_COL_B}{HELPER_FUND_EARNINGS_ROW}"] = f'=MAX(0, SUM({gain_b_range}))'
 
     a_earnings = f"${HELPER_COL_A}${HELPER_FUND_EARNINGS_ROW}"
     b_earnings = f"${HELPER_COL_B}${HELPER_FUND_EARNINGS_ROW}"
@@ -419,8 +411,8 @@ def _build_helpers(
     for i in range(ASSUMPTIONS.member_count):
         helper_row = HELPER_MEMBER_TAX_FIRST_ROW + i
         inputs_row = MEMBERS_FIRST_DATA_ROW + i
-        ws[f"{HELPER_COL_A}{helper_row}"] = _member_tax_formula(inputs_row, a_earnings)
-        ws[f"{HELPER_COL_B}{helper_row}"] = _member_tax_formula(inputs_row, b_earnings)
+        ws[f"{HELPER_COL_A}{helper_row}"] = per_member_div296_tax_formula(inputs_row, a_earnings)
+        ws[f"{HELPER_COL_B}{helper_row}"] = per_member_div296_tax_formula(inputs_row, b_earnings)
 
     headline_a_cell = f"{HELPER_COL_A}{HELPER_HEADLINE_ROW}"
     headline_b_cell = f"{HELPER_COL_B}{HELPER_HEADLINE_ROW}"
@@ -530,30 +522,34 @@ def _build_subtotals(ws: Worksheet, headline_a: str, headline_b: str,
         c.fill = SECTION_BAND_FILL
         c.alignment = CENTER
 
-    # Reference to the Analyser's Ordinary CGT total — this is the same in both
-    # scenarios (ordinary CGT doesn't depend on reset election).
-    # Analyser B74 = Ordinary CGT payable (reconciliation panel). The state strip
-    # added in v2.0.0 shifted this from B73 → B74 but the Comparison reference
-    # wasn't updated; fixed in v2.2.0.
-    ord_cgt_ref = f"={ANALYSER_SHEET}!B74"
+    # Reference to the Analyser's Fund Ordinary CGT total — same in both
+    # scenarios (ordinary CGT doesn't depend on reset election; uses
+    # original cost base via ordinary_raw_gain).
+    # v3.2: address derived from analyser.FUND_ORD_CGT_CELL constant so any
+    # future row shift on the Analyser tab propagates automatically.
+    ord_cgt_ref = f"={ANALYSER_SHEET}!{analyser_tab.FUND_ORD_CGT_CELL}"
 
     # v2.3 C-3: per-row definitions surfaced as cell Comments on the col-A label
     # so the reader can hover for a plain-English explanation of each subtotal.
+    # v3.1: "Div 296 earnings" formula nets gains and losses (was SUMIF(>0)).
     rows = [
         (SUBTOTAL_EARNINGS_ROW, "Div 296 earnings",
-         f"=SUMIF({gain_a_range},\">0\")", f"=SUMIF({gain_b_range},\">0\")",
+         f"=MAX(0, SUM({gain_a_range}))", f"=MAX(0, SUM({gain_b_range}))",
          "The total estimated Division 296 adjusted taxable capital gain "
-         "across all assets included in the analysis. Excludes losses."),
+         "across all assets included in the analysis, net of capital losses "
+         "within the year (s102-5 method). Floored at zero — Div 296 earnings "
+         "cannot be negative."),
         (SUBTOTAL_ORD_CGT_ROW,  "Ordinary CGT (unchanged by reset)",
          ord_cgt_ref, ord_cgt_ref,
-         "Ordinary capital gains tax (fund CGT rate applied to the realised "
-         "gain after any 1/3 CGT discount). Same in both scenarios — the "
-         "reset election affects Div 296, not ordinary CGT."),
+         "Ordinary capital gains tax — fund CGT rate applied to net taxable "
+         "capital gain after intra-year netting of capital losses (s102-5 ITAA "
+         "1997 method). Same in both scenarios — the reset election affects "
+         "Div 296, not ordinary CGT."),
         (SUBTOTAL_DIV296_ROW,   "Div 296 tax (headline)",
          f"={headline_a[1:]}", f"={headline_b[1:]}",
          "Division 296 additional tax payable. Each member's share is "
-         "computed from their TSB proportion above the $3m threshold, with "
-         "the +25% tier band applied where the toggle is enabled."),
+         "computed from their TSB proportion in the $3m–$10m band (taxed "
+         "at 15%) plus the slice above $10m (taxed at 25%)."),
         (SUBTOTAL_BURDEN_ROW,   "TOTAL TAX BURDEN",
          f"=B{SUBTOTAL_ORD_CGT_ROW}+B{SUBTOTAL_DIV296_ROW}",
          f"=C{SUBTOTAL_ORD_CGT_ROW}+C{SUBTOTAL_DIV296_ROW}",
@@ -757,7 +753,7 @@ def _build_per_asset_detail(
 
     # Column sub-headers (29)
     sub_headers = ["Asset", "Proceeds", "Div 296 cost base",
-                   "Div 296 adj gain", "Div 296 tax"]
+                   "Div 296 adj gain (info only)", "Div 296 tax"]
     for col, header in zip(PANEL_A_COLS, sub_headers):
         c = ws[f"{col}{PANEL_HEADER_ROW}"]
         c.value = header

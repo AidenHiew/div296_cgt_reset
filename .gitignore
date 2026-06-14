@@ -22,6 +22,9 @@ Thumbs.db
 # Local session handoff notes
 docs/handoffs/
 
+# Design mockup / verification scratch (throwaway previews, not the build)
+docs/mockups/
+
 # Loose feedback notes in repo root (raw client feedback before triage).
 # If they should be tracked, move into docs/feedback/ and commit there.
 /FEEDBACK FROM AIDEN*
