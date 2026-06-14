@@ -1055,6 +1055,23 @@ def test_class_import_howto_banner_gives_physical_range(tmp_path: Path):
     assert "T7:Z56" in ws["T5"].value
 
 
+def test_class_import_demo_remnant_guard(tmp_path: Path):
+    """v3.4 review: a machine-checked banner must fire while the shipped demo
+    rows remain in the paste zone, so a SHORT real paste that leaves a demo
+    tail is caught before it transfers phantom holdings into the register."""
+    ws = _class_import(tmp_path)
+    # The sentinel must actually be in the shipped sample, or the guard is dead.
+    sample_names = [name for (_code, name, *_rest) in ci.SAMPLE_ROWS]
+    assert ci.DEMO_SENTINEL_NAME in sample_names
+    # The guard banner sits over the mapped block (its merge top-left).
+    guard = ws.cell(row=ci.CAPACITY_WARN_ROW, column=ci.MAP_COL_START).value
+    assert guard and "COUNTIF" in guard
+    assert ci.DEMO_SENTINEL_NAME in guard
+    # ...counting over the paste NAME column, where the sentinel lives.
+    assert f"{ci.PASTE_COL_NAME}{ci.FIRST_DATA_ROW}" in guard
+    assert "clear the green zone" in guard.lower()
+
+
 def test_class_import_overflow_rows_unlocked(tmp_path: Path):
     """v3.3 audit: rows below the 50-row paste zone must be unlocked so an
     oversize CLASS paste LANDS (triggering the row-4 capacity warning)
