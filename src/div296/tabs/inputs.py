@@ -221,9 +221,10 @@ def build(wb: Workbook) -> Worksheet:
         fill=PatternFill("solid", fgColor="E1F5EE"),
     )
     # Light amber when at least one member is above $3m but below $10m.
+    # v3.4 audit: FFF4CE (true amber) — pink (FBE9E9) is reserved for trap/loss.
     amber_rule = FormulaRule(
         formula=[f"AND({max_tsb_expr}>threshold_1,{max_tsb_expr}<=threshold_2)"],
-        fill=PatternFill("solid", fgColor="FBE9E9"),
+        fill=PatternFill("solid", fgColor="FFF4CE"),
     )
     # Darker amber when at least one member is above $10m.
     deep_amber_rule = FormulaRule(
@@ -317,15 +318,22 @@ def build(wb: Workbook) -> Worksheet:
         CellIsRule(operator="equal", formula=["1"], fill=PatternFill("solid", fgColor="E1F5EE")),
     )
 
-    # --- Row 13: transfer-integrity tripwire (v3.3 audit) ---
-    # A normal Ctrl+V from the CLASS Import mapped block lands FORMULAS that
-    # re-point at this sheet's own cells — plausible garbage, no error value.
-    # ISFORMULA over the register catches it the moment it happens.
+    # --- Row 13: transfer-integrity + completeness tripwire (v3.3/v3.4 audit) ---
+    # Priority 1: a normal Ctrl+V from the CLASS Import mapped block lands
+    # FORMULAS that re-point at this sheet's own cells — plausible garbage, no
+    # error value; ISFORMULA over the register catches it the moment it happens.
+    # Priority 2 (v3.4 audit F2): a row with proceeds but no Market value at
+    # 30 Jun is now blanked everywhere instead of showing the full proceeds as
+    # a gain — COUNTIFS surfaces those silently-excluded rows.
     trip = ws.cell(
         row=TRANSFER_CHECK_ROW, column=1,
         value=(f'=IF(SUMPRODUCT(--ISFORMULA(A{REGISTER_FIRST_DATA_ROW}:G{REGISTER_LAST_DATA_ROW}))>0,'
                f'"⚠ Formulas detected in the asset register — the CLASS Import transfer must use '
-               f'Paste-Special > Values. Press Ctrl+Z and re-paste as values.","")'),
+               f'Paste-Special > Values. Press Ctrl+Z and re-paste as values.",'
+               f'IF(COUNTIFS(G{REGISTER_FIRST_DATA_ROW}:G{REGISTER_LAST_DATA_ROW},"<>",'
+               f'E{REGISTER_FIRST_DATA_ROW}:E{REGISTER_LAST_DATA_ROW},"")>0,'
+               f'"⚠ Some rows have Projected sale proceeds but no Market value at 30 Jun 2026 — '
+               f'those rows are EXCLUDED from all figures until completed.",""))'),
     )
     trip.font = Font(name="Arial", size=10, bold=True, color="A61B1B")
     ws.merge_cells(f"A{TRANSFER_CHECK_ROW}:I{TRANSFER_CHECK_ROW}")
@@ -370,10 +378,7 @@ def build(wb: Workbook) -> Worksheet:
         errorStyle="stop",
         showErrorMessage=True,
         errorTitle="Invalid value",
-        error=(
-            "Enter 'Yes' or 'No'. Paste-in values are normalised "
-            "automatically (case and whitespace) by a hidden helper column."
-        ),
+        error="Enter Yes or No.",
     )
     ws.add_data_validation(held_dv)
 
@@ -409,6 +414,34 @@ def build(wb: Workbook) -> Worksheet:
                     value = sample[col_idx - 2]
                 _input_cell(ws, coord, value=value, number_format=fmt)
         held_dv.add(f"I{row}")
+
+    # --- v3.4 audit: amber CF on UNRECOGNISED held>12m values ---
+    # Anything other than blank/Yes/No silently normalises to "No" (no
+    # discount) via hidden col J; make that silent coercion visible.
+    held_rng = f"I{REGISTER_FIRST_DATA_ROW}:I{REGISTER_LAST_DATA_ROW}"
+    ws.conditional_formatting.add(
+        held_rng,
+        FormulaRule(
+            formula=[f'AND(I{REGISTER_FIRST_DATA_ROW}<>"",'
+                     f'TRIM(UPPER(I{REGISTER_FIRST_DATA_ROW}))<>"YES",'
+                     f'TRIM(UPPER(I{REGISTER_FIRST_DATA_ROW}))<>"NO")'],
+            fill=PatternFill("solid", fgColor="FFF4CE"),
+        ),
+    )
+
+    # --- v3.4 audit: numeric DV (warning) on currency inputs ---
+    # Paste bypasses xlsx DV entirely, so a warning + the downstream formula
+    # guards is the right strength — this only catches direct typing.
+    money_dv = DataValidation(
+        type="decimal", operator="greaterThanOrEqual", formula1="0",
+        allow_blank=True, errorStyle="warning", showErrorMessage=True,
+        errorTitle="Expected a dollar amount",
+        error="This cell expects a non-negative number. Text here breaks downstream formulas.",
+    )
+    ws.add_data_validation(money_dv)
+    money_dv.add(f"B{MEMBERS_FIRST_DATA_ROW}:B{MEMBERS_FIRST_DATA_ROW + ASSUMPTIONS.member_count - 1}")
+    for col in ("C", "D", "E", "G"):
+        money_dv.add(f"{col}{REGISTER_FIRST_DATA_ROW}:{col}{REGISTER_LAST_DATA_ROW}")
 
     # v3.1.2: hidden col J — normalised held>12mo flag. Every formula that
     # reads the held flag now points at Inputs!J, not Inputs!I.
@@ -494,5 +527,15 @@ def build(wb: Workbook) -> Worksheet:
     ws.protection.formatRows = False
     ws.protection.selectLockedCells = False
     ws.protection.selectUnlockedCells = False
+
+    # --- Print header watermark + page setup (v3.4 audit: was missing here) ---
+    ws.oddHeader.center.text = "ILLUSTRATIVE — NOT ADVICE"
+    ws.oddHeader.center.size = 28
+    ws.oddHeader.center.color = "CCCCCC"
+    ws.page_setup.orientation = "portrait"
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0   # let the register + assumptions spill vertically
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.print_area = f"A1:I{ADV_FIRST_ROW + len(ADV_ROWS)}"
 
     return ws

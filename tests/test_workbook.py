@@ -745,7 +745,7 @@ class TestComparison:
         ws = _comparison(tmp_path)
         assert "Members & TSB" in str(ws["A12"].value)
         assert ws["A13"].value == "Members"
-        assert ws["B13"].value == "Total Super Balance"
+        assert ws["B13"].value == "Total Superannuation Balance (TSB)"
         assert ws["A14"].value == "Member 1"
         assert ws["A15"].value == "Member 2"
         assert ws["A16"].value == "Member 3"
@@ -847,7 +847,9 @@ class TestComparison:
 
     def test_helper_columns_hidden(self, tmp_path: Path):
         ws = _comparison(tmp_path)
-        for col_letter in ("L", "M", "N", "O", "P", "Q", "R"):
+        # v3.4: col Q dropped from the hidden tuple — nothing writes it (the
+        # per-register grid is N/O/P and the matched-row lookup is R).
+        for col_letter in ("L", "M", "N", "O", "P", "R"):
             assert ws.column_dimensions[col_letter].hidden, f"col {col_letter} should be hidden"
         for col_letter in ("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"):
             assert not ws.column_dimensions[col_letter].hidden, f"col {col_letter} must be visible"
@@ -1053,6 +1055,23 @@ def test_class_import_howto_banner_gives_physical_range(tmp_path: Path):
     assert "T7:Z56" in ws["T5"].value
 
 
+def test_class_import_demo_remnant_guard(tmp_path: Path):
+    """v3.4 review: a machine-checked banner must fire while the shipped demo
+    rows remain in the paste zone, so a SHORT real paste that leaves a demo
+    tail is caught before it transfers phantom holdings into the register."""
+    ws = _class_import(tmp_path)
+    # The sentinel must actually be in the shipped sample, or the guard is dead.
+    sample_names = [name for (_code, name, *_rest) in ci.SAMPLE_ROWS]
+    assert ci.DEMO_SENTINEL_NAME in sample_names
+    # The guard banner sits over the mapped block (its merge top-left).
+    guard = ws.cell(row=ci.CAPACITY_WARN_ROW, column=ci.MAP_COL_START).value
+    assert guard and "COUNTIF" in guard
+    assert ci.DEMO_SENTINEL_NAME in guard
+    # ...counting over the paste NAME column, where the sentinel lives.
+    assert f"{ci.PASTE_COL_NAME}{ci.FIRST_DATA_ROW}" in guard
+    assert "clear the green zone" in guard.lower()
+
+
 def test_class_import_overflow_rows_unlocked(tmp_path: Path):
     """v3.3 audit: rows below the 50-row paste zone must be unlocked so an
     oversize CLASS paste LANDS (triggering the row-4 capacity warning)
@@ -1095,6 +1114,79 @@ def test_inputs_transfer_tripwire(tmp_path: Path):
     assert "ISFORMULA" in v and "Paste-Special" in v
 
 
+def test_incomplete_rows_blank_not_zero(tmp_path: Path):
+    """v3.4 audit F2/F3: a register row missing its cost-base cell must render
+    blank (""), never coerce the blank to $0 (a full-proceeds 'gain'). Every
+    per-asset Analyser cell must guard BOTH proceeds and its cost base."""
+    out = tmp_path / "out.xlsx"
+    wb = build_workbook()
+    wb.save(out)
+    wb_re = load_workbook(out)
+    a = wb_re["Analyser"]
+    # Col H/I/J guard proceeds AND MV; col E guards proceeds AND orig CB.
+    for coord in ("E17", "H17", "I17", "J17"):
+        f = a[coord].value
+        assert f.startswith("=IF(OR("), f"{coord}: {f}"
+    # Inputs completeness warning (row-13 tripwire, second priority) exists.
+    assert "no Market value at 30 Jun" in wb_re["Inputs"]["A13"].value
+
+
+def test_comparison_card_formulas_keep_absolute_refs():
+    """v3.4 audit 3.1: card/subtotal formulas must be '=$L$6' (absolute),
+    not '=L$6' produced by the accidental [1:] slice."""
+    from div296.tabs import comparison as C
+    wb = build_workbook()
+    ws = wb["Comparison"]
+    card_a = ws[f"A{C.CARD_VALUE_ROW}"].value
+    assert card_a == f"=${C.HELPER_COL_A}${C.HELPER_HEADLINE_ROW}"
+    # The Div 296 subtotal row mirrors the same headline cells (absolute).
+    sub = ws[f"B{C.SUBTOTAL_DIV296_ROW}"].value
+    assert sub == f"=${C.HELPER_COL_A}${C.HELPER_HEADLINE_ROW}"
+
+
+def test_comparison_positive_difference_red_cf(tmp_path: Path):
+    """v3.4 audit 3.1: a positive Difference (reset costs money) renders red,
+    mirroring Analyser. Assert a '>0' CF rule covers the subtotal Difference."""
+    from div296.tabs import comparison as C
+    out = tmp_path / "out.xlsx"
+    wb = build_workbook()
+    wb.save(out)
+    ws = load_workbook(out)["Comparison"]
+    sub_range = f"D{C.SUBTOTAL_EARNINGS_ROW}:D{C.SUBTOTAL_BURDEN_ROW}"
+    for rng, rules in ws.conditional_formatting._cf_rules.items():
+        if sub_range in str(rng):   # str(rng) is "<ConditionalFormatting D27:D30>"
+            formulas = [f for rule in rules for f in (rule.formula or [])]
+            assert any(">0" in f for f in formulas), formulas
+            break
+    else:
+        raise AssertionError(f"no CF rule on {sub_range}")
+
+
+def test_watermark_on_all_tabs():
+    """v3.4 audit: the ILLUSTRATIVE print header must cover EVERY sheet
+    (was missing on Inputs and CLASS Import — a compliance gap)."""
+    wb = build_workbook()
+    for ws in wb.worksheets:
+        assert "ILLUSTRATIVE" in (ws.oddHeader.center.text or ""), ws.title
+
+
+def test_inputs_numeric_dv_and_held_flag_cf(tmp_path: Path):
+    """v3.4 audit: a numeric (warning) DV guards currency inputs, and an amber
+    CF flags unrecognised held>12m values that silently normalise to 'No'."""
+    from div296.tabs import inputs as I
+    out = tmp_path / "out.xlsx"
+    wb = build_workbook()
+    wb.save(out)
+    ws = load_workbook(out)["Inputs"]
+    dvs = list(ws.data_validations.dataValidation)
+    assert len(dvs) == 2, [dv.type for dv in dvs]
+    assert any(dv.type == "decimal" for dv in dvs)
+    # Amber CF on the held column (I) register range.
+    held_rng = f"I{I.REGISTER_FIRST_DATA_ROW}:I{I.REGISTER_LAST_DATA_ROW}"
+    cf_ranges = " ".join(str(r) for r in ws.conditional_formatting)
+    assert held_rng in cf_ranges, cf_ranges
+
+
 def test_sample_badge_survives_register_replacement(tmp_path: Path):
     """v3.3 audit: badge must also key on the seeded member TSBs, not only
     the register codes a CLASS transfer removes."""
@@ -1105,3 +1197,24 @@ def test_sample_badge_survives_register_replacement(tmp_path: Path):
     for sheet, cell in (("Inputs", "A2"), ("Analyser", "A3"), ("Comparison", "A9")):
         v = wb_re[sheet][cell].value
         assert "12000000" in v.replace(",", "") and "P1" in v
+
+
+def test_recalc_limitations_derive_from_constants():
+    """v3.4 audit: the known-limitation list must track layout constants."""
+    from div296._recalc_limitations import (
+        KNOWN_FORMULAS_LIMITATIONS,
+        is_known_limitation,
+    )
+    assert any(e.endswith("O70") for e in KNOWN_FORMULAS_LIMITATIONS)
+    assert any(e.endswith("Q70") for e in KNOWN_FORMULAS_LIMITATIONS)
+    assert is_known_limitation("'[X.xlsx]ANALYSER'!B71")
+    assert not is_known_limitation("'[X.xlsx]ANALYSER'!C13")
+    # v3.4: the Comparison per-asset detail panel (LARGE/MATCH/INDEX false
+    # positives) is excluded across its full A..K x data-rows extent.
+    from div296.tabs import comparison as C
+    assert is_known_limitation(f"'[X.xlsx]COMPARISON'!{C.PANEL_A_COLS[0]}{C.DATA_FIRST_ROW}")
+    assert is_known_limitation(f"'[X.xlsx]COMPARISON'!{C.DELTA_COL}{C.DATA_LAST_ROW}")
+    # ...but the panel HEADER row (not part of the lookup chain) is not.
+    assert not is_known_limitation(
+        f"'[X.xlsx]COMPARISON'!{C.PANEL_A_COLS[0]}{C.PANEL_HEADER_ROW}"
+    )

@@ -8,7 +8,8 @@ docs/superpowers/specs/2026-06-01-class-import-mapping-design.md):
        basis (not Accounting) and export to CSV.
     2. Clear the green PASTE ZONE first (select A7:R56, press Delete) — the
        tab ships with demo data and stale rows will transfer if not removed.
-       Then paste the CLASS data rows into the green zone.
+       A red "EXAMPLE DATA STILL PRESENT" banner stays lit (over the mapped
+       block) until every demo row is gone. Then paste the CLASS data rows.
     3. The MAPPED BLOCK (right) filters + maps each row into register shape.
     4. Copy mapped-block cols A:G only (physical range T7:Z56) -> Inputs!A16
        -> Paste-Special > Values.
@@ -79,9 +80,9 @@ PASTE_USED_COL_IDX = {2, 3, 8, 12, 13}  # B, C, H, L, M
 MAP_COL_START = 20  # T
 MAP_HEADERS = [
     "A  Asset code", "B  Asset name", "C  Original cost base (tax)",
-    "D  Current market value", "E  MV @ 30 Jun 2026", "F  Valuation source/date",
-    "G  Projected proceeds", "H  Projected gain/loss (formula — DON'T copy)",
-    "I  Held > 12 months?",
+    "D  Current market value (as at today)", "E  Market value at 30 Jun 2026",
+    "F  Valuation source / date", "G  Projected sale proceeds",
+    "H  Projected gain/loss (formula — DON'T copy)", "I  Held > 12 months?",
 ]
 MAP_FLAG_COL_IDX = MAP_COL_START + len(MAP_HEADERS)  # AC
 # 0-based offsets into the mapped block.
@@ -129,6 +130,13 @@ SAMPLE_ROWS = [
     ("PD", "Demo Property", "Direct Property", 330150.81, 554900.00),
     ("REASEDCGT", "Reaslied CGT", "Wrap/Platform Assets", 0.0, -3081.19),
 ]
+
+# A demo-only holding name (it never appears in a real CLASS export) used as a
+# sentinel for "shipped example data still present". While it is anywhere in the
+# paste zone, demo rows remain — and a short real paste leaves a demo TAIL below
+# it that would transfer phantom holdings into the register. Kept in sync with
+# SAMPLE_ROWS by test_class_import_demo_remnant_guard.
+DEMO_SENTINEL_NAME = "Demo Property"
 
 AMBER_FILL = PatternFill("solid", fgColor="FFF4CE")
 GREY_FILL = PatternFill("solid", fgColor="EDEDED")
@@ -202,6 +210,25 @@ def build(wb: Workbook) -> Worksheet:
     )
     align.font = Font(name="Arial", size=10, bold=True, color="A61B1B")
     ws.merge_cells(start_row=ALIGN_WARN_ROW, start_column=1, end_row=ALIGN_WARN_ROW, end_column=PASTE_LAST_COL_IDX)
+
+    # --- Demo-remnant guard: "example data still present" (machine-checked) ---
+    # Fires while the shipped demo holdings remain in the paste zone. A short
+    # real paste leaves a demo TAIL below it, and once real codes overwrite the
+    # register's sample rows the Inputs sample-data badge can no longer see it —
+    # so this COUNTIF is the only automatic guard against transferring phantom
+    # demo holdings. It sits over the mapped block, directly above the copy
+    # hint, so the user meets it at the moment they go to copy.
+    demo = ws.cell(
+        row=CAPACITY_WARN_ROW, column=MAP_COL_START,
+        value=(f'=IF(COUNTIF({PASTE_COL_NAME}{FIRST_DATA_ROW}:{PASTE_COL_NAME}{LAST_DATA_ROW},'
+               f'"{DEMO_SENTINEL_NAME}")>0,'
+               f'"⚠ EXAMPLE DATA STILL PRESENT — clear the green zone (select '
+               f'A{FIRST_DATA_ROW}:R{LAST_DATA_ROW}, press Delete) and paste only your own '
+               f'CLASS export before copying to Inputs.","")'),
+    )
+    demo.font = Font(name="Arial", size=10, bold=True, color="A61B1B")
+    ws.merge_cells(start_row=CAPACITY_WARN_ROW, start_column=MAP_COL_START,
+                   end_row=CAPACITY_WARN_ROW, end_column=MAP_FLAG_COL_IDX)
 
     # --- Copy-range hint pinned next to the mapped block itself ---
     hint = ws.cell(
@@ -338,5 +365,14 @@ def build(wb: Workbook) -> Worksheet:
     ws.protection.formatRows = False
     ws.protection.selectLockedCells = False
     ws.protection.selectUnlockedCells = False
+
+    # --- Print header watermark + page setup (v3.4 audit: was missing here) ---
+    ws.oddHeader.center.text = "ILLUSTRATIVE — NOT ADVICE"
+    ws.oddHeader.center.size = 28
+    ws.oddHeader.center.color = "CCCCCC"
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0   # staff-only tab; let the paste zone spill
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
 
     return ws
