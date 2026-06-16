@@ -405,7 +405,74 @@ code {
   margin-bottom: 12px;
 }
 
-/* ── Calculator ── */
+/* ── Calculator: badge, gate, actions ── */
+.sample-badge {
+  background: #fff6e2;
+  border: 1px solid var(--gold);
+  border-left: 5px solid var(--gold);
+  border-radius: 10px;
+  padding: 12px 18px;
+  font-size: 0.9rem;
+  color: #7a5a14;
+  margin-bottom: 16px;
+}
+.sample-badge strong {
+  color: #6a4d10;
+}
+
+.applies-banner {
+  border-radius: 10px;
+  padding: 12px 18px;
+  font-size: 0.92rem;
+  margin-bottom: 20px;
+  display: none; /* shown by JS once it has a state */
+}
+.applies-banner.is-applies {
+  display: block;
+  background: var(--green-bg);
+  border: 1px solid #bcdfd1;
+  color: #0a4d39;
+}
+.applies-banner.is-clear {
+  display: block;
+  background: #eef4f8;
+  border: 1px solid #cfe0ea;
+  color: #2c5266;
+}
+.applies-banner strong {
+  font-weight: 700;
+}
+
+.calc-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+.btn-sm {
+  padding: 8px 16px;
+  font-size: 0.88rem;
+}
+
+/* Print-only tearsheet header — hidden on screen */
+.print-only {
+  display: none;
+}
+.print-header h1 {
+  font-size: 1.4rem;
+  margin: 0 0 2px;
+}
+.print-header .ph-meta {
+  font-size: 0.85rem;
+  color: var(--slate);
+}
+.print-header .ph-illus {
+  margin-top: 8px;
+  font-weight: 700;
+  color: var(--red);
+  letter-spacing: 0.04em;
+  font-size: 0.8rem;
+}
+
 .result-cards {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -796,4 +863,76 @@ code {
 .footer-disclaimer strong {
   color: var(--white);
   opacity: 1;
+}
+
+/* ─────────────────────── Print tearsheet ───────────────────────
+   One clean page: just the calculator results + disclaimer. Everything
+   marked .no-print (chrome, inputs, explainer, hero, footer) drops away;
+   .print-only blocks (the tearsheet header) appear. */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 14mm;
+  }
+  body {
+    background: #fff;
+  }
+  .disclaimer-bar,
+  .site-header,
+  .hero,
+  #explainer,
+  #trap,
+  #download,
+  .site-footer,
+  .calc-actions,
+  .panel-head .btn-mini,
+  .section-sub,
+  .calc-foot {
+    display: none !important;
+  }
+  /* Hide the editable input panels; keep only the computed output */
+  .calc-grid {
+    display: none !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block;
+  }
+  .section,
+  .section-alt {
+    padding: 0 !important;
+    border: 0 !important;
+    background: #fff !important;
+  }
+  .wrap {
+    max-width: none;
+    padding: 0;
+  }
+  .section-title {
+    text-align: left;
+    font-size: 1.2rem;
+    margin: 14px 0 10px;
+  }
+  .result-cards {
+    margin: 6px 0 14px;
+    gap: 10px;
+  }
+  .result-card,
+  .panel,
+  .fund-fig {
+    box-shadow: none !important;
+    border: 1px solid #bbb !important;
+    break-inside: avoid;
+  }
+  .breakdown-grid {
+    break-inside: avoid;
+  }
+  .result-value {
+    font-size: 1.5rem;
+  }
+  a[href]::after {
+    content: "";
+  }
 }

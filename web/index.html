@@ -159,6 +159,25 @@
             overwrite it with your own figures.
           </p>
 
+          <!-- Sample-data warning (shown while seeded P1/S1/L1 / sample TSBs remain) -->
+          <div class="sample-badge" id="sample-badge" role="alert" hidden>
+            ⚠ <strong>Sample data preloaded</strong> — overwrite every figure with your fund's own
+            before relying on or sharing these numbers.
+          </div>
+
+          <!-- Div 296 applicability gate (mirrors the workbook TSB traffic-light) -->
+          <div class="applies-banner" id="applies-banner" aria-live="polite"></div>
+
+          <!-- Print-only tearsheet header (hidden on screen, shown when printing) -->
+          <div class="print-only print-header" id="print-header"></div>
+
+          <!-- Print / PDF action -->
+          <div class="calc-actions no-print">
+            <button class="btn btn-ghost btn-sm" id="print-btn" type="button">
+              🖶 Print / Save as PDF
+            </button>
+          </div>
+
           <!-- Headline result cards -->
           <div class="result-cards" id="result-cards" aria-live="polite">
             <div class="result-card">
