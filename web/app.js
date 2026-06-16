@@ -11,7 +11,10 @@ import {
 } from "./calcs.js";
 
 // ── config ──
-const DEADLINE = new Date("2026-06-30T23:59:59+10:00"); // AEST end of 30 Jun 2026
+// 30 Jun 2026 is the reset VALUATION date (market value used for the reset
+// cost base), not the election deadline — the election is made with the
+// 2026-27 return. The countdown just marks days to this valuation date.
+const VALUATION_DATE = new Date("2026-06-30T23:59:59+10:00"); // AEST
 const VERSION = "v3.4.0";
 
 // ── editable state (deep copies of the sample so the originals stay pristine) ──
@@ -39,13 +42,13 @@ const el = (id) => document.getElementById(id);
 // ─────────────────────────── countdown ───────────────────────────
 function renderCountdown() {
   const now = new Date();
-  const ms = DEADLINE - now;
+  const ms = VALUATION_DATE - now;
   const days = Math.max(0, Math.ceil(ms / 86_400_000));
   const node = el("countdown-days");
   if (ms <= 0) {
     node.textContent = "0";
     el("countdown").querySelector(".countdown-label").textContent =
-      "the 30 June 2026 election deadline has passed";
+      "30 June 2026 (the reset valuation date) has passed";
   } else {
     node.textContent = days;
   }
