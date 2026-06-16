@@ -15,6 +15,12 @@ import {
 // cost base), not the election deadline — the election is made with the
 // 2026-27 return. The countdown just marks days to this valuation date.
 const VALUATION_DATE = new Date("2026-06-30T23:59:59+10:00"); // AEST
+
+// Seeded sample fingerprints (mirror of inputs.py sample-data detection):
+// the badge shows while any of these remain, so staff don't share a polished
+// tearsheet still built on Mr Sample's figures.
+const SAMPLE_CODES = new Set(["P1", "S1", "L1"]);
+const SAMPLE_TSBS = new Set([12_000_000, 3_500_000]);
 const VERSION = "v3.4.0";
 
 // ── editable state (deep copies of the sample so the originals stay pristine) ──
@@ -269,11 +275,60 @@ function fundFig(k, v) {
   return `<div class="fund-fig"><div class="k">${k}</div><div class="v">${v}</div></div>`;
 }
 
+// ── #2 sample-data badge ──
+function renderSampleBadge() {
+  const present =
+    state.assets.some((a) => SAMPLE_CODES.has((a.code || "").trim())) ||
+    state.members.some((m) => SAMPLE_TSBS.has(m.tsb));
+  el("sample-badge").hidden = !present;
+}
+
+// ── #1 Div 296 applicability gate ──
+function renderAppliesBanner() {
+  const t1 = ASSUMPTIONS.threshold_1;
+  const above = state.members.filter((m) => m.tsb > t1).length;
+  const banner = el("applies-banner");
+  if (above === 0) {
+    banner.className = "applies-banner is-clear";
+    banner.innerHTML = `✓ <strong>Division 296 doesn't apply to this fund.</strong> No member's
+      total super balance exceeds $${t1.toLocaleString("en-AU")}, so the Div 296 figures below
+      are $0 either way. The reset election makes no difference here.`;
+  } else {
+    banner.className = "applies-banner is-applies";
+    banner.innerHTML = `● <strong>Division 296 applies.</strong> ${above} member${
+      above > 1 ? "s have" : " has"
+    } a total super balance above $${t1.toLocaleString(
+      "en-AU"
+    )} — the reset election is worth modelling.`;
+  }
+}
+
+// ── #3 print tearsheet header ──
+function renderPrintHeader() {
+  const totalTsb = state.members.reduce((s, m) => s + m.tsb, 0);
+  const n = state.members.filter((m) => m.tsb > 0).length;
+  const when = new Date().toLocaleDateString("en-AU", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  el("print-header").innerHTML = `
+    <h1>Division 296 — reset comparison</h1>
+    <div class="ph-meta">
+      ${n} member${n === 1 ? "" : "s"} · total TSB ${fmtMoney(totalTsb)} ·
+      reset valuation date 30 June 2026 · prepared ${when}
+    </div>
+    <div class="ph-illus">ILLUSTRATIVE — NOT FINANCIAL, TAX OR LEGAL ADVICE</div>`;
+}
+
 // ─────────────────────────── orchestration ───────────────────────────
 function render() {
   renderMembers();
   renderAssets();
   renderResults();
+  renderSampleBadge();
+  renderAppliesBanner();
+  renderPrintHeader();
 }
 
 // ── static chrome ──
@@ -286,6 +341,8 @@ function initChrome() {
     state.members.push({ tsb: 0, split_pct: 0 });
     render();
   });
+  el("print-btn").addEventListener("click", () => window.print());
+
   el("add-asset").addEventListener("click", () => {
     state.assets.push({
       code: "NEW",

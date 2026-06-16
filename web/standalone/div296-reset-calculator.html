@@ -422,7 +422,74 @@ code {
   margin-bottom: 12px;
 }
 
-/* ── Calculator ── */
+/* ── Calculator: badge, gate, actions ── */
+.sample-badge {
+  background: #fff6e2;
+  border: 1px solid var(--gold);
+  border-left: 5px solid var(--gold);
+  border-radius: 10px;
+  padding: 12px 18px;
+  font-size: 0.9rem;
+  color: #7a5a14;
+  margin-bottom: 16px;
+}
+.sample-badge strong {
+  color: #6a4d10;
+}
+
+.applies-banner {
+  border-radius: 10px;
+  padding: 12px 18px;
+  font-size: 0.92rem;
+  margin-bottom: 20px;
+  display: none; /* shown by JS once it has a state */
+}
+.applies-banner.is-applies {
+  display: block;
+  background: var(--green-bg);
+  border: 1px solid #bcdfd1;
+  color: #0a4d39;
+}
+.applies-banner.is-clear {
+  display: block;
+  background: #eef4f8;
+  border: 1px solid #cfe0ea;
+  color: #2c5266;
+}
+.applies-banner strong {
+  font-weight: 700;
+}
+
+.calc-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+.btn-sm {
+  padding: 8px 16px;
+  font-size: 0.88rem;
+}
+
+/* Print-only tearsheet header — hidden on screen */
+.print-only {
+  display: none;
+}
+.print-header h1 {
+  font-size: 1.4rem;
+  margin: 0 0 2px;
+}
+.print-header .ph-meta {
+  font-size: 0.85rem;
+  color: var(--slate);
+}
+.print-header .ph-illus {
+  margin-top: 8px;
+  font-weight: 700;
+  color: var(--red);
+  letter-spacing: 0.04em;
+  font-size: 0.8rem;
+}
+
 .result-cards {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -815,6 +882,78 @@ code {
   opacity: 1;
 }
 
+/* ─────────────────────── Print tearsheet ───────────────────────
+   One clean page: just the calculator results + disclaimer. Everything
+   marked .no-print (chrome, inputs, explainer, hero, footer) drops away;
+   .print-only blocks (the tearsheet header) appear. */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 14mm;
+  }
+  body {
+    background: #fff;
+  }
+  .disclaimer-bar,
+  .site-header,
+  .hero,
+  #explainer,
+  #trap,
+  #download,
+  .site-footer,
+  .calc-actions,
+  .panel-head .btn-mini,
+  .section-sub,
+  .calc-foot {
+    display: none !important;
+  }
+  /* Hide the editable input panels; keep only the computed output */
+  .calc-grid {
+    display: none !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block;
+  }
+  .section,
+  .section-alt {
+    padding: 0 !important;
+    border: 0 !important;
+    background: #fff !important;
+  }
+  .wrap {
+    max-width: none;
+    padding: 0;
+  }
+  .section-title {
+    text-align: left;
+    font-size: 1.2rem;
+    margin: 14px 0 10px;
+  }
+  .result-cards {
+    margin: 6px 0 14px;
+    gap: 10px;
+  }
+  .result-card,
+  .panel,
+  .fund-fig {
+    box-shadow: none !important;
+    border: 1px solid #bbb !important;
+    break-inside: avoid;
+  }
+  .breakdown-grid {
+    break-inside: avoid;
+  }
+  .result-value {
+    font-size: 1.5rem;
+  }
+  a[href]::after {
+    content: "";
+  }
+}
+
 </style>
   </head>
   <body>
@@ -959,6 +1098,25 @@ code {
             your browser — nothing is sent anywhere. Pre-loaded with the model's sample fund;
             overwrite it with your own figures.
           </p>
+
+          <!-- Sample-data warning (shown while seeded P1/S1/L1 / sample TSBs remain) -->
+          <div class="sample-badge" id="sample-badge" role="alert" hidden>
+            ⚠ <strong>Sample data preloaded</strong> — overwrite every figure with your fund's own
+            before relying on or sharing these numbers.
+          </div>
+
+          <!-- Div 296 applicability gate (mirrors the workbook TSB traffic-light) -->
+          <div class="applies-banner" id="applies-banner" aria-live="polite"></div>
+
+          <!-- Print-only tearsheet header (hidden on screen, shown when printing) -->
+          <div class="print-only print-header" id="print-header"></div>
+
+          <!-- Print / PDF action -->
+          <div class="calc-actions no-print">
+            <button class="btn btn-ghost btn-sm" id="print-btn" type="button">
+              🖶 Print / Save as PDF
+            </button>
+          </div>
 
           <!-- Headline result cards -->
           <div class="result-cards" id="result-cards" aria-live="polite">
@@ -1482,6 +1640,12 @@ function computeComparison(assets, members, a = ASSUMPTIONS) {
 // cost base), not the election deadline — the election is made with the
 // 2026-27 return. The countdown just marks days to this valuation date.
 const VALUATION_DATE = new Date("2026-06-30T23:59:59+10:00"); // AEST
+
+// Seeded sample fingerprints (mirror of inputs.py sample-data detection):
+// the badge shows while any of these remain, so staff don't share a polished
+// tearsheet still built on Mr Sample's figures.
+const SAMPLE_CODES = new Set(["P1", "S1", "L1"]);
+const SAMPLE_TSBS = new Set([12_000_000, 3_500_000]);
 const VERSION = "v3.4.0";
 
 // ── editable state (deep copies of the sample so the originals stay pristine) ──
@@ -1736,11 +1900,60 @@ function fundFig(k, v) {
   return `<div class="fund-fig"><div class="k">${k}</div><div class="v">${v}</div></div>`;
 }
 
+// ── #2 sample-data badge ──
+function renderSampleBadge() {
+  const present =
+    state.assets.some((a) => SAMPLE_CODES.has((a.code || "").trim())) ||
+    state.members.some((m) => SAMPLE_TSBS.has(m.tsb));
+  el("sample-badge").hidden = !present;
+}
+
+// ── #1 Div 296 applicability gate ──
+function renderAppliesBanner() {
+  const t1 = ASSUMPTIONS.threshold_1;
+  const above = state.members.filter((m) => m.tsb > t1).length;
+  const banner = el("applies-banner");
+  if (above === 0) {
+    banner.className = "applies-banner is-clear";
+    banner.innerHTML = `✓ <strong>Division 296 doesn't apply to this fund.</strong> No member's
+      total super balance exceeds ${t1.toLocaleString("en-AU")}, so the Div 296 figures below
+      are $0 either way. The reset election makes no difference here.`;
+  } else {
+    banner.className = "applies-banner is-applies";
+    banner.innerHTML = `● <strong>Division 296 applies.</strong> ${above} member${
+      above > 1 ? "s have" : " has"
+    } a total super balance above ${t1.toLocaleString(
+      "en-AU"
+    )} — the reset election is worth modelling.`;
+  }
+}
+
+// ── #3 print tearsheet header ──
+function renderPrintHeader() {
+  const totalTsb = state.members.reduce((s, m) => s + m.tsb, 0);
+  const n = state.members.filter((m) => m.tsb > 0).length;
+  const when = new Date().toLocaleDateString("en-AU", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  el("print-header").innerHTML = `
+    <h1>Division 296 — reset comparison</h1>
+    <div class="ph-meta">
+      ${n} member${n === 1 ? "" : "s"} · total TSB ${fmtMoney(totalTsb)} ·
+      reset valuation date 30 June 2026 · prepared ${when}
+    </div>
+    <div class="ph-illus">ILLUSTRATIVE — NOT FINANCIAL, TAX OR LEGAL ADVICE</div>`;
+}
+
 // ─────────────────────────── orchestration ───────────────────────────
 function render() {
   renderMembers();
   renderAssets();
   renderResults();
+  renderSampleBadge();
+  renderAppliesBanner();
+  renderPrintHeader();
 }
 
 // ── static chrome ──
@@ -1753,6 +1966,8 @@ function initChrome() {
     state.members.push({ tsb: 0, split_pct: 0 });
     render();
   });
+  el("print-btn").addEventListener("click", () => window.print());
+
   el("add-asset").addEventListener("click", () => {
     state.assets.push({
       code: "NEW",
