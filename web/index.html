@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Division 296 CGT Reset — should your SMSF reset its cost base?</title>
+    <meta
+      name="description"
+      content="Illustrative model for the Division 296 cost-base reset election. See, side by side, your SMSF's Div 296 tax if you reset the cost base to 30 June 2026 market value vs if you don't, before you lodge the election with your 2026-27 return."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <!-- Persistent not-advice banner — mirrors the workbook's ILLUSTRATIVE header -->
+    <div class="disclaimer-bar" role="note">
+      <strong>Illustrative only — not financial, tax, or legal advice.</strong>
+      <span>Confirm every figure against the final ATO method and a registered tax agent.</span>
+    </div>
+
+    <header class="site-header">
+      <div class="wrap header-inner">
+        <a class="brand" href="#top">
+          <span class="brand-mark">Div&nbsp;296</span>
+          <span class="brand-text">CGT Reset Model</span>
+        </a>
+        <nav class="nav">
+          <a href="#explainer">What is it?</a>
+          <a href="#calculator">Calculator</a>
+          <a href="#trap">The reset trap</a>
+          <a href="#download">Get the workbook</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="top">
+      <!-- ───────────────────────── HERO ───────────────────────── -->
+      <section class="hero">
+        <div class="wrap hero-grid">
+          <div class="hero-copy">
+            <div class="countdown" id="countdown" aria-live="polite">
+              <span class="countdown-num" id="countdown-days">—</span>
+              <span class="countdown-label">days until 30 June 2026 (the reset valuation date)</span>
+            </div>
+            <h1>
+              Reset your SMSF's Div&nbsp;296 cost base — or not?
+              <em>See the tax difference before you decide.</em>
+            </h1>
+            <p class="lede">
+              From 1 July 2025, <strong>Division 296</strong> adds tax on super balances above
+              $3&nbsp;million. A fund can <strong>elect to reset</strong> its Div&nbsp;296 cost base
+              to <strong>market value at 30 June 2026</strong>. For some funds that saves tax — for
+              funds holding assets in an unrealised loss, it can <em>create</em> tax that wasn't
+              there. This model shows you both outcomes, side by side.
+            </p>
+            <div class="hero-cta">
+              <a class="btn btn-primary" href="#calculator">Run the calculator →</a>
+              <a class="btn btn-ghost" href="#explainer">Explain it plainly</a>
+            </div>
+          </div>
+          <aside class="hero-card" aria-label="Sample result">
+            <div class="hero-card-head">Sample fund — single member, $12m balance</div>
+            <div class="hero-card-rows" id="hero-sample">
+              <!-- filled by app.js from the §12 sample register -->
+            </div>
+            <p class="hero-card-foot">
+              Live numbers from the calculator below, computed in your browser.
+            </p>
+          </aside>
+        </div>
+      </section>
+
+      <!-- ─────────────────────── EXPLAINER ─────────────────────── -->
+      <section id="explainer" class="section">
+        <div class="wrap">
+          <h2 class="section-title">Division 296 in plain English</h2>
+          <div class="explainer-grid">
+            <article class="card">
+              <div class="card-num">1</div>
+              <h3>A new tax above $3m</h3>
+              <p>
+                If your <abbr title="Total Superannuation Balance">TSB</abbr> is over
+                $3&nbsp;million, Div&nbsp;296 applies an <strong>extra 15%</strong> on the share of
+                earnings attributable to the slice between $3m and $10m, and an
+                <strong>extra 25%</strong> on the slice above $10m. It's on top of the normal 15%
+                fund tax.
+              </p>
+            </article>
+            <article class="card">
+              <div class="card-num">2</div>
+              <h3>The one-time reset election</h3>
+              <p>
+                A fund can elect to <strong>step its Div&nbsp;296 cost base up to market value at
+                30 June 2026</strong>, instead of original cost. The election is lodged with the
+                2026-27 return, but the value is fixed at 30 June 2026. It's irreversible and applies
+                to the whole balance. Ordinary CGT is unaffected — it always uses original cost.
+              </p>
+            </article>
+            <article class="card card-warn">
+              <div class="card-num">3</div>
+              <h3>The "reset trap"</h3>
+              <p>
+                For an asset sitting in an <strong>unrealised loss</strong>, resetting the cost base
+                <em>down</em> to market value turns a future loss into a future
+                <strong>Div&nbsp;296 gain</strong> — creating tax that didn't exist. The trap is the
+                whole reason to model this before electing.
+              </p>
+            </article>
+          </div>
+
+          <details class="deep-dive">
+            <summary>For the accountant — the mechanics in full</summary>
+            <div class="deep-dive-body">
+              <ul>
+                <li>
+                  <strong>Two-band tax.</strong> A member's tax =
+                  <code>earnings × split × (band1 × 15% + band2 × 25%)</code>, where
+                  <code>band1</code> is the proportion of TSB in the $3m–$10m slice and
+                  <code>band2</code> the proportion above $10m. The $10m / +25% tier is enacted law
+                  and always applies.
+                </li>
+                <li>
+                  <strong>Intra-year netting (s102-5).</strong> Capital gains and losses net within
+                  the income year at the fund level, for both ordinary CGT and Div&nbsp;296. Div&nbsp;296
+                  fund earnings = <code>MAX(0, Σ adjusted gains)</code> — floored at zero.
+                </li>
+                <li>
+                  <strong>1/3 CGT discount.</strong> Applies to assets held &gt; 12 months, to gains
+                  only (never losses), on both the ordinary and Div&nbsp;296 sides.
+                </li>
+                <li>
+                  <strong>Per-asset allocation.</strong> Each asset's Div&nbsp;296 tax is its share of
+                  the headline, pro-rata by positive adjusted gain. Loss assets bear $0 — even when
+                  they reduce the headline at fund level.
+                </li>
+                <li>
+                  <strong>Not modelled:</strong> prior-year carry-forward losses, pension phase
+                  (assumes 100% accumulation), and unrealised TSB movement under the no-reset path
+                  (compares realised vs realised). See the workbook's Notes tab.
+                </li>
+              </ul>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <!-- ─────────────────────── CALCULATOR ─────────────────────── -->
+      <section id="calculator" class="section section-alt">
+        <div class="wrap">
+          <h2 class="section-title">Live reset calculator</h2>
+          <p class="section-sub">
+            Edit the members and the asset register below. Everything recalculates instantly in
+            your browser — nothing is sent anywhere. Pre-loaded with the model's sample fund;
+            overwrite it with your own figures.
+          </p>
+
+          <!-- Sample-data warning (shown while seeded P1/S1/L1 / sample TSBs remain) -->
+          <div class="sample-badge" id="sample-badge" role="alert" hidden>
+            ⚠ <strong>Sample data preloaded</strong> — overwrite every figure with your fund's own
+            before relying on or sharing these numbers.
+          </div>
+
+          <!-- Div 296 applicability gate (mirrors the workbook TSB traffic-light) -->
+          <div class="applies-banner" id="applies-banner" aria-live="polite"></div>
+
+          <!-- Print-only tearsheet header (hidden on screen, shown when printing) -->
+          <div class="print-only print-header" id="print-header"></div>
+
+          <!-- Print / PDF action -->
+          <div class="calc-actions no-print">
+            <button class="btn btn-ghost btn-sm" id="print-btn" type="button">
+              🖶 Print / Save as PDF
+            </button>
+          </div>
+
+          <!-- Headline result cards -->
+          <div class="result-cards" id="result-cards" aria-live="polite">
+            <div class="result-card">
+              <div class="result-label">If no reset (default)</div>
+              <div class="result-value" id="rc-noreset">—</div>
+              <div class="result-note">Div 296 headline tax</div>
+            </div>
+            <div class="result-card">
+              <div class="result-label">If elected to reset</div>
+              <div class="result-value" id="rc-elected">—</div>
+              <div class="result-note">Div 296 headline tax</div>
+            </div>
+            <div class="result-card result-card-diff">
+              <div class="result-label">Difference</div>
+              <div class="result-value" id="rc-diff">—</div>
+              <div class="result-note" id="rc-diff-note">elected − no reset</div>
+            </div>
+          </div>
+
+          <div class="calc-grid">
+            <!-- Members -->
+            <div class="panel">
+              <div class="panel-head">
+                <h3>Members</h3>
+                <button class="btn-mini" id="add-member" type="button">+ Add member</button>
+              </div>
+              <div class="table-scroll">
+                <table class="data-table" id="members-table">
+                  <thead>
+                    <tr>
+                      <th>Member</th>
+                      <th>Total super balance (TSB)</th>
+                      <th>Earnings split %</th>
+                      <th aria-label="remove"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="members-body"></tbody>
+                </table>
+              </div>
+              <p class="panel-hint" id="split-hint"></p>
+            </div>
+
+            <!-- Assets -->
+            <div class="panel">
+              <div class="panel-head">
+                <h3>Asset register</h3>
+                <button class="btn-mini" id="add-asset" type="button">+ Add asset</button>
+              </div>
+              <div class="table-scroll">
+                <table class="data-table data-table-assets" id="assets-table">
+                  <thead>
+                    <tr>
+                      <th>Code</th>
+                      <th>Original cost base</th>
+                      <th>Market value @ 30 Jun 2026</th>
+                      <th>Projected sale proceeds</th>
+                      <th title="Held more than 12 months — eligible for the 1/3 CGT discount">
+                        Held&nbsp;&gt;12m?
+                      </th>
+                      <th aria-label="remove"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="assets-body"></tbody>
+                </table>
+              </div>
+              <p class="panel-hint">
+                Rows where market value is below original cost are
+                <span class="loss-chip">unrealised-loss</span> positions — the reset-trap candidates.
+              </p>
+            </div>
+          </div>
+
+          <!-- Breakdown: per-member + most-affected assets -->
+          <div class="breakdown-grid">
+            <div class="panel">
+              <h3>Per-member Div 296 tax</h3>
+              <div class="table-scroll">
+                <table class="data-table" id="permember-table">
+                  <thead>
+                    <tr>
+                      <th>Member</th>
+                      <th>No reset</th>
+                      <th>Elected</th>
+                      <th>Difference</th>
+                    </tr>
+                  </thead>
+                  <tbody id="permember-body"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="panel">
+              <h3>Most affected assets <span class="subtle">(by tax difference)</span></h3>
+              <div class="table-scroll">
+                <table class="data-table" id="asset-impact-table">
+                  <thead>
+                    <tr>
+                      <th>Asset</th>
+                      <th>No reset</th>
+                      <th>Elected</th>
+                      <th>Difference</th>
+                    </tr>
+                  </thead>
+                  <tbody id="asset-impact-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Supporting fund-level figures -->
+          <div class="fund-figures" id="fund-figures"></div>
+
+          <p class="calc-foot">
+            <strong>Difference</strong> is signed: <em>elected − no&nbsp;reset</em>. A
+            <span class="neg-inline">negative (green)</span> difference means the reset
+            <em>reduces</em> tax — a saving. A <span class="pos-inline">positive (red)</span>
+            difference means the reset <em>costs</em> money — the trap. These are illustrative,
+            realised-basis, Year&nbsp;1 figures.
+          </p>
+        </div>
+      </section>
+
+      <!-- ─────────────────────── TRAP CALLOUT ─────────────────────── -->
+      <section id="trap" class="section">
+        <div class="wrap trap-callout">
+          <div class="trap-icon" aria-hidden="true">⚠</div>
+          <div>
+            <h2>Why this needs modelling first</h2>
+            <p>
+              The election is <strong>irreversible</strong> and applies to your whole balance. It's
+              made with your 2026-27 return, but the cost base is locked to <strong>market value at
+              30 June 2026</strong> — so the valuation date is what you're racing. Electing the reset
+              to cut tax on your gains can simultaneously
+              <strong>create Div&nbsp;296 tax on assets currently in a loss</strong>. The only way to
+              know the net effect for <em>your</em> fund is to model both paths on real holdings.
+              Selling purely for the tax outcome also sits in anti-avoidance territory
+              (Part&nbsp;IVA / TR&nbsp;2008/1); always confirm with your tax agent.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─────────────────────── DOWNLOAD ─────────────────────── -->
+      <section id="download" class="section section-alt">
+        <div class="wrap download-grid">
+          <div>
+            <h2 class="section-title">Get the full workbook</h2>
+            <p class="section-sub">
+              The web calculator mirrors the headline of the Excel model. The workbook adds the
+              complete audit trail: per-asset reconciliation, a CLASS Super import staging tab, the
+              s102-5 ordinary-CGT working, two-band transparency columns, and a client-shareable
+              printed Comparison page.
+            </p>
+            <ul class="feature-list">
+              <li>Up to 4 members, 50-row asset register</li>
+              <li>Side-by-side Comparison + Analyser tabs</li>
+              <li>CLASS Super <em>Investment Summary</em> import mapping</li>
+              <li>Every formula mirrored and tested against the §12 acceptance numbers</li>
+            </ul>
+          </div>
+          <aside class="download-card">
+            <div class="download-version" id="download-version">Division 296 Model — v3.4.0</div>
+            <p>
+              The <code>.xlsx</code> is a build artifact, generated from the Python source. Build it
+              locally:
+            </p>
+            <pre><code>pip install -e .[dev]
+python -m div296.build
+# → dist/Division_296_Model_v3.4.0.xlsx</code></pre>
+            <a
+              class="btn btn-primary btn-block"
+              href="https://github.com/aidenhiew/div296_cgt_reset"
+              >View the source on GitHub →</a
+            >
+          </aside>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap footer-inner">
+        <div>
+          <div class="footer-brand">Division 296 CGT Cost Base Reset Model</div>
+          <p class="footer-meta">
+            Prepared by Aiden Hiew · Model <span id="footer-version">v3.4.0</span> ·
+            Calculator runs entirely client-side.
+          </p>
+        </div>
+        <p class="footer-disclaimer">
+          <strong>Illustrative only — not financial, tax, or legal advice.</strong> Assumes 100%
+          accumulation phase and a realised-basis Year&nbsp;1 comparison. Prior-year carry-forward
+          losses, pension phase and unrealised TSB movement are not modelled. Confirm against the
+          final ATO method, regulations and a registered tax agent / licensed financial adviser
+          before relying on any figure.
+        </p>
+      </div>
+    </footer>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
