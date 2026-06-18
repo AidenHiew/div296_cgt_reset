@@ -46,9 +46,22 @@ change both in lockstep and keep `tests/parity.test.js` green so drift is caught
 
 ## Open / deferred (next session)
 
-- **Website hosting / GitHub Pages — user is still thinking about it.** Not
-  started. Caveat to raise: repo is proprietary, so a Pages site would be
-  public. Don't deploy without an explicit go-ahead.
+- **Hosting — decided against GitHub Pages (proprietary → would be public).**
+  User has only M365 (SharePoint/OneDrive/Teams), no confirmed Azure. Chosen
+  path: **SPFx web part** so it runs natively in SharePoint + Teams, internal-
+  only. User will ask IT to approve the package in the App Catalog.
+  - Deliverables in `docs/hosting/`: `README.md` (options + decision tree),
+    `IT-request.md` (note to hand IT), and `spfx/` (web part source + `BUILD.md`).
+  - `docs/hosting/spfx/` reuses the verified engine: `calcs.ts` = copy of
+    `web/calcs.js`; `ui.ts` = scoped port of `web/app.js`; `markup.ts` is
+    GENERATED from `web/styles.css` + `web/index.html` by
+    `build-spfx-markup.mjs` (re-run after any `web/` change). GUIDs pre-filled.
+  - **Not compiled** in this env (no SPFx toolchain). `BUILD.md` has the
+    scaffold→drop-in→`gulp package-solution --ship` steps; needs Node 18 + SPFx.
+  - Fallback if IT declines the app: Azure Static Web Apps (Entra-locked) + a
+    Teams Website tab — not yet built; offer it if needed.
+  - This work is on branch `claude/sharepoint-hosting` (separate from the merged
+    website branch). No PR opened yet.
 - Refinements not yet done (user picked 1–3 only so far):
   - #4 Shareable link / save scenario (encode inputs in URL hash) + "reset to sample" button.
   - #5 Thousands separators while typing; tighter mobile layout for tables.

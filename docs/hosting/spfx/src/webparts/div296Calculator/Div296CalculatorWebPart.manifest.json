@@ -1,0 +1,24 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx/client-side-web-part-manifest.schema.json",
+  "id": "b4b1c59b-8535-4b64-bb5f-560454a411e3",
+  "alias": "Div296CalculatorWebPart",
+  "componentType": "WebPart",
+  "version": "*",
+  "manifestVersion": 2,
+  "requiresCustomScript": false,
+  "supportedHosts": ["SharePointWebPart", "TeamsPersonalApp", "TeamsTab"],
+  "supportsThemeVariants": true,
+
+  "preconfiguredEntries": [
+    {
+      "groupId": "5c03119e-3074-46fd-976b-c60198311f70",
+      "group": { "default": "Advanced" },
+      "title": { "default": "Division 296 Reset Calculator" },
+      "description": {
+        "default": "Illustrative Div 296 cost-base reset comparison — internal tool. Not advice."
+      },
+      "officeFabricIconFontName": "Calculator",
+      "properties": {}
+    }
+  ]
+}

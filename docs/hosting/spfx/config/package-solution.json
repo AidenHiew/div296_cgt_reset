@@ -1,0 +1,40 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/package-solution.schema.json",
+  "solution": {
+    "name": "div296-calculator-client-side-solution",
+    "id": "02d78458-bf8c-4d3f-81ce-2e0a9c2547ae",
+    "version": "1.0.0.0",
+    "includeClientSideAssets": true,
+    "skipFeatureDeployment": true,
+    "isDomainIsolated": false,
+    "developer": {
+      "name": "Aiden Hiew",
+      "websiteUrl": "",
+      "privacyUrl": "",
+      "termsOfUseUrl": "",
+      "mpnId": ""
+    },
+    "metadata": {
+      "shortDescription": {
+        "default": "Internal Division 296 cost-base reset calculator (illustrative, client-side only)."
+      },
+      "longDescription": {
+        "default": "A client-side-only SharePoint web part that compares an SMSF's Division 296 tax with and without a cost-base reset. No server, no database, no external network calls or API permissions. Illustrative only, not advice."
+      },
+      "screenshotPaths": [],
+      "videoUrl": "",
+      "categories": []
+    },
+    "features": [
+      {
+        "title": "Division 296 Reset Calculator",
+        "description": "Adds the Division 296 reset calculator web part.",
+        "id": "708a2e60-37cd-44c3-b256-8409e64e34e0",
+        "version": "1.0.0.0"
+      }
+    ]
+  },
+  "paths": {
+    "zippedPackage": "solution/div296-calculator.sppkg"
+  }
+}
