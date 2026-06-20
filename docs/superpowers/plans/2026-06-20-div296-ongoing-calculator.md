@@ -1034,7 +1034,7 @@ def share_guard_status_formula(pooled_count_c, share_sum_c) -> str:
 Run: `pytest tests/div296_calc/test_calc_formulas_golden.py -q`
 Expected: PASS (all golden-string tests green).
 
-> Note: the golden tests compare against the literal `⚠`/`✓`/`—`/`≠` characters; the builders emit them via `\uXXXX` escapes so the source stays ASCII. The test strings use the literal glyphs — both sides resolve to the same Unicode, so the assertions hold.
+> Note: the builders emit literal `⚠`/`✓`/`—`/`≠` glyphs (matching the frozen tool's `inputs.py`, which already uses `⚠`/`➤`/`✓`). The golden tests compare literal-to-literal, so the assertions hold. ruff permits non-ASCII in string literals.
 
 - [ ] **Step 5: Commit**
 
@@ -1189,7 +1189,7 @@ Layout (members as columns B–E; labels in col A):
 
 from __future__ import annotations
 
-from openpyxl.styles import Alignment, Font, PatternFill, Protection
+from openpyxl.styles import Font, PatternFill, Protection
 from openpyxl.utils import get_column_letter
 from openpyxl.workbook import Workbook
 from openpyxl.workbook.defined_name import DefinedName
@@ -1203,7 +1203,7 @@ from div296_calc.assumptions import (
     DISCOUNT_RATE, MEMBER_COUNT, RATE_TIER1, RATE_TIER2, YEAR_TABLE,
 )
 from div296.styles import (
-    BODY_FONT, CENTER, FMT_CURRENCY, FMT_PERCENT, FMT_TEXT,
+    BODY_FONT, FMT_CURRENCY, FMT_PERCENT, FMT_TEXT,
     INPUT_FILL, INPUT_FONT, SECTION_BAND_FILL, SECTION_BAND_FONT,
     THIN_BOX, TITLE_FONT,
 )
@@ -1328,7 +1328,9 @@ def build(wb: Workbook) -> Worksheet:
     _label(ws, YEAR_ROW, "Income year")
     _input(ws, f"B{YEAR_ROW}", value="2026-27", number_format=FMT_TEXT)
     # constrain to table years
-    dv = DataValidation(type="list", formula1=f"={year_rng_o}", allow_blank=False,
+    # NOTE: a range-reference list DV takes the bare range (no leading '='),
+    # mirroring openpyxl's idiom; the '="Yes,No"' form is only for literal lists.
+    dv = DataValidation(type="list", formula1=year_rng_o, allow_blank=False,
                         showErrorMessage=True, errorTitle="Unknown income year",
                         error="Pick a year present in the threshold table (cols O–R).")
     ws.add_data_validation(dv)
@@ -1901,6 +1903,8 @@ python -m div296.build --no-validate
 python -m div296_calc.build
 ```
 Expected: ruff clean; all fast tests pass; both builds exit 0 (the new one prints `Recalc validation: OK`).
+
+> **Lint caveat (the code in this plan is illustrative, not pre-linted):** ruff (line-length 100) will likely flag a few `E501` long lines in `calculator.py`/`tabs/notes.py` (label dicts, comment banners, the liability/Notes prose) and any `F401` unused import. Wrap/fix exactly what ruff reports before committing — do **not** widen the line-length or add blanket `noqa`. This is mechanical and expected; the formula/engine logic is unaffected.
 
 - [ ] **Step 3: Run the slow suite once locally (CI skips it)**
 
