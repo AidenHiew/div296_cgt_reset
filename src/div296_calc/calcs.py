@@ -78,3 +78,30 @@ def net_capital_gain(cgt: CgtInputs, discount_rate: float) -> CgtResult:
     net = nondisc_net + disc_net * (1.0 - discount_rate)
     unused = max(0.0, loss - cgt.gross_gains_over_12m)
     return CgtResult(net_realised_cg=net, unused_capital_loss=unused)
+
+
+@dataclass(frozen=True)
+class PooledIncome:
+    dividends_grossed: float          # incl. franking credits, per the fund return
+    interest: float
+    rent: float
+    other: float
+    net_realised_cg: float            # from net_capital_gain()
+    deductible_expenses: float
+
+
+def pooled_total(p: PooledIncome) -> float:
+    """Realised income less deductible expenses. May be negative."""
+    return (p.dividends_grossed + p.interest + p.rent + p.other
+            + p.net_realised_cg - p.deductible_expenses)
+
+
+def member_earnings(member: Member, pool_total: float) -> float:
+    """Segregated members earn only their override; otherwise share × pool.
+
+    `override is None` ⇒ pooled. An override of 0.0 is honoured (not treated
+    as 'no override').
+    """
+    if member.override is not None:
+        return member.override
+    return member.share * pool_total

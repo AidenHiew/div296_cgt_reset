@@ -3,7 +3,7 @@
 import pytest
 
 from div296_calc.assumptions import RATE_TIER1, RATE_TIER2
-from div296_calc.calcs import member_div296_tax, tsb_ref
+from div296_calc.calcs import Member, member_div296_tax, tsb_ref
 
 T1, T2 = 3_000_000, 10_000_000
 
@@ -101,3 +101,39 @@ def test_cgt_losses_exceeding_all_gains_carry_forward():
 def test_cgt_result_is_frozen_dataclass():
     r = net_capital_gain(CgtInputs(0, 0, 0), DISCOUNT_RATE)
     assert isinstance(r, CgtResult)
+
+
+# --- pooled total + per-member allocation ---
+from div296_calc.calcs import PooledIncome, member_earnings, pooled_total  # noqa: E402
+
+
+def test_pooled_total_sums_income_less_expenses():
+    p = PooledIncome(dividends_grossed=120_000, interest=30_000, rent=80_000,
+                     other=0, net_realised_cg=160_000, deductible_expenses=40_000)
+    assert pooled_total(p) == 350_000
+
+
+def test_pooled_total_can_go_negative():
+    p = PooledIncome(dividends_grossed=10_000, interest=0, rent=0, other=0,
+                     net_realised_cg=0, deductible_expenses=60_000)
+    assert pooled_total(p) == -50_000
+
+
+def test_member_earnings_pooled_is_share_times_pool():
+    m = Member("A", 4_000_000, 4_000_000, share=0.6)
+    assert member_earnings(m, 350_000) == pytest.approx(210_000)
+
+
+def test_member_earnings_override_wins_and_ignores_pool():
+    m = Member("A", 4_000_000, 4_000_000, share=0.6, override=90_000)
+    assert member_earnings(m, 350_000) == 90_000
+
+
+def test_member_earnings_override_zero_is_honoured_not_blank():
+    m = Member("A", 4_000_000, 4_000_000, share=0.6, override=0.0)
+    assert member_earnings(m, 350_000) == 0.0
+
+
+def test_member_earnings_negative_pool_allocates_negative():
+    m = Member("A", 4_000_000, 4_000_000, share=0.5)
+    assert member_earnings(m, -50_000) == pytest.approx(-25_000)
