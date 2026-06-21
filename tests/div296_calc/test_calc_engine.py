@@ -65,3 +65,39 @@ def test_tsb_ref_greater_of_when_closing_higher():
     from div296_calc.calcs import Member
     m = Member(name="A", opening_tsb=4_000_000, closing_tsb=6_000_000, share=1.0)
     assert tsb_ref(m, use_greater_of=True) == 6_000_000
+
+
+# --- CGT netting helper (s102-5) ---
+from div296_calc.assumptions import DISCOUNT_RATE  # noqa: E402
+from div296_calc.calcs import CgtInputs, CgtResult, net_capital_gain  # noqa: E402
+
+
+def test_cgt_long_held_gain_gets_one_third_discount():
+    r = net_capital_gain(CgtInputs(gross_gains_over_12m=300_000,
+                                   gross_gains_under_12m=0,
+                                   capital_losses=0), DISCOUNT_RATE)
+    assert r.net_realised_cg == pytest.approx(200_000)   # 300k × 2/3
+    assert r.unused_capital_loss == 0
+
+
+def test_cgt_losses_hit_non_discount_gains_first():
+    # 60k loss eats the 50k short-held gain, then 10k of the long-held gain.
+    # remaining long-held = 240k → ×2/3 = 160k.
+    r = net_capital_gain(CgtInputs(gross_gains_over_12m=250_000,
+                                   gross_gains_under_12m=50_000,
+                                   capital_losses=60_000), DISCOUNT_RATE)
+    assert r.net_realised_cg == pytest.approx(160_000)
+    assert r.unused_capital_loss == 0
+
+
+def test_cgt_losses_exceeding_all_gains_carry_forward():
+    r = net_capital_gain(CgtInputs(gross_gains_over_12m=100_000,
+                                   gross_gains_under_12m=20_000,
+                                   capital_losses=200_000), DISCOUNT_RATE)
+    assert r.net_realised_cg == 0
+    assert r.unused_capital_loss == pytest.approx(80_000)   # 200k − 120k
+
+
+def test_cgt_result_is_frozen_dataclass():
+    r = net_capital_gain(CgtInputs(0, 0, 0), DISCOUNT_RATE)
+    assert isinstance(r, CgtResult)

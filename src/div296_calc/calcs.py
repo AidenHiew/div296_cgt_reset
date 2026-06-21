@@ -53,3 +53,28 @@ def member_div296_tax(
     band1 = max(0.0, min(tsb_ref_value, threshold_2) - threshold_1) / tsb_ref_value
     band2 = max(0.0, tsb_ref_value - threshold_2) / tsb_ref_value
     return net_earnings * (band1 * rate_tier1 + band2 * rate_tier2)
+
+
+@dataclass(frozen=True)
+class CgtInputs:
+    gross_gains_over_12m: float       # discountable
+    gross_gains_under_12m: float      # non-discountable
+    capital_losses: float             # current-year + brought-forward
+
+
+@dataclass(frozen=True)
+class CgtResult:
+    net_realised_cg: float
+    unused_capital_loss: float        # carries forward to next year's losses
+
+
+def net_capital_gain(cgt: CgtInputs, discount_rate: float) -> CgtResult:
+    """s102-5 method: losses hit non-discount gains first, then the 1/3
+    discount applies to the surviving long-held remainder."""
+    loss = cgt.capital_losses
+    nondisc_net = max(0.0, cgt.gross_gains_under_12m - loss)
+    loss = max(0.0, loss - cgt.gross_gains_under_12m)
+    disc_net = max(0.0, cgt.gross_gains_over_12m - loss)
+    net = nondisc_net + disc_net * (1.0 - discount_rate)
+    unused = max(0.0, loss - cgt.gross_gains_over_12m)
+    return CgtResult(net_realised_cg=net, unused_capital_loss=unused)
