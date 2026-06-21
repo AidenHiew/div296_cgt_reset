@@ -137,3 +137,104 @@ def test_member_earnings_override_zero_is_honoured_not_blank():
 def test_member_earnings_negative_pool_allocates_negative():
     m = Member("A", 4_000_000, 4_000_000, share=0.5)
     assert member_earnings(m, -50_000) == pytest.approx(-25_000)
+
+
+# --- per-member result + fund roll-up + share guard ---
+from div296_calc.assumptions import thresholds_for  # noqa: E402
+from div296_calc.calcs import (  # noqa: E402
+    compute_fund,
+    compute_member,
+    fund_total_tax,
+    pooled_share_status,
+)
+
+YT = thresholds_for("2026-27")
+
+
+def _member_result(m, pool):
+    return compute_member(m, pool, YT, RATE_TIER1, RATE_TIER2)
+
+
+def test_compute_member_below_threshold_status():
+    m = Member("Below", 2_500_000, 2_500_000, share=1.0)
+    r = _member_result(m, 100_000)
+    assert r.tax == 0.0
+    assert r.below_threshold is True
+    assert r.new_loss == 0.0
+
+
+def test_compute_member_emma_via_override():
+    m = Member("Emma", 12_900_000, 12_900_000, share=0.0, override=840_000)
+    r = _member_result(m, 0)
+    assert r.tax == pytest.approx(115_581.40, abs=0.01)
+    assert r.tier2_tax > 0          # the >$10M slice is taxed
+    assert r.below_threshold is False
+
+
+def test_compute_member_prior_loss_partially_absorbs():
+    m = Member("P", 4_000_000, 4_000_000, share=1.0, prior_loss=100_000)
+    r = _member_result(m, 200_000)            # net = 100,000
+    assert r.net_earnings == pytest.approx(100_000)
+    assert r.tax == pytest.approx(100_000 * 0.25 * 0.15)   # band1 = 1M/4M
+
+
+def test_compute_member_prior_loss_exceeds_earnings_carries_forward():
+    m = Member("L", 4_000_000, 4_000_000, share=1.0, prior_loss=250_000)
+    r = _member_result(m, 200_000)            # net = -50,000
+    assert r.tax == 0.0
+    assert r.new_loss == pytest.approx(50_000)
+
+
+def test_jamal_negative_earnings_carry_forward():
+    m = Member("Jamal", 5_000_000, 5_000_000, share=1.0, override=-200_000)
+    r = _member_result(m, 0)
+    assert r.tax == 0.0
+    assert r.new_loss == pytest.approx(200_000)
+
+
+def test_compute_fund_rolls_up_sum_including_zero_member():
+    members = [
+        Member("Above", 4_000_000, 4_000_000, share=0.5),
+        Member("Below", 2_000_000, 2_000_000, share=0.5),
+    ]
+    results = compute_fund(members, 400_000, YT, RATE_TIER1, RATE_TIER2)
+    assert len(results) == 2
+    # Above: earnings 200k, band1 = 1M/4M = .25 → 200k×.25×.15 = 7,500
+    assert fund_total_tax(results) == pytest.approx(7_500)
+
+
+def test_pooled_share_status_100_percent_ok():
+    members = [Member("A", 4e6, 4e6, share=0.6), Member("B", 5e6, 5e6, share=0.4)]
+    status = pooled_share_status(members)
+    assert status.pooled_count == 2
+    assert status.share_sum == pytest.approx(1.0)
+    assert status.ok is True
+    assert status.all_segregated is False
+
+
+def test_pooled_share_status_soft_warn_when_not_100():
+    members = [Member("A", 4e6, 4e6, share=0.6), Member("B", 5e6, 5e6, share=0.3)]
+    status = pooled_share_status(members)
+    assert status.ok is False
+
+
+def test_pooled_share_status_excludes_overridden_members():
+    members = [
+        Member("Pooled", 4e6, 4e6, share=1.0),
+        Member("Seg", 5e6, 5e6, share=0.0, override=50_000),
+    ]
+    status = pooled_share_status(members)
+    assert status.pooled_count == 1
+    assert status.share_sum == pytest.approx(1.0)
+    assert status.ok is True
+
+
+def test_pooled_share_status_all_overridden_is_suppressed():
+    members = [
+        Member("S1", 4e6, 4e6, share=0.0, override=10_000),
+        Member("S2", 5e6, 5e6, share=0.0, override=20_000),
+    ]
+    status = pooled_share_status(members)
+    assert status.pooled_count == 0
+    assert status.all_segregated is True
+    assert status.ok is True          # no false warning

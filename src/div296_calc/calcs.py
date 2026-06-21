@@ -12,6 +12,7 @@ band2 with 0.10 instead of 0.25 undercounts (the documented footgun).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 
@@ -105,3 +106,87 @@ def member_earnings(member: Member, pool_total: float) -> float:
     if member.override is not None:
         return member.override
     return member.share * pool_total
+
+
+@dataclass(frozen=True)
+class MemberResult:
+    name: str
+    earnings: float
+    tsb_ref: float
+    used_greater_of: bool
+    net_earnings: float
+    band1: float
+    band2: float
+    tier1_tax: float
+    tier2_tax: float
+    tax: float
+    new_loss: float
+    below_threshold: bool
+
+
+def compute_member(
+    member: Member,
+    pool_total: float,
+    yt,                               # YearThresholds
+    rate_tier1: float,
+    rate_tier2: float,
+) -> MemberResult:
+    earnings = member_earnings(member, pool_total)
+    ref = tsb_ref(member, yt.use_greater_of)
+    net = earnings - member.prior_loss
+    below = ref <= yt.threshold_1
+
+    if ref > 0:
+        band1 = max(0.0, min(ref, yt.threshold_2) - yt.threshold_1) / ref
+        band2 = max(0.0, ref - yt.threshold_2) / ref
+    else:
+        band1 = band2 = 0.0
+
+    if net <= 0 or below:
+        tier1 = tier2 = 0.0
+        new_loss = max(0.0, -net)
+    else:
+        tier1 = net * band1 * rate_tier1
+        tier2 = net * band2 * rate_tier2
+        new_loss = 0.0
+
+    return MemberResult(
+        name=member.name, earnings=earnings, tsb_ref=ref,
+        used_greater_of=yt.use_greater_of, net_earnings=net,
+        band1=band1, band2=band2, tier1_tax=tier1, tier2_tax=tier2,
+        tax=tier1 + tier2, new_loss=new_loss, below_threshold=below,
+    )
+
+
+def compute_fund(
+    members: Sequence[Member],
+    pool_total: float,
+    yt,
+    rate_tier1: float,
+    rate_tier2: float,
+) -> list[MemberResult]:
+    return [compute_member(m, pool_total, yt, rate_tier1, rate_tier2)
+            for m in members]
+
+
+def fund_total_tax(results: Sequence[MemberResult]) -> float:
+    return sum(r.tax for r in results)
+
+
+@dataclass(frozen=True)
+class ShareStatus:
+    pooled_count: int
+    share_sum: float
+    all_segregated: bool
+    ok: bool
+
+
+def pooled_share_status(members: Sequence[Member]) -> ShareStatus:
+    """Soft guard on pooled members' shares. Suppressed (ok=True) when every
+    member is segregated (overridden), since there is then no pool to split."""
+    pooled = [m for m in members if m.override is None]
+    share_sum = sum(m.share for m in pooled)
+    all_seg = len(pooled) == 0
+    ok = all_seg or abs(share_sum - 1.0) < 1e-9
+    return ShareStatus(pooled_count=len(pooled), share_sum=share_sum,
+                       all_segregated=all_seg, ok=ok)
