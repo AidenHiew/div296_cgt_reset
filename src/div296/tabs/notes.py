@@ -183,8 +183,14 @@ def _git_short_sha() -> str:
         return "unknown"
 
 
-def build(wb: Workbook) -> Worksheet:
+def build(wb: Workbook, *, include_class_import_hints: bool = True) -> Worksheet:
     ws = wb.create_sheet(SHEET)
+    terminology = TERMINOLOGY if include_class_import_hints else [
+        t for t in TERMINOLOGY if not t[0].startswith("CLASS Import")
+    ]
+    caveats = CAVEATS if include_class_import_hints else [
+        c for c in CAVEATS if not c[0].startswith("CLASS Import")
+    ]
     ws.sheet_view.showGridLines = False
 
     # --- Title ---
@@ -212,7 +218,7 @@ def build(wb: Workbook) -> Worksheet:
     row = 6
     _band(ws, row, "Terminology")
     row += 1
-    for term, definition in TERMINOLOGY:
+    for term, definition in terminology:
         ws.cell(row=row, column=1, value=term).font = Font(name="Arial", size=10, bold=True)
         d = ws.cell(row=row, column=2, value=definition)
         d.font = BODY_FONT
@@ -225,7 +231,7 @@ def build(wb: Workbook) -> Worksheet:
     row += 1
     _band(ws, row, "Caveats (factual disclosure)")
     row += 1
-    for headline, body in CAVEATS:
+    for headline, body in caveats:
         ws.cell(row=row, column=1, value=headline).font = Font(name="Arial", size=10, bold=True)
         d = ws.cell(row=row, column=2, value=body)
         d.font = BODY_FONT
