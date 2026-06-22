@@ -3,7 +3,8 @@
     python -m div296_calc.build
     python -m div296_calc.build --no-validate
 
-Writes dist/Division_296_Calculator_v<version>.xlsx (Calculator, Notes).
+Writes dist/ongoing_calculator/Div_296_Ongoing_Calculator_v<version>.xlsx
+(Calculator, Notes).
 The recalc gate is STRICT: ANY Excel error cell fails the build (no
 skip-list). The workbook is small enough that the pure-Python `formulas`
 engine recalculates it without the OOM the year-one model hits.
@@ -26,7 +27,7 @@ TITLE = "Ongoing Division 296 Calculator"
 
 
 def _dist_dir() -> Path:
-    return Path(__file__).resolve().parents[2] / "dist"
+    return Path(__file__).resolve().parents[2] / "dist" / "ongoing_calculator"
 
 
 def build_workbook() -> Workbook:
@@ -72,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-validate", action="store_true")
     args = parser.parse_args(argv)
 
-    out = args.output or (_dist_dir() / f"Division_296_Calculator_v{__version__}.xlsx")
+    out = args.output or (_dist_dir() / f"Div_296_Ongoing_Calculator_v{__version__}.xlsx")
     out.parent.mkdir(parents=True, exist_ok=True)
     build_workbook().save(out)
     print(f"Wrote {out}")
