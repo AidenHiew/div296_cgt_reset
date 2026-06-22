@@ -39,6 +39,9 @@ jobs:
       - name: Build (recalc validation skipped on CI — see note above)
         run: python -m div296.build --no-validate
 
+      - name: Build ongoing calculator (STRICT recalc — small enough to validate)
+        run: python -m div296_calc.build
+
       - name: Upload built workbook
         if: matrix.python-version == '3.13'
         uses: actions/upload-artifact@v4
