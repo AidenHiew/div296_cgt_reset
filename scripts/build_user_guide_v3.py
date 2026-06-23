@@ -218,6 +218,47 @@ def title_strip(doc, *, include_class: bool) -> None:
     _run(sub, audience, size=10, italic=True, color=SUB)
 
 
+def about_panel(doc, *, include_class: bool) -> None:
+    """Four-line orientation block between title strip and map strip.
+
+    Frames Division 296, the reset election, what the model compares, and the
+    decision the tool supports. Designed so a brand-new reader has the 'why'
+    before the 'how' on the very first page.
+    """
+    p = _para(doc, before=6, after=1)
+    _run(p, "What this tool does", size=11, bold=True, color=INK)
+
+    panel = doc.add_table(rows=4, cols=1)
+    panel.autofit = True
+
+    rows = [
+        ("Division 296.",
+         " From FY 2026–27 (first test 30 Jun 2027), super earnings on the "
+         "slice of Total Super Balance (TSB) between $3m and $10m attract an "
+         "extra 15% tax; the slice above $10m attracts an extra 25%. Assessed "
+         "personally on the member, not on the fund."),
+        ("Cost base reset election.",
+         " A transitional one-off election: step each CGT asset's cost base "
+         "up to its market value at 30 Jun 2026. Once lodged, irrevocable."),
+        ("What this model compares.",
+         " Reset election ON vs OFF. For each scenario it projects Division "
+         "296 tax — and the ordinary CGT that flows from realising the asset."),
+        ("Decision it supports.",
+         " Whether the SMSF should lodge the reset election. Rule of thumb: "
+         "reset usually saves tax on future-gain assets and costs tax on "
+         "future-loss assets — net effect depends on the asset mix."),
+    ]
+    for i, (lead, tail) in enumerate(rows):
+        cell = panel.rows[i].cells[0]
+        cell.text = ""
+        _shade_cell(cell, (0xF5, 0xF1, 0xEA))  # very light parchment
+        cp = cell.paragraphs[0]
+        cp.paragraph_format.space_before = Pt(1)
+        cp.paragraph_format.space_after = Pt(1)
+        _run(cp, lead, size=9.5, bold=True, color=INK)
+        _run(cp, tail, size=9.5, color=(0x33, 0x33, 0x33))
+
+
 def map_strip(doc, *, include_class: bool) -> None:
     """Workbook map — 4 cards (adviser) or 5 cards (full, with CLASS Import)."""
     if include_class:
@@ -315,8 +356,9 @@ def quick_start(doc, *, include_class: bool) -> None:
 
     step_data = [
         ("1", "Inputs → Members.",
-         "Type each member's TSB into column B (rows 7–10). Split %, "
-         "$3m–$10m band, and above-$10m band derive automatically."),
+         "Type each member's Total Super Balance (TSB) into column B "
+         "(rows 7–10). Split %, $3m–$10m band, and above-$10m band "
+         "derive automatically."),
         ("2", step2_head, step2_body),
         ("3", "Comparison tab.",
          "Read the three headline cards: If no reset · If elected · Net effect. "
@@ -344,8 +386,9 @@ def quick_start(doc, *, include_class: bool) -> None:
     body(doc,
          "Comparison tab → Headline cards. Three numbers: total Div 296 tax "
          "under each scenario plus the signed net effect. Negative (green) = "
-         "reset saves tax. Positive (red) = ‘reset trap’ on unrealised-loss "
-         "assets.")
+         "reset saves tax. Positive (red) = ‘reset trap’ — locking in a higher "
+         "basis on an asset you'll later sell at a loss shrinks that future "
+         "loss, so net tax goes up.")
 
     h2(doc, "Two safety banners on Inputs")
     p = _para(doc, after=1)
@@ -651,6 +694,7 @@ def build_guide(*, include_class: bool) -> Document:
     _stamp_header(doc, edition_label="Full Edition" if include_class else "Adviser Edition")
 
     title_strip(doc, include_class=include_class)
+    about_panel(doc, include_class=include_class)
     map_strip(doc, include_class=include_class)
     quick_start(doc, include_class=include_class)
     inputs_reference(doc, include_class=include_class)
