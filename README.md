@@ -120,7 +120,7 @@ A Microsoft Excel workbook (`.xlsx`) that illustrates Division 296 tax outcomes 
 - **Comparison — chart removed** — the v2.3 horizontal bar chart didn't add narrative on top of the per-asset detail table; cut entirely.
 - **Layout re-tune** — col widths bumped for the new longer headers; single-page A4 landscape print fit.
 
-**Audience:** internal use by partners, managers and staff; also printed or shared with clients.
+**Audience:** anyone modelling Division 296 outcomes for an SMSF — financial advisers, accountants, SMSF trustees, and individual fund members. Outputs can be printed or shared with clients.
 
 > **Illustrative only — not financial, tax, or legal advice.** Confirm against final ATO method, regulations and a registered tax agent / licensed financial adviser before relying on any figure.
 
@@ -232,7 +232,7 @@ These supplement [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) §1.
 
 Factual disclosures, not recommendations:
 
-1. **Prior-year capital losses are NOT modelled.** v3.1 implements fund-level intra-year netting of capital gains and losses (s102-5 ITAA 1997). However, this model does not take a brought-forward capital-loss balance as an input — if the fund holds losses carried forward from prior years, they should be applied to the figures here outside the workbook. Real-world figures must be reconciled with the firm's tax practitioner.
+1. **Prior-year capital losses are NOT modelled.** v3.1 implements fund-level intra-year netting of capital gains and losses (s102-5 ITAA 1997). However, this model does not take a brought-forward capital-loss balance as an input — if the fund holds losses carried forward from prior years, they should be applied to the figures here outside the workbook. Real-world figures must be reconciled with a registered tax practitioner.
 2. **Pension phase not modelled.** Assumes 100% accumulation phase, fund earnings tax = 15%. Retirement-phase assets are 0% — model overstates Ordinary CGT for funds with pension members.
 3. **Reset OFF scenario is realised-only.** In reality, a fund that does not elect the reset is taxed under Div 296 on TSB movement (unrealised + realised). The Comparison tab compares realised vs realised.
 4. **Wash sale / Part IVA risk.** Selling pre–30 June 2026 purely for the tax outcome and reacquiring sits in anti-avoidance territory (TR 2008/1).
