@@ -103,8 +103,8 @@ A Microsoft Excel workbook (`.xlsx`) that illustrates Division 296 tax outcomes 
 - **Workbook authorship** — Core Properties now stamp `creator = Aiden Hiew`, `lastModifiedBy = Aiden Hiew`, plus title/subject/description/keywords. Visible in Excel under File → Info.
 - **Visible attribution on Notes tab** — small italic line directly under the title: `Prepared by: Aiden Hiew · Model version v2.6.0 · Built YYYY-MM-DD`. Survives screenshots and PDF export.
 - **Print footer on every tab** — `Prepared by Aiden Hiew` (left) / `v2.6.0 | Page X of N` (right) in soft grey 8pt. Carries attribution onto every printed page and exported PDF.
-- **LICENSE** — added a proprietary "all rights reserved" LICENSE at repo root with copyright line, permitted-use scope, no-warranty and not-advice disclaimers.
-- **README author line** — `Author & maintainer: Aiden Hiew · License: Proprietary` directly under the title.
+- **LICENSE** — added a proprietary "all rights reserved" LICENSE at repo root with copyright line, permitted-use scope, no-warranty and not-advice disclaimers. *(Superseded: the project was relicensed to MIT in 2026 when the repo was made public — see the license in the header above.)*
+- **README author line** — `Author & maintainer: Aiden Hiew · License: Proprietary` directly under the title. *(The current license is MIT.)*
 - **Source-package metadata** — `pyproject.toml` authors/maintainers set to `Aiden Hiew` with GitHub noreply email; `src/div296/__init__.py` exposes `__author__ = "Aiden Hiew"`.
 - **pyproject version sync** — bumped `pyproject.toml` `version` to `2.6.0` (was stale at `1.0.0`).
 - No calc changes, no UI changes to existing cells, no acceptance-number changes — v2.6.0 is byte-identical to v2.5.0 for every model output; only metadata and chrome differ.
