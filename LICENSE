@@ -1,33 +1,21 @@
-Copyright (c) 2026 Aiden Hiew. All rights reserved.
+MIT License
 
-This software and the Excel workbook it produces (the "Work") are the
-proprietary property of Aiden Hiew. No part of the Work may be reproduced,
-distributed, modified, sublicensed, or used to create derivative works,
-in whole or in part, by any means, without the prior written permission of
-the copyright holder, except as expressly permitted below.
+Copyright (c) 2026 Aiden Hiew
 
-Permitted use
--------------
-The Work is provided to its intended recipient(s) solely for the recipient's
-own internal evaluation, professional advice, and record-keeping purposes
-in connection with Division 296 of the Income Tax Assessment Act 1997 (Cth)
-and related Australian superannuation tax matters. Redistribution outside
-the recipient's organisation, public posting, or commercial sublicensing is
-not permitted without prior written consent.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-No warranty
------------
-THE WORK IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL
-THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
-AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-CONNECTION WITH THE WORK OR THE USE OR OTHER DEALINGS IN THE WORK.
-
-Not advice
-----------
-The Work is illustrative only and does not constitute financial, tax, or
-legal advice. Recipients must confirm all figures against current ATO
-guidance, the final form of the relevant legislation and regulations, and
-a registered tax agent or licensed financial adviser before relying on any
-output.
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

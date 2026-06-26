@@ -1,6 +1,6 @@
 # Division 296 CGT Cost Base Reset Model
 
-**Author & maintainer:** Aiden Hiew · **License:** Proprietary — see [LICENSE](LICENSE)
+**Author & maintainer:** Aiden Hiew · **License:** MIT — see [LICENSE](LICENSE)
 
 A Microsoft Excel workbook (`.xlsx`) that illustrates Division 296 tax outcomes for SMSFs and makes the case for pre–30 June 2026 action on assets sitting in an unrealised-loss position (the "reset trap").
 
