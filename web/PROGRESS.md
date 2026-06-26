@@ -47,8 +47,9 @@ change both in lockstep and keep `tests/parity.test.js` green so drift is caught
 ## Open / deferred (next session)
 
 - **Website hosting / GitHub Pages — user is still thinking about it.** Not
-  started. Caveat to raise: repo is proprietary, so a Pages site would be
-  public. Don't deploy without an explicit go-ahead.
+  started. The repo is now public and MIT-licensed (2026), so GitHub Pages is a
+  viable host and a Pages site being public is no longer a blocker. Don't deploy
+  without an explicit go-ahead.
 - Refinements not yet done (user picked 1–3 only so far):
   - #4 Shareable link / save scenario (encode inputs in URL hash) + "reset to sample" button.
   - #5 Thousands separators while typing; tighter mobile layout for tables.
