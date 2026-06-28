@@ -68,7 +68,13 @@ def status_formula(tsb_ref_c, t1_c) -> str:
 
 
 def threshold_lookup_formula(value_range, year_range, year_c) -> str:
-    return f"=SUMIFS({value_range},{year_range},{year_c})"
+    # Fail SAFE on an unknown income year: COUNTIF=0 -> NA() so the missing
+    # threshold propagates #N/A through every band/tier/total cell (visibly
+    # broken) instead of SUMIFS returning 0, which would collapse t2 to 0,
+    # drive band2 to 1.0 and emit a fictitious >$10M-tier liability. The
+    # year_known_guard banner explains it; this stops the numbers computing.
+    return (f"=IF(COUNTIF({year_range},{year_c})=0,NA(),"
+            f"SUMIFS({value_range},{year_range},{year_c}))")
 
 
 def year_known_guard_formula(year_range, year_c) -> str:

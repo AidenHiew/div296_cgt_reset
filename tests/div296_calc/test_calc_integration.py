@@ -85,3 +85,30 @@ def test_recalc_gate_zero_error_cells(tmp_path):
     out = tmp_path / "calc.xlsx"
     build_workbook().save(out)
     assert validate_recalc(out) == []
+
+
+def test_unknown_year_fails_safe_not_fictitious(tmp_path):
+    # An income year absent from the threshold table must propagate #N/A
+    # through the thresholds and the tax outputs (fail SAFE), NOT silently
+    # compute a fictitious >$10M-tier liability from collapsed-to-0 thresholds.
+    out = tmp_path / "calc_badyear.xlsx"
+    wb = build_workbook()
+    wb[C.SHEET][f"B{C.YEAR_ROW}"] = "2099-00"   # not in YEAR_TABLE
+    wb.save(out)
+
+    xl = formulas.ExcelModel().loads(str(out)).finish()
+    s = xl.calculate()
+    token = f"[{out.name}]"
+
+    def at(cell):
+        return _unwrap(s[f"'{token}CALCULATOR'!{cell}"].value)
+
+    def is_error(v):
+        return not isinstance(v, (int, float)) or str(v).startswith("#")
+
+    # thresholds themselves error out rather than resolving to 0
+    assert is_error(at("S2")), f"t1 should be #N/A, got {at('S2')!r}"
+    assert is_error(at("S3")), f"t2 should be #N/A, got {at('S3')!r}"
+    # and the error propagates to the tax outputs — no fictitious number
+    assert is_error(at(f"B{C.TOTAL_TAX_ROW}")), at(f"B{C.TOTAL_TAX_ROW}")
+    assert is_error(at(f"B{C.FUND_TOTAL_ROW}")), at(f"B{C.FUND_TOTAL_ROW}")

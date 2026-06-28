@@ -78,9 +78,13 @@ def test_status_formula_golden():
     )
 
 
-def test_threshold_lookup_uses_sumifs_not_index_match():
+def test_threshold_lookup_uses_sumifs_and_fails_safe_on_unknown_year():
+    # SUMIFS (never INDEX/MATCH — recalc-gate false positives), wrapped in a
+    # COUNTIF=0 -> NA() guard so an unknown income year errors out instead of
+    # resolving the threshold to a silent 0 (which would emit fictitious tax).
     assert F.threshold_lookup_formula("$P$2:$P$10", "$O$2:$O$10", "$B$3") == (
-        "=SUMIFS($P$2:$P$10,$O$2:$O$10,$B$3)"
+        "=IF(COUNTIF($O$2:$O$10,$B$3)=0,NA(),"
+        "SUMIFS($P$2:$P$10,$O$2:$O$10,$B$3))"
     )
 
 
