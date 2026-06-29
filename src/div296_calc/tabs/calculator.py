@@ -32,7 +32,7 @@ Layout (members as columns B–E; labels in col A):
   Row 31  band1 proportion   (B–E)                  [formula]
   Row 32  band2 proportion   (B–E)                  [formula]
   Row 33  Tier-1 tax (15%)   (B–E)                  [formula]
-  Row 34  Tier-2 tax (extra) (B–E)                  [formula]
+  Row 34  Tier-2 tax (25%)   (B–E)                  [formula]
   Row 35  TOTAL Division 296 tax (B–E)              [formula]
   Row 36  New carried-forward loss (B–E)            [formula]
   Row 37  Status             (B–E)                  [formula]
@@ -280,7 +280,7 @@ def build(wb: Workbook) -> Worksheet:
         EARNINGS_ROW: "Earnings used", TSB_REF_ROW: "TSB used (ref)",
         NET_EARNINGS_ROW: "Net Div 296 earnings", BAND1_ROW: "Proportion $3m–$10m",
         BAND2_ROW: "Proportion above $10m", TIER1_TAX_ROW: "Tier-1 tax (15%)",
-        TIER2_TAX_ROW: "Tier-2 tax (extra 10%)", TOTAL_TAX_ROW: "TOTAL Division 296 tax",
+        TIER2_TAX_ROW: "Tier-2 tax (25% on >$10M slice)", TOTAL_TAX_ROW: "TOTAL Division 296 tax",
         NEW_LOSS_ROW: "New carried-forward Div 296 loss", STATUS_ROW: "Status",
     }
     for row, text in row_labels.items():
@@ -328,6 +328,17 @@ def build(wb: Workbook) -> Worksheet:
             f"{col}{NAME_ROW}", f"{col}{OVERRIDE_ROW}", f"{col}{SHARE_ROW}"),
             number_format=FMT_PERCENT)
     ws.row_dimensions[POOLED_CONTRIB_ROW].hidden = True
+
+    # Prior-year Div 296 loss is a carried-forward amount that is always >= 0
+    # (the law never refunds a negative). Block negative entries so a stray "-"
+    # can't silently inflate net earnings = earnings - prior_loss.
+    loss_dv = DataValidation(
+        type="decimal", operator="greaterThanOrEqual", formula1="0",
+        allow_blank=True, showErrorMessage=True,
+        errorTitle="Invalid prior-year loss",
+        error="Prior-year Div 296 loss is a carried-forward amount and cannot be negative.")
+    ws.add_data_validation(loss_dv)
+    loss_dv.add(f"B{PRIOR_LOSS_ROW}:{MEMBER_COLS[-1]}{PRIOR_LOSS_ROW}")
 
     # --- Share guard ---
     last_col = MEMBER_COLS[-1]
