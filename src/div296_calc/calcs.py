@@ -143,6 +143,11 @@ def compute_member(
         band1 = band2 = 0.0
 
     if net <= 0 or below:
+        # No Div 296 liability this year — net earnings are non-positive OR the
+        # member's TSB is below threshold_1. A NEGATIVE net still accrues a Div
+        # 296 carry-forward loss (new_loss), even for a below-threshold member:
+        # the enacted rule accrues the loss regardless of current-year liability
+        # so it can offset future years. Zero/positive net carries nothing.
         tier1 = tier2 = 0.0
         new_loss = max(0.0, -net)
     else:

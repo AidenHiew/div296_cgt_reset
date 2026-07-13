@@ -69,6 +69,18 @@ def test_sheet_protected_with_unlocked_inputs(wb):
     assert ws[f"B{C.TOTAL_TAX_ROW}"].protection.locked is True
 
 
+def test_prior_loss_input_rejects_negative(wb):
+    ws = wb["Calculator"]
+    guards = [
+        d for d in ws.data_validations.dataValidation
+        if d.type == "decimal" and d.operator == "greaterThanOrEqual"
+        and str(d.formula1) == "0"
+    ]
+    assert guards, "expected a >=0 DataValidation guarding the prior-loss cells"
+    sqref = str(guards[0].sqref)
+    assert f"B{C.PRIOR_LOSS_ROW}" in sqref and f"E{C.PRIOR_LOSS_ROW}" in sqref
+
+
 def test_notes_tab_has_law_basis_and_caveats(wb):
     text = "\n".join(
         str(c.value) for row in wb["Notes"].iter_rows() for c in row if c.value)
