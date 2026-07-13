@@ -10,7 +10,7 @@ order: Inputs, CLASS Import, Analyser, Comparison, Notes.
 The `--edition adviser` build omits the CLASS Import staging tab (for
 advisers who don't use CLASS Super); all other content is identical. Output
 filename gets an `_Adviser_Edition` suffix so the two builds can't be
-mixed up. See docs/USER_GUIDE_Adviser_Edition.docx.
+mixed up. See docs/USER_GUIDE_Adviser_Edition_v3.docx.
 
 By default, after writing the file the build runs a pure-Python recalc
 via the `formulas` package and fails with a non-zero exit if any cell
