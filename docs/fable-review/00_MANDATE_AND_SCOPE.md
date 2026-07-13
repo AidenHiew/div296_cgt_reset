@@ -62,35 +62,35 @@ this is the single most important thing to understand before reviewing. See
 
 ---
 
-## What Fable must produce (summary — full spec in `05`)
+## What Fable must produce (exact structure in `05` — follow it)
 
-A single markdown report with:
+A single markdown report: an executive summary, a per-surface review (×3),
+cross-cutting findings, a **tiered optimisation plan**, and a "what's already good"
+section. `05_FABLE_REVIEW_PROMPT.md` is the authoritative spec — use its section
+order verbatim.
 
-- **A. Per-surface review** (×3): purpose recap, engine/calc sanity, presentation
-  critique, and a prioritised list of concrete improvements.
-- **B. Cross-cutting findings** — the things only visible when you look at all three
-  together: duplicated calc logic and drift risk, inconsistent domain language,
-  overlapping audiences, whether the three should converge.
-- **C. Optimisation / redesign plan** — the headline deliverable. Concrete,
-  **tiered by disruption** so the maintainer can choose per item:
-  - **Tier 0 — in-place** (tweaks within a surface as-is)
-  - **Tier 1 — medium/architecture** (move or merge surfaces, shared engine)
-  - **Tier 2 — greenfield** (a from-scratch product shape, if you believe one is
-    warranted — argue it, don't just assert it)
-  For each item: the problem, the proposed change, the payoff, the cost/risk, and
-  where in the code it lands.
+The optimisation plan is the headline deliverable and is **tiered by disruption** so
+the maintainer can adopt per item. This vocabulary (T0/T1/T2) is used throughout:
+
+- **Tier 0 — in-place:** tweaks within a surface as-is.
+- **Tier 1 — medium/architecture:** move or merge surfaces, a shared engine, a web
+  front-end for the ongoing tool.
+- **Tier 2 — greenfield:** a from-scratch product shape — only if warranted, and
+  argued, not asserted.
 
 Be opinionated and honest. If something is over-engineered, say so. If a whole
-surface is redundant, say so and make the case. If the current approach is
-actually right, say that too — don't invent work.
+surface is redundant, make the case. If the current approach is actually right, say
+so — don't invent work.
 
 ---
 
 ## Efficiency guidance (the maintainer explicitly cares about resource use)
 
-This briefing package (files `00`–`04`) is written so you do **not** need to read
-the whole tree. `04_CODE_READING_GUIDE.md` gives you a **curated, ranked file list
-per surface** — read those directly (you are encouraged to read real code for the
-parts that matter), and lean on the maps in `02` for everything else. Don't
-exhaustively read tests or frozen `dist/` artifacts. Spend reads where your
-design judgement needs ground truth: the calc kernels and the presentation layers.
+This briefing package is written so you do **not** need to read the whole tree.
+`04_CODE_READING_GUIDE.md` gives you a **curated, ranked file list per surface** plus
+a **"Seeing the rendered output"** note — read the ranked files directly, and lean on
+the maps in `02` for everything else. Don't exhaustively read tests or frozen `dist/`
+artifacts. Spend reads where your design judgement needs ground truth: the calc
+kernels and the presentation layers. **Because this is a presentation review, build
+the actual artifact where you can (see `04`) — reading a workbook's openpyxl builder
+alone will mislead you about how it looks.**

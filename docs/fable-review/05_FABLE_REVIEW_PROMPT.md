@@ -30,10 +30,14 @@ every claim with a specific file/line or a concrete user scenario.
 - **Don't relitigate settled scope decisions** (`00`) or re-report the team's own
   known-deferred items (`web/PROGRESS.md`) — build on them.
 
-## Efficiency
+## Efficiency & seeing the output
 
-Use `04_CODE_READING_GUIDE.md`. Read the ★★★ files; skim ★★; don't read the whole
-tree, the generated `standalone/` bundle, or the full test suites.
+Use `04_CODE_READING_GUIDE.md` — read the ★★★ files, skim ★★, and skip the whole
+tree, the generated `standalone/` bundle, and the full test suites. **Before you
+critique Excel presentation, read `04`'s "Seeing the rendered output" note:** build
+the workbook and inspect the actual `.xlsx` (and, where you can, the PDF) — judging a
+tearsheet from its openpyxl builder alone will mislead you. Scope any visual verdict
+to what you could actually verify.
 
 ---
 

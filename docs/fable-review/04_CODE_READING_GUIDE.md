@@ -18,6 +18,30 @@ Legend: ★★★ read fully · ★★ skim for shape · ★ reference only
 
 ---
 
+## ⚠ Seeing the rendered output (you're judging *presentation*)
+
+The two Excel surfaces are built by openpyxl code. Reading `comparison.py` to judge
+the client tearsheet is like reviewing a website by reading its DOM builder — you'll
+misjudge how it actually looks. Judge each surface at the altitude you can verify:
+
+- **Build the workbook and inspect the produced `.xlsx` directly** (you can load cell
+  values, number formats, fills, fonts, column widths, merged ranges via
+  openpyxl/pandas — that's real evidence for information architecture & layout):
+  - Reset: `python -m div296.build --no-validate` → `dist/Division_296_Model_v3.4.0.xlsx`
+  - Ongoing: `python -m div296_calc.build --no-validate` → `dist/ongoing_calculator/…xlsx`
+  - (Run from repo root; `--no-validate` skips the slow recalc gate.)
+- **For a true visual/print verdict** on the reset tearsheet, the honest artifact is
+  a PDF: `python scripts/export_pdf.py <xlsx>` (needs LibreOffice on PATH). If you
+  can't render it, **say so** and scope your Excel critique to information
+  architecture + workflow (visible in the builder and the built cells), not
+  pixel-level visual design.
+- **Web** is the easy one: open `web/index.html` in a browser, or read
+  `index.html` + `styles.css` — HTML/CSS closely reflect the rendered result.
+
+Don't assert a visual verdict you couldn't actually verify.
+
+---
+
 ## Surface 1 — Reset workbook (`src/div296/`)
 
 | File | | Why |
