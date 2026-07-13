@@ -7,6 +7,11 @@
 
 Legend: ★★★ read fully · ★★ skim for shape · ★ reference only
 
+**Quota-constrained priority:** spend your reads on **Surface 2 — the ongoing
+calculator** (the PRIMARY target, per `00`). Read its ★★★ files properly. **Surface 1
+(reset) and Surface 3 (web) are light/optional** — skim only what you need for a
+brief pass, and skip them entirely if you're low on budget.
+
 ---
 
 ## Read first (context — you're already partway through)
@@ -24,12 +29,14 @@ The two Excel surfaces are built by openpyxl code. Reading `comparison.py` to ju
 the client tearsheet is like reviewing a website by reading its DOM builder — you'll
 misjudge how it actually looks. Judge each surface at the altitude you can verify:
 
-- **Build the workbook and inspect the produced `.xlsx` directly** (you can load cell
-  values, number formats, fills, fonts, column widths, merged ranges via
-  openpyxl/pandas — that's real evidence for information architecture & layout):
-  - Reset: `python -m div296.build --no-validate` → `dist/Division_296_Model_v3.4.0.xlsx`
-  - Ongoing: `python -m div296_calc.build --no-validate` → `dist/ongoing_calculator/…xlsx`
-  - (Run from repo root; `--no-validate` skips the slow recalc gate.)
+- **Inspect the produced `.xlsx` directly** (load cell values, number formats, fills,
+  fonts, column widths, merged ranges via openpyxl/pandas — real evidence for
+  information architecture & layout). **Both workbooks are already built for you** in
+  this worktree's `dist/` (gitignored):
+  - Ongoing (PRIMARY): `dist/ongoing_calculator/Div_296_Ongoing_Calculator_v0.1.0.xlsx`
+  - Reset (optional): `dist/Division_296_Model_v3.4.0.xlsx`
+  - To rebuild: `PYTHONPATH=src python -m div296_calc.build --no-validate` (or
+    `div296.build`) from repo root; `--no-validate` skips the slow recalc gate.
 - **For a true visual/print verdict** on the reset tearsheet, the honest artifact is
   a PDF: `python scripts/export_pdf.py <xlsx>` (needs LibreOffice on PATH). If you
   can't render it, **say so** and scope your Excel critique to information

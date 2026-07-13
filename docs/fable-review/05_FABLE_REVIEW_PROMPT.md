@@ -23,7 +23,12 @@ every claim with a specific file/line or a concrete user scenario.
   and reproduce it against the anchors in `03`.)
 - **Medium/architecture is open.** You may propose moving between mediums, merging
   or killing surfaces, a shared engine, etc.
-- **All three surfaces get equal, mid-depth attention.** No single deep-dive.
+- **Concentrate on the PRIMARY surface (quota-constrained).** Go **deep on the
+  ongoing calculator (`src/div296_calc/`)** + the cross-cutting product-shape
+  question. The reset workbook and web get a **light/optional** pass only if budget
+  remains — don't spend scarce review budget deep-diving the mature reset tool. (See
+  `00` §Scope for the full priority order; it supersedes the earlier equal-weight
+  plan.)
 - **Correctness is a sanity pass**, already well-reviewed. Reproduce **Emma =
   $115,581.40** as your kernel sanity check, spot-check the invariants in `03`, then
   spend your depth on design.
@@ -50,15 +55,25 @@ Your headline judgement. If a reader reads only this, what should they know? Inc
 your **top 5 recommendations** as a ranked list, each one line, each tagged with its
 disruption tier (T0/T1/T2 — defined below).
 
-### 2. Per-surface review (×3: Reset workbook · Ongoing calculator · Web)
-For **each** surface, same sub-structure:
+### 2. PRIMARY — Ongoing calculator (`src/div296_calc/`), in depth
+This is the bulk of the report. Cover:
 - **What it is & who it's for** (one paragraph — confirm you understood it).
-- **Engine sanity** (short — did the math check out at a sanity level? any
-  ⚠ CORRECTNESS flags?).
-- **Presentation critique** — the substance. Is the medium right for this
-  audience/task? Is the layout/UX good? What confuses, what's over-built, what's
-  missing? Ground it in specific files.
+- **Engine sanity** (short — did the math check out at a sanity level? reproduce
+  Emma; any ⚠ CORRECTNESS flags?).
+- **Presentation critique** — the substance. Is a single-sheet Excel workbook the
+  right medium for a tool a fund will run **every year from 2027**? Judge the
+  members-as-columns layout, the manual year-table upkeep, the manual carry-forward
+  roll, the 4-member cap, the hidden-column mechanics. What confuses, what's
+  over-built, what's missing, what breaks at year 2? Ground it in specific files and
+  the built `.xlsx` (see `04`).
 - **Concrete improvements** — a prioritised list, each tagged T0/T1/T2.
+
+### 2b. LIGHT / OPTIONAL — Reset workbook + Web (only if budget remains)
+A **brief** pass each (a few paragraphs, not the full treatment above): standout
+strengths, standout problems, and any T0/T1/T2 items worth recording. The reset tool
+is mature — don't re-derive its design history; just flag what a fresh eye sees.
+**If you're low on budget, skip these and say so** — the ongoing tool + §3 matter
+more.
 
 ### 3. Cross-cutting findings
 The things only visible across all three. At minimum, take a clear position on:

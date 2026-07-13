@@ -42,9 +42,21 @@ this is the single most important thing to understand before reviewing. See
 
 ## Scope decisions (already made by the maintainer — do not relitigate)
 
-1. **All three surfaces, weighted equally.** Give each a comparable mid-depth
-   pass. Do **not** deep-dive one at the expense of the others. There is no single
-   "primary" surface.
+1. **Priority order (quota-constrained — read carefully).** The maintainer has
+   **limited review budget** and wants it concentrated, not spread thin:
+   - **PRIMARY (deep): the ongoing calculator — `src/div296_calc/`.** It's the
+     least-designed (v0.1), most future-facing tool (the ongoing tax is the
+     *recurring annual* reality from 2027; the reset is a one-off 2026 decision),
+     and the highest-leverage target for "a better way to present & do this." Spend
+     the bulk of your effort here.
+   - **THEN: the one cross-cutting product-shape question** (see `05` §3) — should
+     the public web calculator expose the *ongoing* tax, and how should the three
+     surfaces converge? This is the highest-value strategic finding and rides on top
+     of the ongoing tool.
+   - **LIGHT / OPTIONAL: the reset workbook (`src/div296/`) and web (`web/`).** Only
+     if budget remains. The reset tool is already mature (v1→v3.4, many UX passes) so
+     fresh eyes there have low marginal value; give it and the web a brief pass or
+     skip. *(This supersedes an earlier "all three, equal weight" decision.)*
 
 2. **Latitude: medium is OPEN, the law is FIXED.**
    - You **may** propose moving between mediums or consolidating surfaces — e.g.
@@ -64,10 +76,11 @@ this is the single most important thing to understand before reviewing. See
 
 ## What Fable must produce (exact structure in `05` — follow it)
 
-A single markdown report: an executive summary, a per-surface review (×3),
-cross-cutting findings, a **tiered optimisation plan**, and a "what's already good"
-section. `05_FABLE_REVIEW_PROMPT.md` is the authoritative spec — use its section
-order verbatim.
+A single markdown report: an executive summary, a **deep review of the ongoing
+calculator**, the **cross-cutting product-shape finding**, a **tiered optimisation
+plan** (weighted to the ongoing tool), a **light/optional pass** on the reset
+workbook + web, and a "what's already good" section. `05_FABLE_REVIEW_PROMPT.md` is
+the authoritative spec — use its section order verbatim.
 
 The optimisation plan is the headline deliverable and is **tiered by disruption** so
 the maintainer can adopt per item. This vocabulary (T0/T1/T2) is used throughout:
