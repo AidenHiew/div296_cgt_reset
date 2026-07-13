@@ -23,14 +23,18 @@ const app = read("app.js").replace(
 
 const bundle = `// ==== calcs.js (engine) ====\n${calcs}\n\n// ==== app.js (ui) ====\n${app}`;
 
+// NB: function replacements, not string replacements. A string replacement
+// runs JS's $-substitution ($$ -> $, $& -> match, ...), which silently ate a
+// dollar sign from `$${t1...}` in app.js and shipped the standalone with
+// "exceeds 3,000,000" (no $). A function replacement inserts the text verbatim.
 let html = read("index.html")
   .replace(
     /<link rel="stylesheet" href="styles\.css" \/>/,
-    `<style>\n${css}\n</style>`
+    () => `<style>\n${css}\n</style>`
   )
   .replace(
     /<script type="module" src="app\.js"><\/script>/,
-    `<script>\n${bundle}\n</script>`
+    () => `<script>\n${bundle}\n</script>`
   );
 
 if (/\bexport\s/.test(bundle) || /\bimport\s/.test(bundle)) {
