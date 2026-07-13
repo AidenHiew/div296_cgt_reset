@@ -1,10 +1,16 @@
 """Entrypoint: build the Division 296 Cost Base Reset Model workbook.
 
     python -m div296.build
-    python -m div296.build --no-validate   # skip live recalc check
+    python -m div296.build --no-validate          # skip live recalc check
+    python -m div296.build --edition adviser      # omit CLASS Import tab
 
 Writes dist/Division_296_Model_v<version>.xlsx with the 5 tabs in spec
 order: Inputs, CLASS Import, Analyser, Comparison, Notes.
+
+The `--edition adviser` build omits the CLASS Import staging tab (for
+advisers who don't use CLASS Super); all other content is identical. Output
+filename gets an `_Adviser_Edition` suffix so the two builds can't be
+mixed up. See docs/USER_GUIDE_Adviser_Edition_v3.docx.
 
 By default, after writing the file the build runs a pure-Python recalc
 via the `formulas` package and fails with a non-zero exit if any cell
@@ -46,17 +52,18 @@ def _stamp_properties(wb: Workbook) -> None:
     props.keywords = "Division 296; superannuation; CGT; cost base reset"
 
 
-def build_workbook() -> Workbook:
+def build_workbook(*, include_class_import: bool = True) -> Workbook:
     wb = Workbook()
     # openpyxl creates a default "Sheet" — remove it so tab order is exact.
     default = wb.active
     wb.remove(default)
 
-    inputs.build(wb)
-    class_import.build(wb)
+    inputs.build(wb, include_class_import_hints=include_class_import)
+    if include_class_import:
+        class_import.build(wb)
     analyser.build(wb)
     comparison.build(wb)
-    notes.build(wb)
+    notes.build(wb, include_class_import_hints=include_class_import)
     _stamp_properties(wb)
     _stamp_print_footer(wb)
     return wb
@@ -130,12 +137,22 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Skip the post-build recalc validation check.",
     )
+    parser.add_argument(
+        "--edition",
+        choices=("full", "adviser"),
+        default="full",
+        help=("'full' (default) ships the CLASS Import staging tab; "
+              "'adviser' omits it (for advisers who don't use CLASS Super)."),
+    )
     args = parser.parse_args(argv)
 
-    out_path = args.output or (_dist_dir() / f"Division_296_Model_v{__version__}.xlsx")
+    include_class_import = args.edition == "full"
+    suffix = "" if include_class_import else "_Adviser_Edition"
+    default_name = f"Division_296_Model_v{__version__}{suffix}.xlsx"
+    out_path = args.output or (_dist_dir() / default_name)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    wb = build_workbook()
+    wb = build_workbook(include_class_import=include_class_import)
     wb.save(out_path)
     print(f"Wrote {out_path}")
 

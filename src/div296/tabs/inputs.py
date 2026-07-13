@@ -168,7 +168,7 @@ def _define_name(wb: Workbook, name: str, coord: str) -> None:
     wb.defined_names[name] = DefinedName(name=name, attr_text=ref)
 
 
-def build(wb: Workbook) -> Worksheet:
+def build(wb: Workbook, *, include_class_import_hints: bool = True) -> Worksheet:
     ws = wb.create_sheet(SHEET)
 
     # --- Row 1: Title ---
@@ -325,11 +325,17 @@ def build(wb: Workbook) -> Worksheet:
     # Priority 2 (v3.4 audit F2): a row with proceeds but no Market value at
     # 30 Jun is now blanked everywhere instead of showing the full proceeds as
     # a gain — COUNTIFS surfaces those silently-excluded rows.
+    _formula_warn_text = (
+        "⚠ Formulas detected in the asset register — the CLASS Import transfer must use "
+        "Paste-Special > Values. Press Ctrl+Z and re-paste as values."
+        if include_class_import_hints else
+        "⚠ Formulas detected in the asset register — paste data with "
+        "Paste-Special > Values, not a normal Ctrl+V. Press Ctrl+Z and re-paste as values."
+    )
     trip = ws.cell(
         row=TRANSFER_CHECK_ROW, column=1,
         value=(f'=IF(SUMPRODUCT(--ISFORMULA(A{REGISTER_FIRST_DATA_ROW}:G{REGISTER_LAST_DATA_ROW}))>0,'
-               f'"⚠ Formulas detected in the asset register — the CLASS Import transfer must use '
-               f'Paste-Special > Values. Press Ctrl+Z and re-paste as values.",'
+               f'"{_formula_warn_text}",'
                f'IF(COUNTIFS(G{REGISTER_FIRST_DATA_ROW}:G{REGISTER_LAST_DATA_ROW},"<>",'
                f'E{REGISTER_FIRST_DATA_ROW}:E{REGISTER_LAST_DATA_ROW},"")>0,'
                f'"⚠ Some rows have Projected sale proceeds but no Market value at 30 Jun 2026 — '
