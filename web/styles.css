@@ -863,6 +863,11 @@ code {
   padding: 0;
   color: inherit;
 }
+.download-alt {
+  margin-top: 20px;
+  font-size: 0.86rem;
+  color: var(--slate);
+}
 
 /* ── Footer ── */
 .site-footer {

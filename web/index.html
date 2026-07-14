@@ -348,15 +348,23 @@
           <aside class="download-card">
             <div class="download-version" id="download-version">Division 296 Model — v3.4.0</div>
             <p>
-              The <code>.xlsx</code> is a build artifact, generated from the Python source. Build it
-              locally:
+              Excel workbook (five tabs), pre-loaded with
+              <strong>illustrative sample data only — no client information</strong>. Open it and
+              replace the sample rows with your own figures.
             </p>
+            <a
+              class="btn btn-primary btn-block"
+              href="https://github.com/AidenHiew/div296_cgt_reset/releases/download/v3.4.0/Division_296_Model_v3.4.0.xlsx"
+              download
+              >↓ Download the workbook (.xlsx)</a
+            >
+            <p class="download-alt">Or build it from the Python source:</p>
             <pre><code>pip install -e .[dev]
 python -m div296.build
 # → dist/Division_296_Model_v3.4.0.xlsx</code></pre>
             <a
-              class="btn btn-primary btn-block"
-              href="https://github.com/aidenhiew/div296_cgt_reset"
+              class="btn btn-ghost btn-block"
+              href="https://github.com/AidenHiew/div296_cgt_reset"
               >View the source on GitHub →</a
             >
           </aside>
