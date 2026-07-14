@@ -52,9 +52,13 @@ function renderCountdown() {
   const days = Math.max(0, Math.ceil(ms / 86_400_000));
   const node = el("countdown-days");
   if (ms <= 0) {
-    node.textContent = "0";
+    // Valuation date is past: drop the dead day-counter and reframe the chip
+    // around the live, actionable deadline — the election is made with the
+    // 2026-27 return. (Fable FINDINGS_WEB W2.)
+    el("countdown").classList.add("countdown--past");
+    node.textContent = "";
     el("countdown").querySelector(".countdown-label").textContent =
-      "30 June 2026 (the reset valuation date) has passed";
+      "The reset valuation date (30 June 2026) has passed — model both paths before you lodge your 2026-27 return.";
   } else {
     node.textContent = days;
   }
@@ -214,19 +218,6 @@ function renderResults() {
       ? "reset COSTS this much extra"
       : "no difference";
 
-  // hero sample card (always shows the live numbers from current state)
-  const hero = el("hero-sample");
-  hero.innerHTML = `
-    <div class="hero-row"><span class="k">If no reset</span><span class="v">${fmtMoney(
-      cmp.noReset.headline
-    )}</span></div>
-    <div class="hero-row"><span class="k">If elected to reset</span><span class="v">${fmtMoney(
-      cmp.elected.headline
-    )}</span></div>
-    <div class="hero-row headline"><span class="k">Difference</span><span class="v ${valSignClass(
-      cmp.headlineDifference
-    )}">${fmtSigned(cmp.headlineDifference)}</span></div>`;
-
   // per-member breakdown
   const pmBody = el("permember-body");
   pmBody.innerHTML = "";
@@ -273,6 +264,23 @@ function renderResults() {
 
 function fundFig(k, v) {
   return `<div class="fund-fig"><div class="k">${k}</div><div class="v">${v}</div></div>`;
+}
+
+// Hero teaser: frozen to the genuine §12 sample fund (single $12m member) and
+// rendered once at load, so the "Sample fund" label stays truthful even after
+// the user edits the live calculator below. (Fable FINDINGS_WEB W2 / §2.3.)
+function renderHeroSample() {
+  const cmp = computeComparison(SAMPLE_REGISTER, SAMPLE_MEMBERS, ASSUMPTIONS);
+  el("hero-sample").innerHTML = `
+    <div class="hero-row"><span class="k">If no reset</span><span class="v">${fmtMoney(
+      cmp.noReset.headline
+    )}</span></div>
+    <div class="hero-row"><span class="k">If elected to reset</span><span class="v">${fmtMoney(
+      cmp.elected.headline
+    )}</span></div>
+    <div class="hero-row headline"><span class="k">Difference</span><span class="v ${valSignClass(
+      cmp.headlineDifference
+    )}">${fmtSigned(cmp.headlineDifference)}</span></div>`;
 }
 
 // ── #2 sample-data badge ──
@@ -334,6 +342,7 @@ function render() {
 // ── static chrome ──
 function initChrome() {
   renderCountdown();
+  renderHeroSample();
   el("download-version").textContent = `Division 296 Model — ${VERSION}`;
   el("footer-version").textContent = VERSION;
 
