@@ -73,7 +73,11 @@ function numInput(value, onInput, attrs = "") {
   if (attrs) inp.setAttribute(...attrs.split("="));
   inp.addEventListener("input", (e) => {
     onInput(parseFloat(e.target.value) || 0);
-    render();
+    // Value edits refresh only the derived outputs — NOT the input tables.
+    // A full render() rebuilds members-body/assets-body via innerHTML, which
+    // destroys the very <input> being typed in and drops focus/caret after a
+    // single keystroke. (Fable FINDINGS_WEB W3 render-loop / focus-loss.)
+    renderOutputs();
   });
   return inp;
 }
@@ -133,8 +137,12 @@ function renderMembers() {
     );
     body.appendChild(tr);
   });
+}
 
-  // split sanity hint
+// Split sanity hint — a derived display, so it lives with the outputs (not in
+// renderMembers) and updates when a split % is edited without rebuilding the
+// input tables. (Fable FINDINGS_WEB W3.)
+function renderSplitHint() {
   const sum = state.members.reduce((s, m) => s + m.split_pct, 0);
   const hint = el("split-hint");
   if (Math.abs(sum - 1) > 0.005) {
@@ -330,13 +338,23 @@ function renderPrintHeader() {
 }
 
 // ─────────────────────────── orchestration ───────────────────────────
-function render() {
-  renderMembers();
-  renderAssets();
+// Derived displays only — safe to call on every keystroke because it never
+// rebuilds the members-body / assets-body input tables, so the focused <input>
+// survives. (Fable FINDINGS_WEB W3.)
+function renderOutputs() {
   renderResults();
+  renderSplitHint();
   renderSampleBadge();
   renderAppliesBanner();
   renderPrintHeader();
+}
+
+// Full render — rebuilds the input tables too. Call only on structural changes
+// (add/remove member or asset), never on a value edit.
+function render() {
+  renderMembers();
+  renderAssets();
+  renderOutputs();
 }
 
 // ── static chrome ──
