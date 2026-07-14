@@ -120,14 +120,15 @@ function renderMembers() {
     const tr = document.createElement("tr");
     tr.appendChild(cell(`Member ${i + 1}`));
     tr.appendChild(cell(numInput(m.tsb, (v) => (m.tsb = v))));
-    tr.appendChild(
-      cell(
-        numInput(
-          +(m.split_pct * 100).toFixed(4),
-          (v) => (m.split_pct = v / 100)
-        )
-      )
-    );
+    // Earnings split is derived from each member's share of total balance
+    // (matches the Excel workbook — CONTEXT.md "auto-derived from TSB split").
+    // Read-only span with a stable id so a TSB edit can refresh it live via
+    // updateDerivedSplits() WITHOUT rebuilding the input row (keeps focus).
+    const splitSpan = document.createElement("span");
+    splitSpan.className = "split-derived";
+    splitSpan.id = `split-pct-${i}`;
+    splitSpan.textContent = fmtPct(m.split_pct);
+    tr.appendChild(cell(splitSpan));
     tr.appendChild(
       cell(
         state.members.length > 1
@@ -139,19 +140,36 @@ function renderMembers() {
   });
 }
 
-// Split sanity hint — a derived display, so it lives with the outputs (not in
-// renderMembers) and updates when a split % is edited without rebuilding the
-// input tables. (Fable FINDINGS_WEB W3.)
+// Derive each member's earnings split from their share of total TSB, matching
+// the workbook (CONTEXT.md). Mutates state.members[*].split_pct — the single
+// source the engine reads. If total TSB is 0, every share is 0.
+function syncSplits() {
+  const total = state.members.reduce((s, m) => s + (m.tsb || 0), 0);
+  state.members.forEach((m) => {
+    m.split_pct = total > 0 ? (m.tsb || 0) / total : 0;
+  });
+}
+
+// Refresh the read-only split-% displays from the (already synced) shares,
+// WITHOUT rebuilding the input rows — so editing one member's balance updates
+// every member's split live while the caret stays put. (Complements W3.)
+function updateDerivedSplits() {
+  state.members.forEach((m, i) => {
+    const span = el(`split-pct-${i}`);
+    if (span) span.textContent = fmtPct(m.split_pct);
+  });
+}
+
+// Static note: the split is derived, not entered, so it always totals 100%.
 function renderSplitHint() {
-  const sum = state.members.reduce((s, m) => s + m.split_pct, 0);
   const hint = el("split-hint");
-  if (Math.abs(sum - 1) > 0.005) {
-    hint.innerHTML = `⚠ Earnings splits sum to <strong>${fmtPct(
-      sum
-    )}</strong> — they normally total 100%.`;
-    hint.style.color = "var(--red)";
+  const total = state.members.reduce((s, m) => s + (m.tsb || 0), 0);
+  if (total > 0) {
+    hint.textContent =
+      "Earnings split is derived from each member's share of total balance (totals 100%).";
+    hint.style.color = "var(--muted)";
   } else {
-    hint.textContent = "Earnings splits total 100%. ✓";
+    hint.textContent = "Enter member balances to derive the earnings split.";
     hint.style.color = "var(--muted)";
   }
 }
@@ -342,7 +360,9 @@ function renderPrintHeader() {
 // rebuilds the members-body / assets-body input tables, so the focused <input>
 // survives. (Fable FINDINGS_WEB W3.)
 function renderOutputs() {
+  syncSplits(); // derive splits from TSB before the engine reads them
   renderResults();
+  updateDerivedSplits(); // refresh the read-only split-% spans in place
   renderSplitHint();
   renderSampleBadge();
   renderAppliesBanner();
@@ -352,6 +372,7 @@ function renderOutputs() {
 // Full render — rebuilds the input tables too. Call only on structural changes
 // (add/remove member or asset), never on a value edit.
 function render() {
+  syncSplits(); // so the split-% spans render with correct values on first paint
   renderMembers();
   renderAssets();
   renderOutputs();
