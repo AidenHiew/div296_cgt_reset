@@ -186,6 +186,14 @@ code {
   min-width: 34px;
   text-align: center;
 }
+/* Past the valuation date the day-counter is dead; hide it and let the chip
+   read as an actionable framing pill. (Fable FINDINGS_WEB W2.) */
+.countdown--past {
+  padding-left: 16px;
+}
+.countdown--past .countdown-num {
+  display: none;
+}
 .hero-copy h1 {
   font-size: clamp(2rem, 4.4vw, 3.1rem);
   font-weight: 600;
@@ -537,6 +545,14 @@ code {
   .breakdown-grid {
     grid-template-columns: 1fr;
   }
+}
+/* Grid items default to min-width:auto (their content's min-content width), so
+   a wide table forces the panel — and the whole page — to overflow sideways on
+   narrow screens. min-width:0 lets the panel shrink so the inner .table-scroll
+   engages as designed. (Fable review FINDINGS_WEB W1: 442px mobile overflow.) */
+.calc-grid > .panel,
+.breakdown-grid > .panel {
+  min-width: 0;
 }
 .panel {
   background: var(--white);
