@@ -1,8 +1,9 @@
 # Division 296 CGT Reset — website
 
 A static, single-page site for the Division 296 cost-base reset model: a
-plain-English explainer, a countdown to the **30 June 2026** election deadline,
-and a **live in-browser calculator** that reproduces the workbook's headline
+plain-English explainer framed around the reset **valuation date (30 June 2026)**
+— which is *not* the election deadline; the election is made with the fund's
+2026-27 return — and a **live in-browser calculator** that reproduces the workbook's headline
 comparison (Div 296 tax *if no reset* vs *if elected to reset*, with the signed
 difference, per-member split, and most-affected assets — including the
 "reset trap" flag).
