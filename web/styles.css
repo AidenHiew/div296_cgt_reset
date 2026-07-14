@@ -529,6 +529,17 @@ code {
 .result-value.pos {
   color: var(--red);
 }
+/* Estimate-only caption directly under the headline figures. */
+.result-disclaimer {
+  margin: 12px 0 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--muted);
+  text-align: center;
+}
+.result-disclaimer strong {
+  color: var(--ink);
+}
 
 .calc-grid,
 .breakdown-grid {
