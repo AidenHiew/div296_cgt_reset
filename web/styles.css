@@ -529,6 +529,17 @@ code {
 .result-value.pos {
   color: var(--red);
 }
+/* Estimate-only caption directly under the headline figures. */
+.result-disclaimer {
+  margin: 12px 0 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--muted);
+  text-align: center;
+}
+.result-disclaimer strong {
+  color: var(--ink);
+}
 
 .calc-grid,
 .breakdown-grid {
@@ -651,6 +662,15 @@ code {
   outline: none;
   border-color: var(--teal-500);
   background: var(--white);
+}
+/* Earnings split is derived (read-only), not entered — render it muted and
+   right-aligned so it reads as an output beside the editable balance. */
+.split-derived {
+  display: block;
+  text-align: right;
+  padding: 6px 8px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 .data-table tr.loss-row input {
   background: var(--red-bg);
